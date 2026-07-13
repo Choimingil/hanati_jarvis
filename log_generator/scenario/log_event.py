@@ -1,4 +1,8 @@
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+from logger.log_constants import SystemStatus
 
 
 @dataclass
@@ -10,4 +14,15 @@ class LogEvent:
 
     message: str
 
-    # TODO- Add additional fields for more detailed log information, such as timestamp, source, etc.
+    status_after: Optional[str] = None
+
+    source: Optional[str] = None
+
+    timestamp: Optional[str] = None
+
+    def __post_init__(self):
+        if self.status_after is None:
+            self.status_after = SystemStatus.HEALTHY
+
+        if self.timestamp is None:
+            self.timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

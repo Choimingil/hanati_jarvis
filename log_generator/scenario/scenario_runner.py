@@ -18,7 +18,8 @@ class ScenarioRunner:
             log = self.formatter.format(
                 event.level,
                 event.message,
-                self.system
+                self.system,
+                event
             )
 
             self.writer.write(log)

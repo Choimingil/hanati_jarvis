@@ -1,6 +1,7 @@
 
 from .scenario import Scenario
 from .log_event import LogEvent
+from ..logger.log_constants import LogLevel, SystemStatus
 
 
 class DNSFailureScenario(Scenario):
@@ -11,31 +12,41 @@ class DNSFailureScenario(Scenario):
 
             LogEvent(
                 delay=0,
-                level="WARN",
-                message="DNS lookup timeout."
+                level=LogLevel.WARN,
+                message="DNS lookup timeout.",
+                status_after=SystemStatus.DEGRADED,
+                source="dns"
             ),
 
             LogEvent(
                 delay=1,
-                level="WARN",
-                message="Retrying DNS resolution."
+                level=LogLevel.WARN,
+                message="Retrying DNS resolution.",
+                status_after=SystemStatus.DEGRADED,
+                source="dns"
             ),
 
             LogEvent(
                 delay=2,
-                level="ERROR",
-                message="Failed to resolve service endpoint."
+                level=LogLevel.ERROR,
+                message="Failed to resolve service endpoint.",
+                status_after=SystemStatus.FAILED,
+                source="dns"
             ),
 
             LogEvent(
                 delay=3,
-                level="ERROR",
-                message="HTTP request aborted."
+                level=LogLevel.ERROR,
+                message="HTTP request aborted.",
+                status_after=SystemStatus.FAILED,
+                source="http"
             ),
 
             LogEvent(
                 delay=4,
-                level="ERROR",
-                message="Circuit breaker opened."
+                level=LogLevel.ERROR,
+                message="Circuit breaker opened.",
+                status_after=SystemStatus.FAILED,
+                source="circuit-breaker"
             ),
         ]
