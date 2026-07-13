@@ -28,7 +28,7 @@ system = SystemInfo(
         ],
     ),
     failure_behavior=FailureBehavior(
-        probability=0.3,
+        probability=0.1,
         trigger_after=1.0,
         scenario=DNSFailureScenario(),
     ),
