@@ -1,7 +1,7 @@
 
-from .scenario import Scenario
-from .log_event import LogEvent
-from ..logger.log_constants import LogLevel, SystemStatus
+from scenario.scenario import Scenario
+from scenario.log_event import LogEvent
+from logger.log_constants import LogLevel, SystemStatus
 
 
 class DNSFailureScenario(Scenario):
