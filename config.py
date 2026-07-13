@@ -77,3 +77,29 @@ DIAGNOSTIC_SCRIPTS = {
         "check_sqlnet.sh",
     ),
 }
+
+
+# "mock" (기본값) 또는 "qdrant" 중 선택. qdrant로 두면
+# case_searcher가 QdrantCaseSearcher로 교체된다.
+CASE_SEARCHER_BACKEND = os.getenv(
+    "CASE_SEARCHER_BACKEND", "mock"
+)
+
+# QDRANT_URL이 설정되어 있으면 원격/Docker Qdrant 서버에
+# 접속하고, 없으면 QDRANT_PATH 경로에 로컬 파일 기반으로 저장한다.
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_PATH = os.getenv(
+    "QDRANT_PATH",
+    os.path.join(BASE_DIR, "qdrant", "qdrant_data"),
+)
+QDRANT_COLLECTION = os.getenv(
+    "QDRANT_COLLECTION", "incident_cases"
+)
+
+EMBEDDING_MODEL_NAME = os.getenv(
+    "EMBEDDING_MODEL_NAME", "BAAI/bge-m3"
+)
+# "BAAI/bge-m3" 모델의 임베딩 차원 수
+EMBEDDING_VECTOR_SIZE = int(
+    os.getenv("EMBEDDING_VECTOR_SIZE", "1024")
+)

@@ -31,3 +31,6 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Qdrant local on-disk storage (regenerated via `python -m qdrant.seed`)
+qdrant/qdrant_data/

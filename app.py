@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 
-from config import API_HOST, API_PORT
+from config import API_HOST, API_PORT, CASE_SEARCHER_BACKEND
 from routes.log_routes import log_blueprint
 
 
@@ -14,7 +14,7 @@ def create_app() -> Flask:
         return jsonify({
             "status": "healthy",
             "storage": "mock",
-            "case_search": "mock",
+            "case_search": CASE_SEARCHER_BACKEND,
             "recommendation": "mock",
         })
 
