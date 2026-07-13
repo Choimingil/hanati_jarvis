@@ -2,7 +2,7 @@ import os
 
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("API_PORT", "5001"))
+API_PORT = int(os.getenv("API_PORT", "8080"))
 
 SCRIPT_TIMEOUT_SECONDS = int(
     os.getenv("SCRIPT_TIMEOUT_SECONDS", "30")
