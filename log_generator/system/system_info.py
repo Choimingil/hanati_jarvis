@@ -5,6 +5,12 @@ from typing import List, Optional
 
 
 @dataclass
+class FailureScenarioConfig:
+    scenario: object
+    probability: float = 1.0
+
+
+@dataclass
 class NormalLogPattern:
     delay: float
     messages: List[str] = field(default_factory=list)
@@ -14,7 +20,7 @@ class NormalLogPattern:
 class FailureBehavior:
     probability: float
     trigger_after: float
-    scenario: Optional[object] = None
+    scenarios: Optional[List[FailureScenarioConfig]] = None
 
 
 @dataclass
