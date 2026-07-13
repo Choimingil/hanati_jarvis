@@ -1,11 +1,9 @@
-
-# Sample scenario that emits a sequence of DNS-related failure events.
 from scenario.scenario import Scenario
 from scenario.log_event import LogEvent
 from logger.log_constants import LogLevel, SystemStatus
 
 
-class DNSFailureScenario(Scenario):
+class ExternalAPIFailureScenario(Scenario):
 
     stop_after_failure = False
 
@@ -16,40 +14,40 @@ class DNSFailureScenario(Scenario):
             LogEvent(
                 delay=0,
                 level=LogLevel.WARN,
-                message="DNS lookup timeout.",
+                message="External API response time exceeded threshold.",
                 status_after=SystemStatus.DEGRADED,
-                source="dns"
+                source="http-client"
             ),
 
             LogEvent(
                 delay=1,
                 level=LogLevel.WARN,
-                message="Retrying DNS resolution.",
+                message="Retrying external API request.",
                 status_after=SystemStatus.DEGRADED,
-                source="dns"
+                source="http-client"
             ),
 
             LogEvent(
                 delay=2,
                 level=LogLevel.ERROR,
-                message="Failed to resolve service endpoint.",
+                message="Received HTTP 503 from external API.",
                 status_after=SystemStatus.FAILED,
-                source="dns"
+                source="http-client"
             ),
 
             LogEvent(
                 delay=3,
                 level=LogLevel.ERROR,
-                message="HTTP request aborted.",
+                message="Payment service unavailable.",
                 status_after=SystemStatus.FAILED,
-                source="http"
+                source="payment"
             ),
 
             LogEvent(
                 delay=4,
                 level=LogLevel.ERROR,
-                message="Circuit breaker opened.",
+                message="Transaction cancelled.",
                 status_after=SystemStatus.FAILED,
-                source="circuit-breaker"
+                source="checkout"
             ),
         ]
