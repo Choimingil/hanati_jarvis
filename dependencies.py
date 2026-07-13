@@ -3,13 +3,44 @@ from adapters.mock_adapters import (
     MockLogRepository,
     MockRecommendationGenerator,
 )
-from config import CASE_SEARCHER_BACKEND
+from config import (
+    CASE_SEARCHER_BACKEND,
+    LOG_REPOSITORY_BACKEND,
+)
 from log_processor import LogProcessor
 
 
-repository = MockLogRepository()
+if LOG_REPOSITORY_BACKEND == "elastic":
+    from adapters.elastic_adapters import (
+        ElasticLogRepository,
+    )
 
-if CASE_SEARCHER_BACKEND == "qdrant":
+    repository = ElasticLogRepository()
+else:
+    repository = MockLogRepository()
+
+if CASE_SEARCHER_BACKEND == "hybrid":
+    from adapters.elastic_adapters import (
+        ElasticCaseSearcher,
+    )
+    from adapters.hybrid_adapters import (
+        HybridCaseSearcher,
+    )
+    from adapters.qdrant_adapters import (
+        QdrantCaseSearcher,
+    )
+
+    case_searcher = HybridCaseSearcher(
+        vector_searcher=QdrantCaseSearcher(),
+        keyword_searcher=ElasticCaseSearcher(),
+    )
+elif CASE_SEARCHER_BACKEND == "elastic":
+    from adapters.elastic_adapters import (
+        ElasticCaseSearcher,
+    )
+
+    case_searcher = ElasticCaseSearcher()
+elif CASE_SEARCHER_BACKEND == "qdrant":
     from adapters.qdrant_adapters import (
         QdrantCaseSearcher,
     )

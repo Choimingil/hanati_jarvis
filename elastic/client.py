@@ -1,8 +1,19 @@
 from elasticsearch import Elasticsearch
 
+from config import (
+    ELASTICSEARCH_PASSWORD,
+    ELASTICSEARCH_URL,
+    ELASTICSEARCH_USER,
+    ELASTICSEARCH_VERIFY_CERTS,
+)
+
+
 def get_client():
     return Elasticsearch(
-        "https://localhost:9200",
-        basic_auth=("elastic", "lcv8R4B0ZlJ3MbQgyg8J"),
-        verify_certs=False
+        ELASTICSEARCH_URL,
+        basic_auth=(
+            ELASTICSEARCH_USER,
+            ELASTICSEARCH_PASSWORD,
+        ),
+        verify_certs=ELASTICSEARCH_VERIFY_CERTS,
     )

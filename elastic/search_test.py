@@ -1,4 +1,4 @@
-from client import get_client
+from elastic.client import get_client
 
 
 es = get_client()

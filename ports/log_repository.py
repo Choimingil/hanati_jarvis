@@ -24,3 +24,10 @@ class LogRepository(ABC):
         document: dict[str, Any],
     ) -> None:
         pass
+
+    @abstractmethod
+    def save_remediation(
+        self,
+        document: dict[str, Any],
+    ) -> None:
+        pass

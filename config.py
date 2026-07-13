@@ -78,9 +78,31 @@ DIAGNOSTIC_SCRIPTS = {
     ),
 }
 
+# 운영자가 추천안 중 하나를 승인했을 때 실행되는 원격조치 스크립트.
+# ERROR_RULES[...]["remediation_candidates"]에 등장하는 id와 매핑되어야 한다.
+REMEDIATION_SCRIPTS = {
+    "compress_old_logs": os.path.join(
+        BASE_DIR,
+        "test-runbooks",
+        "compress_old_logs.sh",
+    ),
+    "update_jdbc_driver": os.path.join(
+        BASE_DIR,
+        "test-runbooks",
+        "update_jdbc_driver.sh",
+    ),
+    "modify_sqlnet": os.path.join(
+        BASE_DIR,
+        "test-runbooks",
+        "modify_sqlnet.sh",
+    ),
+}
 
-# "mock" (기본값) 또는 "qdrant" 중 선택. qdrant로 두면
-# case_searcher가 QdrantCaseSearcher로 교체된다.
+
+# "mock" (기본값) / "qdrant" / "elastic" / "hybrid" 중 선택.
+# - qdrant  : QdrantCaseSearcher (벡터 유사도 검색)
+# - elastic : ElasticCaseSearcher (키워드 검색)
+# - hybrid  : 위 둘을 함께 조회해서 병합 (Qdrant + Elasticsearch 모두 근거로 추천)
 CASE_SEARCHER_BACKEND = os.getenv(
     "CASE_SEARCHER_BACKEND", "mock"
 )
@@ -102,4 +124,50 @@ EMBEDDING_MODEL_NAME = os.getenv(
 # "BAAI/bge-m3" 모델의 임베딩 차원 수
 EMBEDDING_VECTOR_SIZE = int(
     os.getenv("EMBEDDING_VECTOR_SIZE", "1024")
+)
+
+
+# "mock" (기본값) 또는 "elastic" 중 선택. elastic로 두면
+# repository가 ElasticLogRepository로 교체된다.
+LOG_REPOSITORY_BACKEND = os.getenv(
+    "LOG_REPOSITORY_BACKEND", "mock"
+)
+
+ELASTICSEARCH_URL = os.getenv(
+    "ELASTICSEARCH_URL", "https://localhost:9200"
+)
+ELASTICSEARCH_USER = os.getenv(
+    "ELASTICSEARCH_USER", "elastic"
+)
+# 자격증명은 반드시 환경변수로 주입한다 (기본값 없음).
+ELASTICSEARCH_PASSWORD = os.getenv(
+    "ELASTICSEARCH_PASSWORD", ""
+)
+ELASTICSEARCH_VERIFY_CERTS = (
+    os.getenv(
+        "ELASTICSEARCH_VERIFY_CERTS", "false"
+    ).lower()
+    == "true"
+)
+
+ELASTIC_LOG_INDEX = os.getenv(
+    "ELASTIC_LOG_INDEX", "application-logs"
+)
+ELASTIC_DIAGNOSIS_INDEX = os.getenv(
+    "ELASTIC_DIAGNOSIS_INDEX",
+    "application-diagnoses",
+)
+ELASTIC_RECOMMENDATION_INDEX = os.getenv(
+    "ELASTIC_RECOMMENDATION_INDEX",
+    "application-recommendations",
+)
+ELASTIC_REMEDIATION_INDEX = os.getenv(
+    "ELASTIC_REMEDIATION_INDEX",
+    "application-remediations",
+)
+
+# Qdrant의 incident_cases 컬렉션과 동일한 과거 대응 사례를
+# 담아두는 Elasticsearch 인덱스 (incident_cases.py로 시딩).
+ELASTIC_INCIDENT_CASES_INDEX = os.getenv(
+    "ELASTIC_INCIDENT_CASES_INDEX", "incident-cases"
 )

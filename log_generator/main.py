@@ -1,6 +1,8 @@
 # Entry point for running the log generation workflow.
-from logger.default_formatter import DefaultFormatter
+from pathlib import Path
+
 from logger.file_writer import FileWriter
+from logger.json_formatter import JsonFormatter
 from scenario.dns_failure_scenario import DNSFailureScenario
 from scenario.memory_leak_scenario import MemoryLeakScenario
 from scenario.external_api_failure_scenario import ExternalAPIFailureScenario
@@ -11,9 +13,19 @@ from scenario.scenario_runner import ScenarioRunner
 from system.system_info import FailureBehavior, FailureScenarioConfig, NormalLogPattern, SystemInfo
 
 
-writer = FileWriter("app.log")
+# fluentbit/fluent-bit.conf가 tail하는 파일에 직접 쓴다. CWD와 무관하게
+# 항상 같은 경로를 가리키도록 이 파일 위치 기준 절대경로로 계산한다.
+FLUENTBIT_LOG_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "fluentbit"
+    / "application.log"
+)
 
-formatter = DefaultFormatter()
+writer = FileWriter(str(FLUENTBIT_LOG_PATH))
+
+# fluentbit의 app_json 파서(fluentbit/parser.conf)가 읽을 수 있도록
+# JSON 한 줄짜리 포맷으로 출력한다.
+formatter = JsonFormatter()
 
 system = SystemInfo(
     hostname="web01",

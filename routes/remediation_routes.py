@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from config import ERROR_RULES, REMEDIATION_SCRIPTS
-from elastic_repository import save_document
+from dependencies import repository
 from script_runner import run_script
 from utils.time_utils import now_iso
 
@@ -77,20 +77,17 @@ def approve_remediation():
         REMEDIATION_SCRIPTS,
     )
 
-    save_document(
-        "remediation-results",
-        {
-            "timestamp": now_iso(),
-            "error_code": error_code,
-            "script_id": script_id,
-            "approved_by": approved_by,
-            "result": result,
-        },
-    )
+    repository.save_remediation({
+        "timestamp": now_iso(),
+        "error_code": error_code,
+        "script_id": script_id,
+        "approved_by": approved_by,
+        "result": result,
+    })
 
     status_code = (
         200
-        if result["status"] == "executed"
+        if result["status"] == "success"
         else 400
     )
 

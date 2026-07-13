@@ -16,6 +16,9 @@ class MockLogRepository(LogRepository):
         self.recommendations: list[
             dict[str, Any]
         ] = []
+        self.remediations: list[
+            dict[str, Any]
+        ] = []
 
     def save_log(
         self,
@@ -43,6 +46,18 @@ class MockLogRepository(LogRepository):
         )
         print(
             "[MOCK REPOSITORY] recommendation saved:",
+            document,
+        )
+
+    def save_remediation(
+        self,
+        document: dict[str, Any],
+    ) -> None:
+        self.remediations.append(
+            deepcopy(document)
+        )
+        print(
+            "[MOCK REPOSITORY] remediation saved:",
             document,
         )
 

@@ -1,6 +1,6 @@
 from elasticsearch.helpers import bulk
-from client import get_client
-from log_generator import generate_log
+from elastic.client import get_client
+from elastic.log_generator import generate_log
 
 
 es = get_client()
