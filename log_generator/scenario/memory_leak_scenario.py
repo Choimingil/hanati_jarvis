@@ -1,11 +1,9 @@
-
-# Sample scenario that emits a sequence of DNS-related failure events.
 from scenario.scenario import Scenario
 from scenario.log_event import LogEvent
 from logger.log_constants import LogLevel, SystemStatus
 
 
-class DNSFailureScenario(Scenario):
+class MemoryLeakScenario(Scenario):
 
     stop_after_failure = False
 
@@ -15,41 +13,41 @@ class DNSFailureScenario(Scenario):
 
             LogEvent(
                 delay=0,
-                level=LogLevel.WARN,
-                message="DNS lookup timeout.",
-                status_after=SystemStatus.DEGRADED,
-                source="dns"
+                level=LogLevel.INFO,
+                message="Memory usage steadily increasing.",
+                status_after=SystemStatus.HEALTHY,
+                source="runtime"
             ),
 
             LogEvent(
                 delay=1,
                 level=LogLevel.WARN,
-                message="Retrying DNS resolution.",
+                message="Heap usage exceeded 85%.",
                 status_after=SystemStatus.DEGRADED,
-                source="dns"
+                source="runtime"
             ),
 
             LogEvent(
                 delay=2,
-                level=LogLevel.ERROR,
-                message="Failed to resolve service endpoint.",
-                status_after=SystemStatus.FAILED,
-                source="dns"
+                level=LogLevel.WARN,
+                message="Frequent garbage collection detected.",
+                status_after=SystemStatus.DEGRADED,
+                source="jvm"
             ),
 
             LogEvent(
                 delay=3,
                 level=LogLevel.ERROR,
-                message="HTTP request aborted.",
+                message="OutOfMemoryError encountered.",
                 status_after=SystemStatus.FAILED,
-                source="http"
+                source="runtime"
             ),
 
             LogEvent(
                 delay=4,
                 level=LogLevel.ERROR,
-                message="Circuit breaker opened.",
+                message="Application process terminated.",
                 status_after=SystemStatus.FAILED,
-                source="circuit-breaker"
+                source="system"
             ),
         ]
