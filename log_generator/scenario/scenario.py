@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 
 class Scenario(ABC):
 
+    stop_after_failure: bool = True
+
     @abstractmethod
     def events(self):
         pass
