@@ -1,5 +1,7 @@
 import threading
 
+# Appends log lines to a file using a lock for safe concurrent writes.
+
 from logger.log_writer import LogWriter
 
 

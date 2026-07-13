@@ -1,5 +1,7 @@
 from datetime import datetime
 
+# Formats log entries with timestamp, level, host, status, and message.
+
 from logger.log_formatter import LogFormatter
 
 

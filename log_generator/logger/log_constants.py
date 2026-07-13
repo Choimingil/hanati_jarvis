@@ -1,3 +1,4 @@
+# Common log severity levels used across the project.
 class LogLevel:
     DEBUG = "DEBUG"
     INFO = "INFO"

@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+
+# Data model for system metadata and runtime behavior patterns.
 from typing import List, Optional
 
 

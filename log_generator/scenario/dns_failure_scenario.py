@@ -1,4 +1,5 @@
 
+# Sample scenario that emits a sequence of DNS-related failure events.
 from scenario.scenario import Scenario
 from scenario.log_event import LogEvent
 from logger.log_constants import LogLevel, SystemStatus

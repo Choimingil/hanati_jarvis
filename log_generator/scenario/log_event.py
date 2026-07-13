@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+
+# Represents a single log emission with timing and state information.
 from datetime import datetime
 from typing import Optional
 

@@ -1,3 +1,4 @@
+# Entry point for running the log generation workflow.
 from logger.default_formatter import DefaultFormatter
 from logger.file_writer import FileWriter
 from scenario.dns_failure_scenario import DNSFailureScenario

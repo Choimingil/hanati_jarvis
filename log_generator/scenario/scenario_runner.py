@@ -1,4 +1,6 @@
 import random
+
+# Runs normal logs and occasionally injects a failure scenario.
 import time
 
 from logger.log_constants import LogLevel
