@@ -61,6 +61,9 @@ recommendation_generator.py : LLM 구현
 
 Mapping:
 
+
+Mapping:
+
 |Field|Type|설명|
 |---|---|---|
 |timestamp|date|로그 발생 시간|
