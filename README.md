@@ -1,4 +1,4 @@
-fluentbit 사용법
+## fluentbit 사용법
 
 1. fluentbit-test.py 실행 : python3 fluentbit-test,py
 
@@ -25,3 +25,9 @@ ports 디렉토리 하위에
 case_searcher.py : Qdrant 구현
 log_repository.py : ElasticSearch 구현
 recommendation_generator.py : LLM 구현
+
+
+## log gernerator 사용법
+현재 프로젝트 내의 실행하고 있는 프로그램 내에 loggenerator_example.py 코드 삽입
+
+수행과 함께 /app.log 경로에 로그 발생
