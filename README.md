@@ -36,6 +36,16 @@ recommendation_generator.py : LLM 구현
 
 수행과 함께 /app.log 경로에 로그 발생
 
+## LLM API 사용법
+
+프로젝트 최상단에서 아래 명령어 수행 API 서버 기동
+
+```
+uvicorn llm_agent.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+API는 http://127.0.0.1:8000/docs 에서 확인
+
 
 ## Qdrant 연동 (case_searcher)
 
