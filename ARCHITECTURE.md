@@ -61,6 +61,7 @@ AIOps 대응 루프다. 자세한 서비스 관점 설명과 실제 테스트 �
 | `script_runner.py` | `run_script()` | `config.DIAGNOSTIC_SCRIPTS`/`REMEDIATION_SCRIPTS` 같은 allowlist에 있는 쉘 스크립트만 subprocess로 실행. 타임아웃/실행권한/allowlist 미포함을 각각 다른 상태로 반환. `routes/remediation_routes.py`가 운영자 승인 후 조치 스크립트를 실행할 때도 동일 함수를 재사용한다. |
 | `utils/time_utils.py` | `now_iso()` | UTC 기준 ISO8601 타임스탬프 생성 헬퍼. |
 | `incident_cases.py` | `INCIDENT_CASES` | Qdrant(`qdrant/seed.py`)와 Elasticsearch(`elastic/seed_cases.py`)에 동일하게 시딩하는 과거 장애 대응 사례 fixture. 두 백엔드가 같은 "학습 데이터"를 갖도록 공유. |
+| `recommendation_ranker.py` | `build_ranked_actions()`, `build_cause()` | 조치 후보를 추천도(score) 높은 순으로 정렬한 리스트와 오류 원인 문구를 만드는 결정론적 헬퍼. `MockRecommendationGenerator`와 `LLMRecommendationGenerator`의 fallback이 공유해서, LLM 유무와 무관하게 "추천 스크립트 리스트"가 항상 채워진다. |
 
 ## 4. 포트 (인터페이스)
 
@@ -83,6 +84,7 @@ AIOps 대응 루프다. 자세한 서비스 관점 설명과 실제 테스트 �
 | `adapters/elastic_adapters.py` | `ElasticLogRepository` | `LogRepository` | `save_log`/`save_diagnosis`/`save_recommendation`/`save_remediation`을 각각 Elasticsearch 인덱스(`application-logs`, `application-diagnoses`, `application-recommendations`, `application-remediations`)에 저장. `LOG_REPOSITORY_BACKEND=elastic`일 때 사용. |
 | | `ElasticCaseSearcher` | `CaseSearcher` | `incident-cases` 인덱스에서 `error_code` term + `summary`/`root_cause` 키워드 매칭으로 과거 사례 검색. `CASE_SEARCHER_BACKEND=elastic`일 때 사용. |
 | `adapters/hybrid_adapters.py` | `HybridCaseSearcher` | `CaseSearcher` | `QdrantCaseSearcher`(벡터)와 `ElasticCaseSearcher`(키워드)를 둘 다 호출해서 `incident_id` 기준으로 병합 후 score순 정렬. "Qdrant와 Elasticsearch 둘 다 학습된 내용을 근거로 추천"하는 서비스 방향성을 그대로 구현한 것. `CASE_SEARCHER_BACKEND=hybrid`일 때 사용. |
+| `adapters/llm_adapters.py` | `LLMRecommendationGenerator` | `RecommendationGenerator` | `llm_agent`의 `LLMService`를 감싸서 LLM에게 "오류 원인"과 "추천도 높은 순 조치 스크립트 랭킹"을 JSON으로 물어보고 파싱한다. `OPENAI_API_KEY`가 없거나 응답이 JSON이 아니면 `recommendation_ranker`의 결정론적 랭킹으로 자동 대체(`generated_by`=`llm-fallback`). `RECOMMENDATION_BACKEND=llm`(기본값)일 때 사용. |
 
 ## 6. Qdrant 지원 모듈 (`qdrant/`)
 
@@ -163,6 +165,7 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 |---|---|
 | `routes/log_routes.py` | `log_blueprint` — `POST /api/v1/logs`. 단건/배열 JSON을 받아 각각 `dependencies.log_processor.process()`로 전달하고 결과 리스트를 반환 (탐지 → 진단 → 추천까지). |
 | `routes/remediation_routes.py` | `remediation_blueprint` — `POST /api/v1/remediations/approve`. 운영자가 추천된 `script_id`/`error_code`/`approved_by`를 보내면, `ERROR_RULES`의 `remediation_candidates`에 있는 스크립트인지 검증한 뒤 `script_runner.run_script()`로 실행하고 `dependencies.repository.save_remediation()`으로 결과를 저장한다. **이전에는 `app.py`에 등록되지 않고 삭제된 `elastic_repository.py`를 참조해 로드조차 안 되던 미사용 코드였는데, 이번에 `dependencies.repository`를 쓰도록 고치고 `app.py`에 등록해서 정상 동작하도록 복구했다.** (부수적으로 `run_script()`가 절대 반환하지 않는 `"executed"` 상태와 비교하던 상태 코드 버그도 `"success"`로 수정.) |
+| `routes/web_routes.py` | `web_blueprint` — `GET /`. 운영자용 단일 페이지(HTML/CSS/JS 인라인, 외부 의존성 없음). 장애 시나리오를 골라 `/api/v1/logs`로 분석하면 오류 원인과 추천도 높은 순 조치 스크립트 리스트를 보여주고, 그중 하나를 선택하면 `/api/v1/remediations/approve`로 실제 실행한 결과(stdout)를 표시한다. |
 
 두 블루프린트 모두 `app.py`에 등록되어 있고, 이제 "탐지 → 진단 → 추천 →
 운영자 승인 → 스크립트 실행"까지 전체 루프가 실제로 동작한다.
@@ -183,7 +186,7 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 |---|---|---|---|
 | `CaseSearcher` | `MockCaseSearcher` | `QdrantCaseSearcher` / `ElasticCaseSearcher` / `HybridCaseSearcher`(둘 다) | `CASE_SEARCHER_BACKEND=qdrant`\|`elastic`\|`hybrid` |
 | `LogRepository` | `MockLogRepository` | `ElasticLogRepository` | `LOG_REPOSITORY_BACKEND=elastic` |
-| `RecommendationGenerator` | `MockRecommendationGenerator` | (아직 없음, LLM 연동은 별도 진행 중 — README "구현 방법" 참고) | — |
+| `RecommendationGenerator` | `LLMRecommendationGenerator`(기본) | `MockRecommendationGenerator` | `RECOMMENDATION_BACKEND=llm`\|`mock` |
 
 운영자 승인 → 스크립트 실행(`routes/remediation_routes.py`)은 백엔드 스위치와
 무관하게 항상 `script_runner.run_script()` + 현재 주입된 `repository`를

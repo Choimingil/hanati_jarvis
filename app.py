@@ -5,11 +5,13 @@ from config import (
     API_PORT,
     CASE_SEARCHER_BACKEND,
     LOG_REPOSITORY_BACKEND,
+    RECOMMENDATION_BACKEND,
 )
 from routes.log_routes import log_blueprint
 from routes.remediation_routes import (
     remediation_blueprint,
 )
+from routes.web_routes import web_blueprint
 
 
 def create_app() -> Flask:
@@ -17,6 +19,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(log_blueprint)
     app.register_blueprint(remediation_blueprint)
+    app.register_blueprint(web_blueprint)
 
     @app.get("/health")
     def health():
@@ -24,7 +27,7 @@ def create_app() -> Flask:
             "status": "healthy",
             "storage": LOG_REPOSITORY_BACKEND,
             "case_search": CASE_SEARCHER_BACKEND,
-            "recommendation": "mock",
+            "recommendation": RECOMMENDATION_BACKEND,
         })
 
     return app

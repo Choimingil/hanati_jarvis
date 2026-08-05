@@ -6,6 +6,7 @@ from adapters.mock_adapters import (
 from config import (
     CASE_SEARCHER_BACKEND,
     LOG_REPOSITORY_BACKEND,
+    RECOMMENDATION_BACKEND,
 )
 from log_processor import LogProcessor
 
@@ -49,9 +50,18 @@ elif CASE_SEARCHER_BACKEND == "qdrant":
 else:
     case_searcher = MockCaseSearcher()
 
-recommendation_generator = (
-    MockRecommendationGenerator()
-)
+if RECOMMENDATION_BACKEND == "mock":
+    recommendation_generator = (
+        MockRecommendationGenerator()
+    )
+else:
+    from adapters.llm_adapters import (
+        LLMRecommendationGenerator,
+    )
+
+    recommendation_generator = (
+        LLMRecommendationGenerator()
+    )
 
 
 log_processor = LogProcessor(

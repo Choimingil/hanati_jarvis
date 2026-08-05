@@ -6,6 +6,10 @@ from ports.log_repository import LogRepository
 from ports.recommendation_generator import (
     RecommendationGenerator,
 )
+from recommendation_ranker import (
+    build_cause,
+    build_ranked_actions,
+)
 
 
 class MockLogRepository(LogRepository):
@@ -108,17 +112,27 @@ class MockRecommendationGenerator(
             error_code,
         )
 
+        ranked = build_ranked_actions(
+            error_code,
+            remediation_candidates,
+            past_cases,
+        )
+
         return {
             "error_code": error_code,
             "summary": (
                 f"{error_code} 에러가 감지되었습니다."
             ),
+            "cause": build_cause(
+                error_code, message, past_cases
+            ),
             "message": message,
             "diagnosis_summary": diagnosis_results,
             "past_cases": past_cases,
-            "recommended_actions": (
-                remediation_candidates
-            ),
+            "ranked_actions": ranked,
+            "recommended_actions": [
+                action["script_id"] for action in ranked
+            ],
             "requires_approval": True,
             "generated_by": "mock-llm",
         }

@@ -47,6 +47,28 @@ uvicorn llm_agent.app:app --host 127.0.0.1 --port 8000 --reload
 API는 http://127.0.0.1:8000/docs 에서 확인
 
 
+## 웹 콘솔 (운영자 UI)
+
+메인 서비스(`python app.py`)를 띄운 뒤 브라우저에서
+`http://localhost:8080/` 로 접속하면 운영자용 단일 페이지가 나온다.
+
+1. `log_generator`가 만드는 6개 장애 시나리오 중 하나를 고르고 **분석** 클릭
+2. LLM이 판단한 **현재 오류 원인**과, 호출하면 좋은 **조치 스크립트를
+   추천도 높은 순**으로 정렬한 리스트(점수 바 포함)가 표시된다
+3. 리스트에서 **실행**을 누르면 해당 스크립트가 실제로 호출되고
+   (`작업 수행.. / 작업 완료..`) 결과가 화면에 출력된다
+
+원인/랭킹은 `RECOMMENDATION_BACKEND`(기본값 `llm`)가 담당한다.
+`OPENAI_API_KEY`가 있으면 LLM이, 없으면 `recommendation_ranker.py`의
+결정론적 랭킹이 자동으로 대체하므로 키 없이도 페이지가 동작한다.
+
+인식하는 오류 코드는 `DISK_FULL`, `DNS_RESOLUTION_FAILURE`,
+`DB_CONNECTION_FAILURE`, `EXTERNAL_API_FAILURE`, `MEMORY_LEAK`,
+`REDIS_CONNECTION_FAILURE`(+ 기존 `ORA-28040`)이며, 각 코드의 진단/조치
+스크립트는 `config.ERROR_RULES`에 정의되어 있고 실제 파일은
+`test-runbooks/`에 있다.
+
+
 ## Qdrant 연동 (case_searcher)
 
 기존에는 `case_searcher`가 항상 `MockCaseSearcher`(하드코딩된 응답)로 동작했는데,

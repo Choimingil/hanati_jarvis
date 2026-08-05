@@ -1,5 +1,6 @@
 #!/bin/bash
-
-echo "TEST_COMPRESS_OLD_LOGS_OK"
-echo "compressed: /var/log/test-large-file.log.gz"
+# 해결 스크립트: 오래된 로그 압축 (compress_old_logs)
+echo "[compress_old_logs] 오래된 로그 압축 작업 수행.."
+sleep 0.2
+echo "[compress_old_logs] 오래된 로그 압축 작업 완료.."
 exit 0

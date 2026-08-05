@@ -75,7 +75,7 @@ curl -s -X POST http://localhost:8080/api/v1/remediations/approve \
     "error_code": "DISK_FULL",
     "approved_by": "operator-1"
   }' | python3 -m json.tool
-# -> status: "success", stdout: "TEST_COMPRESS_OLD_LOGS_OK ..."
+# -> status: "success", stdout: "[compress_old_logs] 오래된 로그 압축 작업 수행.. / 작업 완료.."
 
 # 3) 추천되지 않은(allowlist에 없는) 스크립트는 차단되는지 확인
 curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8080/api/v1/remediations/approve \
@@ -210,27 +210,44 @@ python main.py
 fluentbit → 백엔드 경로로 정확히 도착했다 — 진단 스크립트 실행, mock 과거
 사례 검색, 추천안 생성까지 전부 정상 동작.
 
-6개 장애 시나리오 중 실제로 `error_detector.py`가 인식하는 것은
-`DiskFullScenario`의 `"No space left on device."` 메시지(→ `DISK_FULL`)
-뿐이다. 나머지 DNS/DB커넥션/외부API/메모리릭/Redis 시나리오는
-`error_detector.ERROR_PATTERNS`에 매칭되는 규칙이 아직 없어
-`unknown_error`로 처리된다(로그 수신 자체는 정상 — 탐지 규칙만 없는 것) —
-새 에러 코드를 다루려면 `config.ERROR_RULES`와
-`error_detector.ERROR_PATTERNS`에 규칙을, 조치가 필요하면
-`config.REMEDIATION_SCRIPTS`에 스크립트를 추가하면 된다.
+이제 6개 장애 시나리오가 모두 `error_detector.py`에서 인식된다
+(`DISK_FULL`, `DNS_RESOLUTION_FAILURE`, `DB_CONNECTION_FAILURE`,
+`EXTERNAL_API_FAILURE`, `MEMORY_LEAK`, `REDIS_CONNECTION_FAILURE`).
+각 코드마다 `config.ERROR_RULES`에 진단/조치 스크립트가 매핑되어 있고,
+조치 스크립트는 `test-runbooks/`에서 `작업 수행.. / 작업 완료..` 형태로
+동작한다. 새 에러 코드를 추가하려면 `error_detector.ERROR_PATTERNS`에
+패턴을, `config.ERROR_RULES`에 규칙을, `test-runbooks/`에 스크립트를
+추가하면 된다(스크립트 경로 맵은 `ERROR_RULES`에서 자동 생성된다).
 
 > README.md의 "fluentbit 사용법" 절에 있는 수동 `echo '{"timestamp":...}' >>
 > application.log` 데모도 동일한 파일을 대상으로 하기 때문에 여전히 그대로
 > 동작한다 (직접 재확인함).
 
-## 7. 알려진 제한사항 / 다음에 할 일
+## 7. 웹 콘솔 (운영자 UI)
 
-- `recommendation_generator`는 아직 mock. 실제 LLM 연동은 별도 진행 중.
+`python app.py` 로 서버를 띄운 뒤 브라우저에서 `http://localhost:8080/` 로
+접속하면 운영자용 단일 페이지가 나온다.
+
+1. 장애 시나리오(=log_generator가 만드는 6개 오류)를 하나 고르고 **분석** 클릭
+   (직접 로그 메시지를 입력할 수도 있다)
+2. `POST /api/v1/logs` 결과로 **현재 오류 원인**과 **추천도 높은 순 조치
+   스크립트 리스트**(점수 바 포함)가 표시된다
+3. 리스트에서 **실행**을 누르면 `POST /api/v1/remediations/approve` 로 해당
+   스크립트가 실제로 호출되고, `작업 수행.. / 작업 완료..` stdout이 그대로
+   화면에 출력된다
+
+오류 원인과 추천 랭킹은 `RECOMMENDATION_BACKEND`(기본값 `llm`)가 결정한다.
+`OPENAI_API_KEY`가 설정되어 있으면 LLM이 원인/랭킹을 생성하고, 없으면
+`recommendation_ranker.py`의 결정론적 랭킹으로 자동 대체되므로 키 없이도
+페이지가 정상 동작한다.
+
+## 8. 알려진 제한사항 / 다음에 할 일
+
+- 실제 LLM 호출은 `OPENAI_API_KEY`가 있을 때만 이뤄지고, 없으면 결정론적
+  fallback 랭킹으로 동작한다(`generated_by`가 `llm` ↔ `llm-fallback`으로 구분됨).
 - `HybridCaseSearcher`의 병합 로직은 "동일 incident_id면 더 높은 score 채택"
   하는 단순 로직이다. Qdrant(코사인 유사도)와 Elasticsearch(BM25) 점수
   스케일이 서로 달라 단순 비교는 정확하지 않을 수 있다 — 지금은 두 소스를
   "함께 보여준다"는 최소 요건만 만족시킨 상태.
-- `ERROR_RULES`/`error_detector.ERROR_PATTERNS`에 등록된 에러 코드가
-  `ORA-28040`, `DISK_FULL` 둘뿐이라 실제 서비스 커버리지는 아직 좁다.
 - 이 환경에는 Elasticsearch가 없어 4번 항목은 코드 경로만 검증했고 실 서버
   기준 재검증이 필요하다.

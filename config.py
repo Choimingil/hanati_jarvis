@@ -9,6 +9,15 @@ SCRIPT_TIMEOUT_SECONDS = int(
 )
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _runbook(name: str) -> str:
+    return os.path.join(BASE_DIR, "test-runbooks", f"{name}.sh")
+
+
+# log_generator가 발생시키는 각 장애 시나리오(+ 기존 ORA-28040)에 대한
+# 진단/조치 규칙. error_detector.ERROR_PATTERNS의 코드와 1:1로 매핑된다.
 ERROR_RULES = {
     "ORA-28040": {
         "diagnostic_scripts": [
@@ -29,55 +38,112 @@ ERROR_RULES = {
         ],
         "remediation_candidates": [
             "compress_old_logs",
+            "cleanup_temp_files",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "DNS_RESOLUTION_FAILURE": {
+        "diagnostic_scripts": [
+            "check_dns_resolution",
+        ],
+        "remediation_candidates": [
+            "flush_dns_cache",
+            "restart_dns_resolver",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "DB_CONNECTION_FAILURE": {
+        "diagnostic_scripts": [
+            "check_db_connection",
+        ],
+        "remediation_candidates": [
+            "restart_db_connection_pool",
+            "failover_database",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "EXTERNAL_API_FAILURE": {
+        "diagnostic_scripts": [
+            "check_external_api",
+        ],
+        "remediation_candidates": [
+            "enable_circuit_breaker",
+            "switch_api_endpoint",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "MEMORY_LEAK": {
+        "diagnostic_scripts": [
+            "check_memory_usage",
+        ],
+        "remediation_candidates": [
+            "restart_application",
+            "increase_heap_size",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "REDIS_CONNECTION_FAILURE": {
+        "diagnostic_scripts": [
+            "check_redis_status",
+        ],
+        "remediation_candidates": [
+            "restart_redis",
+            "clear_redis_cache",
         ],
         "auto_diagnose": True,
         "auto_remediate": False,
     },
 }
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 각 스크립트 id에 대한 사람이 읽을 설명. 웹 UI 표시와 추천 사유 문구에 쓰인다.
+SCRIPT_DESCRIPTIONS = {
+    # 진단(diagnostic)
+    "check_jdbc_version": "JDBC 드라이버 버전 점검",
+    "check_sqlnet": "sqlnet.ora 설정 점검",
+    "check_disk_usage": "디스크 사용량 점검",
+    "check_large_files": "대용량 파일 탐색",
+    "check_dns_resolution": "DNS 해석 상태 점검",
+    "check_db_connection": "DB 연결 상태 점검",
+    "check_external_api": "외부 API 헬스 점검",
+    "check_memory_usage": "메모리 사용량 점검",
+    "check_redis_status": "Redis 상태 점검",
+    # 조치(remediation)
+    "update_jdbc_driver": "JDBC 드라이버 최신 버전으로 업데이트",
+    "modify_sqlnet": "sqlnet.ora 인증 설정 수정",
+    "compress_old_logs": "오래된 로그 압축으로 디스크 확보",
+    "cleanup_temp_files": "임시 파일 정리로 디스크 확보",
+    "flush_dns_cache": "DNS 캐시 초기화",
+    "restart_dns_resolver": "DNS 리졸버 재시작",
+    "restart_db_connection_pool": "DB 커넥션 풀 재시작",
+    "failover_database": "예비 DB로 페일오버 전환",
+    "enable_circuit_breaker": "서킷 브레이커를 열어 장애 전파 차단",
+    "switch_api_endpoint": "외부 API 예비 엔드포인트로 전환",
+    "restart_application": "애플리케이션 재시작으로 메모리 회수",
+    "increase_heap_size": "힙 메모리 증설 후 재기동",
+    "restart_redis": "Redis 인스턴스 재시작",
+    "clear_redis_cache": "Redis 캐시 비우기",
+}
+
+
+# ERROR_RULES에 등장하는 모든 스크립트 id를 실제 파일 경로로 매핑.
+# run_script()의 allowlist 역할을 한다 (여기 없는 id는 실행 불가).
 DIAGNOSTIC_SCRIPTS = {
-    "check_disk_usage": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "check_disk_usage.sh",
-    ),
-    "check_large_files": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "check_large_files.sh",
-    ),
-    "check_jdbc_version": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "check_jdbc_version.sh",
-    ),
-    "check_sqlnet": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "check_sqlnet.sh",
-    ),
+    script_id: _runbook(script_id)
+    for rule in ERROR_RULES.values()
+    for script_id in rule["diagnostic_scripts"]
 }
 
 # 운영자가 추천안 중 하나를 승인했을 때 실행되는 원격조치 스크립트.
-# ERROR_RULES[...]["remediation_candidates"]에 등장하는 id와 매핑되어야 한다.
 REMEDIATION_SCRIPTS = {
-    "compress_old_logs": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "compress_old_logs.sh",
-    ),
-    "update_jdbc_driver": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "update_jdbc_driver.sh",
-    ),
-    "modify_sqlnet": os.path.join(
-        BASE_DIR,
-        "test-runbooks",
-        "modify_sqlnet.sh",
-    ),
+    script_id: _runbook(script_id)
+    for rule in ERROR_RULES.values()
+    for script_id in rule["remediation_candidates"]
 }
 
 
@@ -106,6 +172,16 @@ EMBEDDING_MODEL_NAME = os.getenv(
 # "BAAI/bge-m3" 모델의 임베딩 차원 수
 EMBEDDING_VECTOR_SIZE = int(
     os.getenv("EMBEDDING_VECTOR_SIZE", "1024")
+)
+
+
+# "llm" (기본값) 또는 "mock" 중 선택.
+# - llm  : LLMRecommendationGenerator. LLM(OpenAI 호환)에게 오류 원인과
+#          추천 스크립트 랭킹을 물어본다. OPENAI_API_KEY가 없으면 자동으로
+#          결정론적 fallback 랭킹으로 동작한다(앱은 죽지 않음).
+# - mock : MockRecommendationGenerator. LLM 없이 고정 로직으로 랭킹 생성.
+RECOMMENDATION_BACKEND = os.getenv(
+    "RECOMMENDATION_BACKEND", "llm"
 )
 
 
