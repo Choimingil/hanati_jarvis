@@ -35,24 +35,6 @@ ERROR_RULES = {
     },
 }
 
-"""
-DIAGNOSTIC_SCRIPTS = {
-    "check_disk_usage": (
-        "/opt/runbooks/diagnosis/check_disk_usage.sh"
-    ),
-    "check_large_files": (
-        "/opt/runbooks/diagnosis/check_large_files.sh"
-    ),
-    "check_jdbc_version": (
-        "/opt/runbooks/diagnosis/check_jdbc_version.sh"
-    ),
-    "check_sqlnet": (
-        "/opt/runbooks/diagnosis/check_sqlnet.sh"
-    ),
-}
-"""
-
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DIAGNOSTIC_SCRIPTS = {

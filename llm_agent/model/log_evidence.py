@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from llm_agent.model.system_evidence import EvidenceBase, EvidenceImportance
-
-
-LogImportance = EvidenceImportance
+from llm_agent.model.system_evidence import EvidenceBase
 
 
 class LogCategory(Enum):

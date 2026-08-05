@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Any
 
 from config import (
@@ -13,6 +12,7 @@ from ports.recommendation_generator import (
     RecommendationGenerator,
 )
 from script_runner import run_script
+from utils.time_utils import now_iso
 
 
 class LogProcessor:
@@ -131,7 +131,3 @@ class LogProcessor:
             })
 
         return results
-
-
-def now_iso() -> str:
-    return datetime.now(UTC).isoformat()
