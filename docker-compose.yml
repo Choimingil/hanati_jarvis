@@ -1,0 +1,108 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: hanati-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elastic-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  elastic-init:
+    image: python:3.11-slim
+    container_name: hanati-elastic-init
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ELASTICSEARCH_USER=elastic
+      - ELASTICSEARCH_PASSWORD=
+      - ELASTICSEARCH_VERIFY_CERTS=false
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      python -m elastic.main && \
+      python -m elastic.mapping && \
+      python -m elastic.seed_cases"
+    restart: "no"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: hanati-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:6333/healthz >/dev/null || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  qdrant-init:
+    image: python:3.11-slim
+    container_name: hanati-qdrant-init
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=incident_cases
+      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - EMBEDDING_VECTOR_SIZE=1024
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      python -m qdrant.seed"
+    restart: "no"
+
+  log-generator:
+    image: python:3.11-slim
+    container_name: hanati-log-generator
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - log-volume:/workspace/fluentbit
+    environment:
+      - PYTHONPATH=/workspace/log_generator:/workspace
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      python /workspace/log_generator/main.py"
+    restart: "no"
+
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: hanati-fluent-bit
+    volumes:
+      - ./fluentbit:/fluent-bit/etc
+      - log-volume:/var/log/app
+    command: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+    depends_on:
+      - log-generator
+    ports:
+      - "9880:9880"
+
+volumes:
+  elastic-data:
+  qdrant-data:
+  log-volume:
