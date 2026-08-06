@@ -1,10 +1,12 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Formats log entries as single-line JSON so fluentbit's "app_json" tail
 # parser (fluentbit/parser.conf) and the backend's log_normalizer can read them.
 
 from logger.log_formatter import LogFormatter
+
+KST = timezone(timedelta(hours=9))
 
 
 class JsonFormatter(LogFormatter):
@@ -15,8 +17,7 @@ class JsonFormatter(LogFormatter):
         source = getattr(event, "source", None)
 
         return json.dumps({
-            "timestamp": datetime.now()
-            .astimezone()
+            "timestamp": datetime.now(KST)
             .strftime("%Y-%m-%dT%H:%M:%S%z"),
             "level": level,
             "message": message,

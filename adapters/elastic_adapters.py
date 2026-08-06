@@ -17,41 +17,41 @@ class ElasticLogRepository(LogRepository):
     def __init__(self) -> None:
         self.client = get_client()
 
+    def _index(
+        self,
+        index: str,
+        document: dict[str, Any],
+    ) -> None:
+        self.client.index(
+            index=index,
+            document=document,
+        )
+
     def save_log(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_LOG_INDEX,
-            document=document,
-        )
+        self._index(ELASTIC_LOG_INDEX, document)
 
     def save_diagnosis(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_DIAGNOSIS_INDEX,
-            document=document,
-        )
+        self._index(ELASTIC_DIAGNOSIS_INDEX, document)
 
     def save_recommendation(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_RECOMMENDATION_INDEX,
-            document=document,
+        self._index(
+            ELASTIC_RECOMMENDATION_INDEX, document
         )
 
     def save_remediation(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_REMEDIATION_INDEX,
-            document=document,
-        )
+        self._index(ELASTIC_REMEDIATION_INDEX, document)
 
 
 class ElasticCaseSearcher(CaseSearcher):
@@ -90,10 +90,12 @@ class ElasticCaseSearcher(CaseSearcher):
             size=limit,
         )
 
+        hits = response["hits"]["hits"]
+
         return [
             {
                 **hit["_source"],
                 "score": hit["_score"],
             }
-            for hit in response["hits"]["hits"]
+            for hit in hits
         ]

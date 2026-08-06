@@ -107,10 +107,25 @@ _PAGE = """<!doctype html>
   .logline.WARN { color: #f5c451; }
   .logline.ERROR { color: #ff8080; }
   @keyframes fadein { to { opacity: 1; } }
+  .sub-label { font-size: 12px; color: var(--muted); margin: 10px 0 0; font-weight: 600; }
+  .sub-label:first-child { margin-top: 0; }
+  pre.src-qdrant { color: #8ab4f8; }
+  pre.src-elasticsearch { color: #7fe0c4; }
   .status-ok { color: var(--ok); font-weight: 700; }
   .status-err { color: var(--err); font-weight: 700; }
   .status-pending { color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); font-size: 13px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .panel-toggle {
+    background: transparent; border: 0; color: var(--muted); cursor: pointer;
+    padding: 4px 6px; font-size: 13px; border-radius: 6px; flex: 0 0 auto;
+  }
+  .panel-toggle:hover { background: var(--bar); }
+  .panel-toggle .chev { display: inline-block; transition: transform .15s ease; }
+  .card.collapsed .panel-body { display: none; }
+  .card.collapsed .panel-toggle .chev { transform: rotate(-90deg); }
 </style>
 </head>
 <body>
@@ -128,11 +143,41 @@ _PAGE = """<!doctype html>
     </div>
   </div>
 
-  <div id="log" class="card hidden">
-    <div><strong>log_generator 실행 로그</strong>
-      <span class="muted">(fluentbit/application.log 기록분)</span></div>
-    <pre id="log-output"></pre>
-    <div id="wait-status" class="muted" style="margin-top:8px"></div>
+  <div id="log" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>log_generator 실행 로그</strong>
+        <span class="muted">(fluentbit/application.log 기록분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <pre id="log-output"></pre>
+      <div id="wait-status" class="muted" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div id="fluentbit-panel" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>fluent-bit 컨테이너 로그</strong>
+        <span class="muted">(docker logs hanati-fluentbit, 이번 실행 이후분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <pre id="fluentbit-output"></pre>
+    </div>
+  </div>
+
+  <div id="internal-panel" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>Qdrant / Elasticsearch 컨테이너 로그</strong>
+        <span class="muted">(docker logs, 이번 실행 이후분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <div class="sub-label">Qdrant (hanati-qdrant)</div>
+      <pre id="qdrant-output" class="src-qdrant"></pre>
+      <div class="sub-label">Elasticsearch (hanati-es)</div>
+      <pre id="es-output" class="src-elasticsearch"></pre>
+    </div>
   </div>
 
   <div id="result" class="card hidden">
@@ -155,6 +200,12 @@ _PAGE = """<!doctype html>
 const $ = (id) => document.getElementById(id);
 const sel = $("scenario");
 let currentErrorCode = null;
+
+document.querySelectorAll(".panel-toggle").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    btn.closest(".card").classList.toggle("collapsed");
+  });
+});
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -183,14 +234,22 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let currentSince = null;
+
 $("analyze").addEventListener("click", async () => {
   $("analyze").disabled = true;
   $("analyze").textContent = "시나리오 실행 중…";
   $("log").classList.remove("hidden");
+  $("fluentbit-panel").classList.remove("hidden");
+  $("internal-panel").classList.remove("hidden");
   $("result").classList.add("hidden");
   $("exec").classList.add("hidden");
   $("log-output").innerHTML = "";
+  $("fluentbit-output").textContent = "";
+  $("qdrant-output").textContent = "";
+  $("es-output").textContent = "";
   $("wait-status").textContent = "";
+  currentSince = null;
 
   try {
     const { data } = await postJSON("/api/v1/log-generator/run", {
@@ -201,6 +260,10 @@ $("analyze").addEventListener("click", async () => {
       $("wait-status").textContent = "실행 실패: " + JSON.stringify(data);
       return;
     }
+
+    // 이번 실행 이후분만 폴링하도록 트리거 시각으로 스코프를 좁힌다
+    // (안 그러면 이전 실행의 Qdrant/Elasticsearch/fluentbit 로그가 다시 보임)
+    currentSince = data.triggered_at;
 
     data.events.forEach((e, i) => {
       const line = document.createElement("div");
@@ -219,12 +282,34 @@ $("analyze").addEventListener("click", async () => {
   }
 });
 
+async function pollActivity() {
+  try {
+    const params = new URLSearchParams();
+    if (currentSince) params.set("since", currentSince);
+    const data = await getJSON(
+      `/api/v1/log-generator/activity?${params}`
+    );
+    $("fluentbit-output").textContent =
+      (data.fluentbit_log || []).join("\\n");
+    $("fluentbit-output").scrollTop = $("fluentbit-output").scrollHeight;
+    $("qdrant-output").textContent =
+      (data.qdrant_log || []).join("\\n");
+    $("qdrant-output").scrollTop = $("qdrant-output").scrollHeight;
+    $("es-output").textContent =
+      (data.elasticsearch_log || []).join("\\n");
+    $("es-output").scrollTop = $("es-output").scrollHeight;
+  } catch (e) {
+    // 폴링 실패는 조용히 무시하고 다음 주기에 재시도
+  }
+}
+
 async function waitForRecommendation(errorCode, since) {
   $("wait-status").textContent =
     "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
 
   for (let i = 0; i < 20; i++) {
     await sleep(1500);
+    await pollActivity();
     const data = await getJSON(
       `/api/v1/log-generator/latest-recommendation?error_code=${encodeURIComponent(errorCode)}&since=${encodeURIComponent(since)}`
     );

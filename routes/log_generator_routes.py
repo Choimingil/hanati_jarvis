@@ -7,6 +7,7 @@
 두 엔드포인트로 구성된다.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -15,6 +16,11 @@ from flask import Blueprint, jsonify, request
 from config import ELASTIC_RECOMMENDATION_INDEX
 from elastic.client import get_client
 from utils.time_utils import now_iso
+
+# scripts/dev_infra.sh가 띄우는 컨테이너 이름과 일치해야 한다.
+FLUENTBIT_CONTAINER = "hanati-fluentbit"
+ES_CONTAINER = "hanati-es"
+QDRANT_CONTAINER = "hanati-qdrant"
 
 LOG_GENERATOR_DIR = (
     Path(__file__).resolve().parent.parent / "log_generator"
@@ -88,6 +94,9 @@ def latest_recommendation():
                 }
             },
             size=20,
+            # 첫 추천이 저장되기 전엔 이 인덱스가 아직 없다 - 없어도
+            # 404 대신 빈 결과로 받아서 폴링 중 정상 상태로 취급한다.
+            ignore_unavailable=True,
         )
     except Exception:
         return jsonify({"status": "pending"})
@@ -107,4 +116,56 @@ def latest_recommendation():
     return jsonify({
         "status": "ready",
         "recommendation": latest["recommendation"],
+    })
+
+
+def _container_tail(
+    container: str, since: str | None = None, lines: int = 60
+) -> list[str]:
+    cmd = ["docker", "logs"]
+    # since가 있으면(=이번 트리거 이후) 그 시점부터만, 없으면 기존처럼
+    # 마지막 N줄 (과거 실행분이 섞여 보이는 걸 막기 위한 기본 스코프)
+    if since:
+        cmd += ["--since", since]
+    else:
+        cmd += ["--tail", str(lines)]
+    cmd.append(container)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
+        return []
+
+    output = result.stdout + result.stderr
+    return [
+        line
+        for line in output.splitlines()
+        if line.strip()
+    ]
+
+
+@log_generator_blueprint.get(
+    "/api/v1/log-generator/activity"
+)
+def activity():
+    since = request.args.get("since")
+
+    return jsonify({
+        "fluentbit_log": _container_tail(
+            FLUENTBIT_CONTAINER, since
+        ),
+        "qdrant_log": _container_tail(
+            QDRANT_CONTAINER, since
+        ),
+        "elasticsearch_log": _container_tail(
+            ES_CONTAINER, since
+        ),
     })
