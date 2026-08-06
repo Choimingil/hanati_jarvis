@@ -9,9 +9,23 @@
 # Elasticsearch/Qdrant는 Docker 컨테이너로, fluent-bit는 brew로 설치해서
 # 로컬 프로세스로 띄운다. 전부 개발/테스트 전용 설정이다 (보안 비활성화).
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT)
+    if command -v pwsh >/dev/null 2>&1; then
+      exec pwsh -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/dev_infra.ps1" "$@"
+    elif command -v powershell.exe >/dev/null 2>&1; then
+      exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/dev_infra.ps1" "$@"
+    else
+      echo "PowerShell이 필요합니다. Windows PowerShell 5.1 또는 PowerShell 7을 설치해 주세요."
+      exit 1
+    fi
+    ;;
+esac
+
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ES_CONTAINER="hanati-es"
 QDRANT_CONTAINER="hanati-qdrant"
 ES_PORT="9200"
