@@ -35,3 +35,4 @@ Thumbs.db
 
 # Qdrant local on-disk storage (regenerated via `python -m qdrant.seed`)
 qdrant/qdrant_data/
+fluentbit/application.log

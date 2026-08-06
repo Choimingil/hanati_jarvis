@@ -32,5 +32,5 @@ class DiagnosisPromptBuilder:
 {evidence_text or '없음'}
 
 다음 JSON 형식으로만 응답하십시오.
-{{"reason": "진단 이유", "confidence": 0.95}}
+{{"reason": "진단 이유", "confidence": "추천 신뢰도(0~1)"}}
 """
