@@ -2,6 +2,27 @@
 > 흐름(탐지→진단→추천→운영자 승인→스크립트 실행)을 실제로 테스트하는
 > 방법은 [TESTING.md](TESTING.md) 참고.
 
+## 로컬 인프라 자동 실행 (fluent-bit / Elasticsearch / Qdrant)
+
+`scripts/dev_infra.sh` 로 셋 다 없으면 설치하고 바로 기동한다 (macOS 기준,
+Elasticsearch/Qdrant는 Docker 컨테이너, fluent-bit는 brew로 설치). Docker
+Desktop은 미리 켜져 있어야 한다.
+
+```bash
+scripts/dev_infra.sh up       # 설치(필요시) + 3개 전부 기동
+scripts/dev_infra.sh status   # 상태 확인
+scripts/dev_infra.sh down     # 전부 정지
+```
+
+`up` 실행 후 안내되는 환경변수를 export하고 `scripts/run_app.sh`로 백엔드를
+띄우면 된다 (venv 없으면 생성 + 의존성 설치까지 자동):
+
+```bash
+scripts/run_app.sh
+```
+
+자세한 사용 흐름은 [TESTING.md](TESTING.md) 참고.
+
 ## fluentbit 사용법
 
 1. fluentbit-test.py 실행 : python3 fluentbit-test,py

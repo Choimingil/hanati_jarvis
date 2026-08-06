@@ -13,6 +13,14 @@ def _load_environment() -> None:
     if ENV_FILE.exists():
         load_dotenv(dotenv_path=ENV_FILE, override=False)
 
+    # A blank "OPENAI_BASE_URL=" line in .env makes python-dotenv set the
+    # env var to "" rather than leaving it unset. The openai SDK reads
+    # OPENAI_BASE_URL from the environment directly (independent of the
+    # base_url=None we pass in LLMConfig), so an empty string there makes
+    # every request fail with httpx.UnsupportedProtocol. Treat blank as unset.
+    if os.getenv("OPENAI_BASE_URL") == "":
+        del os.environ["OPENAI_BASE_URL"]
+
 
 _load_environment()
 
