@@ -11,9 +11,23 @@
 # app.py(scripts/run_app.sh)로 host.docker.internal을 통해 로그를 전달한다.
 # 전부 개발/테스트 전용 설정이다 (보안 비활성화).
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*|Windows_NT)
+    if command -v pwsh >/dev/null 2>&1; then
+      exec pwsh -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/dev_infra.ps1" "$@"
+    elif command -v powershell.exe >/dev/null 2>&1; then
+      exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/dev_infra.ps1" "$@"
+    else
+      echo "PowerShell이 필요합니다. Windows PowerShell 5.1 또는 PowerShell 7을 설치해 주세요."
+      exit 1
+    fi
+    ;;
+esac
+
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ES_CONTAINER="hanati-es"
 QDRANT_CONTAINER="hanati-qdrant"
 FLUENTBIT_CONTAINER="hanati-fluentbit"
