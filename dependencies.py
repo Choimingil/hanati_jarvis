@@ -24,7 +24,9 @@ elif CASE_SEARCHER_BACKEND == "elastic":
 else:
     case_searcher = QdrantCaseSearcher()
 
-recommendation_generator = LLMRecommendationGenerator()
+recommendation_generator = LLMRecommendationGenerator(
+    history_provider=repository
+)
 
 
 log_processor = LogProcessor(

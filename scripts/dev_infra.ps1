@@ -183,6 +183,13 @@ function Start-Elasticsearch {
         try {
             Invoke-WebRequest -Uri "http://localhost:$esPort" -UseBasicParsing -TimeoutSec 2 | Out-Null
             Write-Host ' done'
+            # 전체 DEBUG + watcher 틱 로거만 조용히 (라이선스 없어 watcher가
+            # 항상 paused라 매 틱마다 스팸만 남긴다).
+            try {
+                $body = '{"persistent":{"logger.org.elasticsearch":"DEBUG","logger.org.elasticsearch.xpack.watcher.trigger.schedule.engine":"ERROR"}}'
+                Invoke-WebRequest -Uri "http://localhost:$esPort/_cluster/settings" -Method Put `
+                    -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 5 | Out-Null
+            } catch {}
             return
         } catch {
             Write-Host -NoNewline '.'

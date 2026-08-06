@@ -31,3 +31,11 @@ class LogRepository(ABC):
         document: dict[str, Any],
     ) -> None:
         pass
+
+    @abstractmethod
+    def remediation_history(
+        self,
+        script_id: str,
+    ) -> dict[str, int]:
+        """해당 스크립트의 과거 실행 성공/실패 횟수."""
+        pass

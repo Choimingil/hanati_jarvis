@@ -72,7 +72,19 @@ start_elasticsearch() {
   fi
   echo -n "[elasticsearch] 기동 대기"
   for _ in $(seq 1 60); do
-    curl -sf "http://localhost:${ES_PORT}" >/dev/null 2>&1 && { echo " 완료"; return; }
+    curl -sf "http://localhost:${ES_PORT}" >/dev/null 2>&1 && {
+      echo " 완료"
+      # 전체 DEBUG + watcher 틱 로거만 조용히 (라이선스 없어 watcher가
+      # 항상 paused라 매 틱마다 스팸만 남긴다).
+      curl -sf -X PUT "http://localhost:${ES_PORT}/_cluster/settings" \
+        -H "Content-Type: application/json" \
+        -d '{"persistent":{
+              "logger.org.elasticsearch":"DEBUG",
+              "logger.org.elasticsearch.xpack.watcher.trigger.schedule.engine":"ERROR"
+            }}' \
+        >/dev/null 2>&1
+      return
+    }
     echo -n "."
     sleep 2
   done

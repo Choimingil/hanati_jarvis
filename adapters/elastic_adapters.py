@@ -53,6 +53,49 @@ class ElasticLogRepository(LogRepository):
     ) -> None:
         self._index(ELASTIC_REMEDIATION_INDEX, document)
 
+    def remediation_history(
+        self,
+        script_id: str,
+    ) -> dict[str, int]:
+        try:
+            response = self.client.search(
+                index=ELASTIC_REMEDIATION_INDEX,
+                query={
+                    "term": {"script_id.keyword": script_id}
+                },
+                size=0,
+                aggs={
+                    "by_status": {
+                        "terms": {
+                            "field": "result.status.keyword"
+                        }
+                    }
+                },
+                ignore_unavailable=True,
+            )
+        except Exception:
+            return {"success": 0, "failure": 0}
+
+        buckets = (
+            response.get("aggregations", {})
+            .get("by_status", {})
+            .get("buckets", [])
+        )
+
+        # "rejected"/"blocked"는 실제로 실행된 적이 없으니 성공/실패
+        # 어느 쪽에도 안 넣는다 - 넣으면 실행 이력이 아니라 거짓 통계가 된다.
+        success = 0
+        failure = 0
+        for bucket in buckets:
+            count = bucket.get("doc_count", 0)
+            key = bucket.get("key")
+            if key == "success":
+                success += count
+            elif key in ("failed", "timeout"):
+                failure += count
+
+        return {"success": success, "failure": failure}
+
 
 class ElasticCaseSearcher(CaseSearcher):
 

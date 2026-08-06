@@ -14,6 +14,7 @@ from typing import Any
 
 from config import SCRIPT_DESCRIPTIONS
 from llm_agent.services.llm_service import LLMService
+from ports.log_repository import LogRepository
 from ports.recommendation_generator import (
     RecommendationGenerator,
 )
@@ -21,6 +22,7 @@ from recommendation_ranker import (
     build_cause,
     build_ranked_actions,
 )
+from runbooks import REMEDIATION_RUNBOOKS
 
 
 class LLMRecommendationGenerator(RecommendationGenerator):
@@ -28,8 +30,10 @@ class LLMRecommendationGenerator(RecommendationGenerator):
     def __init__(
         self,
         llm_service: LLMService | None = None,
+        history_provider: LogRepository | None = None,
     ) -> None:
         self.llm_service = llm_service or LLMService()
+        self.history_provider = history_provider
 
     def generate(
         self,
@@ -63,6 +67,8 @@ class LLMRecommendationGenerator(RecommendationGenerator):
                 past_cases,
             )
 
+        runbooks = self._build_runbooks(cause, ranked)
+
         return {
             "error_code": error_code,
             "summary": f"{error_code} 에러가 감지되었습니다.",
@@ -70,15 +76,58 @@ class LLMRecommendationGenerator(RecommendationGenerator):
             "message": message,
             "diagnosis_summary": diagnosis_results,
             "past_cases": past_cases,
-            "ranked_actions": ranked,
-            "recommended_actions": [
-                action["script_id"] for action in ranked
-            ],
+            "runbooks": runbooks,
             "requires_approval": True,
             "generated_by": (
                 "llm" if used_llm else "llm-fallback"
             ),
         }
+
+    def _build_runbooks(
+        self,
+        cause: str,
+        ranked: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """스크립트 단위 랭킹(ranked)을 운영자가 승인/거부/진단 요청할 수
+        있는 Runbook 단위로 감싼다. 실행 이력은 매번 저장소에서 실시간
+        집계한다 (하드코딩하면 바로 거짓말이 되는 값이라)."""
+        runbooks = []
+
+        for action in ranked:
+            script_id = action["script_id"]
+            meta = REMEDIATION_RUNBOOKS.get(script_id, {})
+            history = {"success": 0, "failure": 0}
+            if self.history_provider is not None:
+                history = self.history_provider.remediation_history(
+                    script_id
+                )
+
+            runbooks.append({
+                "script_id": script_id,
+                "incident": meta.get(
+                    "incident",
+                    SCRIPT_DESCRIPTIONS.get(script_id, script_id),
+                ),
+                "estimated_cause": cause,
+                "confidence": round(
+                    max(0.0, min(1.0, action.get("score", 0.0)))
+                    * 100
+                ),
+                "action": meta.get(
+                    "action",
+                    SCRIPT_DESCRIPTIONS.get(script_id, script_id),
+                ),
+                "reason": action.get("reason", ""),
+                "expected_impact": meta.get(
+                    "expected_impact", "확인되지 않음"
+                ),
+                "history": history,
+                "rollback": meta.get(
+                    "rollback", "담당팀에게 에스컬레이션"
+                ),
+            })
+
+        return runbooks
 
     def _build_prompt(
         self,

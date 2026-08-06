@@ -9,9 +9,12 @@
 2. fluent-bit가 그 파일을 tail해서 `POST /api/v1/logs`로 백엔드에 전달 ->
    탐지 → 진단 → (LLM) 추천이 비동기로 이뤄진다. 화면은 그 결과가
    Elasticsearch에 쌓일 때까지 짧게 폴링한다.
-3. LLM이 준 "오류 원인"과 "추천도 높은 순 조치 스크립트 리스트"를 보여준다
-4. 그중 하나를 "실행"하면 `POST /api/v1/remediations/approve` 로 해당
-   스크립트를 실제로 호출하고 결과(stdout)를 보여준다
+3. LLM이 준 "오류 원인"과 신뢰도 높은 순 조치 제안을 Runbook 카드로 보여준다
+   (장애/추정 원인/신뢰도/조치/예상 영향/과거 실행 이력/실패 시 대응)
+4. 각 Runbook에서 "승인"하면 `POST /api/v1/remediations/approve` 로 해당
+   스크립트를 실제로 호출하고 결과(stdout)를 보여준다. "거부"는 스크립트를
+   실행하지 않고 감사 기록만 남긴다. "진단 요청"은 그 오류 코드의 진단
+   스크립트를 다시 돌려서 최신 상태를 보여준다
 """
 
 from flask import Blueprint, Response
@@ -83,21 +86,41 @@ _PAGE = """<!doctype html>
     background: var(--bar); color: var(--accent); border-radius: 999px;
     padding: 3px 10px; margin-bottom: 10px;
   }
-  .action {
+  .runbook {
     border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; margin-top: 12px; display: flex; gap: 14px;
-    align-items: center; flex-wrap: wrap;
+    padding: 16px; margin-top: 12px;
   }
-  .action .meta { flex: 1 1 320px; min-width: 0; }
-  .action .name { font-weight: 700; font-family: ui-monospace, monospace; }
-  .action .reason { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .rank { font-size: 12px; color: var(--muted); }
-  .scorebar {
-    height: 8px; background: var(--bar); border-radius: 999px;
-    overflow: hidden; margin-top: 8px;
+  .runbook-tag {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: var(--accent); letter-spacing: .02em; margin-bottom: 8px;
   }
-  .scorebar > span { display: block; height: 100%; background: var(--accent); }
-  .score-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .runbook dl {
+    display: grid; grid-template-columns: 88px 1fr; gap: 6px 12px;
+    margin: 0; font-size: 14px;
+  }
+  .runbook dt { color: var(--muted); font-size: 13px; }
+  .runbook dd { margin: 0; }
+  .runbook .confidence-bar {
+    height: 6px; background: var(--bar); border-radius: 999px;
+    overflow: hidden; margin-top: 4px; max-width: 220px;
+  }
+  .runbook .confidence-bar > span {
+    display: block; height: 100%; background: var(--accent);
+  }
+  .runbook .rollback { color: var(--err); }
+  .runbook .buttons {
+    display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+  }
+  .runbook button.reject {
+    background: transparent; color: var(--err); border: 1px solid var(--err);
+  }
+  .runbook button.diagnose {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+  }
+  .runbook.decided { opacity: .6; }
+  .runbook .decision {
+    font-size: 13px; font-weight: 700; margin-top: 10px;
+  }
   pre {
     background: var(--code-bg); color: var(--code-fg); padding: 14px;
     border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 10px 0 0;
@@ -184,8 +207,8 @@ _PAGE = """<!doctype html>
     <span id="errcode" class="pill"></span>
     <div><strong>현재 오류 원인</strong></div>
     <div id="cause" class="cause"></div>
-    <div style="margin-top:18px"><strong>추천 조치 스크립트</strong>
-      <span class="muted">(추천도 높은 순)</span></div>
+    <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
+      <span class="muted">(신뢰도 높은 순)</span></div>
     <div id="actions"></div>
   </div>
 
@@ -332,35 +355,61 @@ function renderRecommendation(errorCode, rec) {
   $("errcode").textContent = errorCode;
   $("cause").textContent = rec.cause || rec.summary || "";
 
-  const actions = rec.ranked_actions || [];
+  const runbooks = rec.runbooks || [];
   const box = $("actions");
   box.innerHTML = "";
 
-  actions.forEach((a, idx) => {
-    const pct = Math.round(Math.max(0, Math.min(1, a.score)) * 100);
+  runbooks.forEach((rb) => {
+    const pct = Math.max(0, Math.min(100, rb.confidence));
     const el = document.createElement("div");
-    el.className = "action";
+    el.className = "runbook";
     el.innerHTML = `
-      <div class="meta">
-        <div class="rank">#${idx + 1} · 추천도 <span class="score-num">${a.score}</span></div>
-        <div class="name">${a.script_id}</div>
-        <div class="reason">${a.reason || ""}</div>
-        <div class="scorebar"><span style="width:${pct}%"></span></div>
+      <div class="runbook-tag">조치 제안</div>
+      <dl>
+        <dt>장애</dt><dd>${rb.incident}</dd>
+        <dt>추정 원인</dt><dd>${rb.estimated_cause}</dd>
+        <dt>신뢰도</dt><dd>${pct}%
+          <div class="confidence-bar"><span style="width:${pct}%"></span></div>
+        </dd>
+        <dt>조치</dt><dd>${rb.action}</dd>
+        <dt>예상 영향</dt><dd>${rb.expected_impact}</dd>
+        <dt>과거 실행</dt><dd>성공 ${rb.history.success}회 / 실패 ${rb.history.failure}회</dd>
+        <dt>실패 시</dt><dd class="rollback">${rb.rollback}</dd>
+      </dl>
+      <div class="decision"></div>
+      <div class="buttons">
+        <button class="approve">승인</button>
+        <button class="reject">거부</button>
+        <button class="diagnose">진단 요청</button>
       </div>`;
-    const btn = document.createElement("button");
-    btn.className = idx === 0 ? "" : "secondary";
-    btn.textContent = "실행";
-    btn.addEventListener("click", () => runScript(a.script_id, btn));
-    el.appendChild(btn);
+
+    el.querySelector(".approve").addEventListener(
+      "click", () => decideRunbook(rb.script_id, el, "approve")
+    );
+    el.querySelector(".reject").addEventListener(
+      "click", () => decideRunbook(rb.script_id, el, "reject")
+    );
+    el.querySelector(".diagnose").addEventListener(
+      "click", () => requestDiagnosis(errorCode, el)
+    );
+
     box.appendChild(el);
   });
 }
 
-async function runScript(scriptId, btn) {
+function setRunbookButtonsDisabled(el, disabled) {
+  el.querySelectorAll(".buttons button").forEach((b) => {
+    b.disabled = disabled;
+  });
+}
+
+async function decideRunbook(scriptId, el, decision) {
   if (!currentErrorCode) return;
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = "실행 중…";
+  setRunbookButtonsDisabled(el, true);
+
+  const endpoint = decision === "approve"
+    ? "/api/v1/remediations/approve"
+    : "/api/v1/remediations/reject";
 
   const exec = $("exec");
   exec.classList.remove("hidden");
@@ -369,10 +418,10 @@ async function runScript(scriptId, btn) {
   $("exec-output").textContent = "";
 
   try {
-    const { status, data } = await postJSON("/api/v1/remediations/approve", {
+    const { status, data } = await postJSON(endpoint, {
       script_id: scriptId, error_code: currentErrorCode, approved_by: "web-ui",
     });
-    const ok = data.status === "success";
+    const ok = data.status === "success" || data.status === "rejected";
     const s = $("exec-status");
     s.className = ok ? "status-ok" : "status-err";
     s.textContent = `${data.status}` + (data.returncode !== undefined
@@ -380,12 +429,41 @@ async function runScript(scriptId, btn) {
     $("exec-output").textContent =
       (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :
         (data.reason ? "\\n" + data.reason : ""));
+
+    el.classList.add("decided");
+    el.querySelector(".decision").textContent =
+      decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
   } catch (e) {
     $("exec-status").className = "status-err";
-    $("exec-status").textContent = "실행 실패: " + e;
+    $("exec-status").textContent = "요청 실패: " + e;
+    setRunbookButtonsDisabled(el, false);
+  }
+}
+
+async function requestDiagnosis(errorCode, el) {
+  setRunbookButtonsDisabled(el, true);
+
+  const exec = $("exec");
+  exec.classList.remove("hidden");
+  $("exec-title").textContent = "진단 요청 — " + errorCode;
+  $("exec-status").textContent = "";
+  $("exec-output").textContent = "";
+
+  try {
+    const { data } = await postJSON("/api/v1/remediations/diagnose", {
+      error_code: errorCode,
+    });
+    const s = $("exec-status");
+    s.className = data.status === "ok" ? "status-ok" : "status-err";
+    s.textContent = data.status;
+    $("exec-output").textContent = JSON.stringify(
+      data.diagnosis_results || data, null, 2
+    );
+  } catch (e) {
+    $("exec-status").className = "status-err";
+    $("exec-status").textContent = "진단 요청 실패: " + e;
   } finally {
-    btn.disabled = false;
-    btn.textContent = original;
+    setRunbookButtonsDisabled(el, false);
   }
 }
 </script>
