@@ -9,6 +9,9 @@ from config import (
 )
 # NOTE: mock 백엔드 없음. LOG_REPOSITORY_BACKEND="elastic",
 # RECOMMENDATION_BACKEND="llm" 고정값 (config.py 참고).
+from routes.log_generator_routes import (
+    log_generator_blueprint,
+)
 from routes.log_routes import log_blueprint
 from routes.remediation_routes import (
     remediation_blueprint,
@@ -21,6 +24,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(log_blueprint)
     app.register_blueprint(remediation_blueprint)
+    app.register_blueprint(log_generator_blueprint)
     app.register_blueprint(web_blueprint)
 
     @app.get("/health")

@@ -2,8 +2,13 @@
 
 `GET /` 에서 단일 페이지를 제공한다. 흐름은 다음과 같다.
 
-1. 장애 시나리오(=log_generator가 만드는 오류)를 하나 골라 "분석" 클릭
-2. `POST /api/v1/logs` 로 로그를 보내 탐지 → 진단 → (LLM) 추천을 받는다
+1. 장애 시나리오(=log_generator/main.py가 발생시키는 오류)를 하나 골라
+   "분석" 클릭 -> 서버가 `log_generator/trigger.py`로 그 시나리오를 실제
+   실행해서 fluentbit가 tail하는 `fluentbit/application.log`에 그대로
+   기록한다 (main.py를 직접 돌렸을 때와 동일한 코드 경로).
+2. fluent-bit가 그 파일을 tail해서 `POST /api/v1/logs`로 백엔드에 전달 ->
+   탐지 → 진단 → (LLM) 추천이 비동기로 이뤄진다. 화면은 그 결과가
+   Elasticsearch에 쌓일 때까지 짧게 폴링한다.
 3. LLM이 준 "오류 원인"과 "추천도 높은 순 조치 스크립트 리스트"를 보여준다
 4. 그중 하나를 "실행"하면 `POST /api/v1/remediations/approve` 로 해당
    스크립트를 실제로 호출하고 결과(stdout)를 보여준다
@@ -49,14 +54,13 @@ _PAGE = """<!doctype html>
     border-radius: 12px; padding: 20px; margin-bottom: 18px;
   }
   label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
-  select, textarea, button {
+  select, button {
     font: inherit; color: inherit;
   }
-  select, textarea {
+  select {
     width: 100%; padding: 10px 12px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--fg);
   }
-  textarea { resize: vertical; min-height: 46px; margin-top: 10px; }
   .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
   .row > div { flex: 1 1 260px; }
   button {
@@ -97,26 +101,38 @@ _PAGE = """<!doctype html>
   pre {
     background: var(--code-bg); color: var(--code-fg); padding: 14px;
     border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 10px 0 0;
+    white-space: pre-wrap;
   }
+  .logline { opacity: 0; animation: fadein .25s ease forwards; }
+  .logline.WARN { color: #f5c451; }
+  .logline.ERROR { color: #ff8080; }
+  @keyframes fadein { to { opacity: 1; } }
   .status-ok { color: var(--ok); font-weight: 700; }
   .status-err { color: var(--err); font-weight: 700; }
+  .status-pending { color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Hanati Jarvis — 장애 대응 콘솔</h1>
-  <p class="sub">로그 → 오류 탐지 → 진단 → LLM 추천 → 조치 스크립트 실행</p>
+  <p class="sub">log_generator 시나리오 실행 → fluentbit 전달 → 오류 탐지 → 진단 → LLM 추천 → 조치 스크립트 실행</p>
 
   <div class="card">
     <div class="row">
       <div>
-        <label for="scenario">장애 시나리오 (log_generator가 발생시키는 오류)</label>
+        <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
         <select id="scenario"></select>
       </div>
-      <button id="analyze">분석</button>
+      <button id="analyze" disabled>분석</button>
     </div>
-    <textarea id="custom" placeholder="직접 로그 메시지를 입력하려면 여기에 (선택)"></textarea>
+  </div>
+
+  <div id="log" class="card hidden">
+    <div><strong>log_generator 실행 로그</strong>
+      <span class="muted">(fluentbit/application.log 기록분)</span></div>
+    <pre id="log-output"></pre>
+    <div id="wait-status" class="muted" style="margin-top:8px"></div>
   </div>
 
   <div id="result" class="card hidden">
@@ -136,23 +152,14 @@ _PAGE = """<!doctype html>
 </div>
 
 <script>
-const SCENARIOS = [
-  { label: "디스크 부족 (DISK_FULL)", message: "No space left on device." },
-  { label: "DNS 해석 실패 (DNS_RESOLUTION_FAILURE)", message: "Failed to resolve service endpoint." },
-  { label: "DB 커넥션 실패 (DB_CONNECTION_FAILURE)", message: "Database connection failed." },
-  { label: "외부 API 장애 (EXTERNAL_API_FAILURE)", message: "Received HTTP 503 from external API." },
-  { label: "메모리 릭 (MEMORY_LEAK)", message: "OutOfMemoryError encountered." },
-  { label: "Redis 연결 끊김 (REDIS_CONNECTION_FAILURE)", message: "Redis connection lost." },
-];
-
-const sel = document.getElementById("scenario");
-SCENARIOS.forEach((s, i) => {
-  const o = document.createElement("option");
-  o.value = i; o.textContent = s.label; sel.appendChild(o);
-});
-
 const $ = (id) => document.getElementById(id);
+const sel = $("scenario");
 let currentErrorCode = null;
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  return res.json();
+}
 
 async function postJSON(url, body) {
   const res = await fetch(url, {
@@ -163,45 +170,81 @@ async function postJSON(url, body) {
   return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
-$("analyze").addEventListener("click", async () => {
-  const custom = $("custom").value.trim();
-  const message = custom || SCENARIOS[sel.value].message;
+(async function loadScenarios() {
+  const scenarios = await getJSON("/api/v1/log-generator/scenarios");
+  scenarios.forEach((s) => {
+    const o = document.createElement("option");
+    o.value = s.key; o.textContent = s.label; sel.appendChild(o);
+  });
+  $("analyze").disabled = false;
+})();
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+$("analyze").addEventListener("click", async () => {
   $("analyze").disabled = true;
-  $("analyze").textContent = "분석 중…";
+  $("analyze").textContent = "시나리오 실행 중…";
+  $("log").classList.remove("hidden");
+  $("result").classList.add("hidden");
   $("exec").classList.add("hidden");
+  $("log-output").innerHTML = "";
+  $("wait-status").textContent = "";
 
   try {
-    const { data } = await postJSON("/api/v1/logs", {
-      level: "ERROR", message, service: "order-api", host: "web01",
+    const { data } = await postJSON("/api/v1/log-generator/run", {
+      scenario: sel.value,
     });
-    const r = Array.isArray(data) ? data[0] : data;
-    renderResult(r);
+
+    if (data.status !== "triggered") {
+      $("wait-status").textContent = "실행 실패: " + JSON.stringify(data);
+      return;
+    }
+
+    data.events.forEach((e, i) => {
+      const line = document.createElement("div");
+      line.className = "logline " + e.level;
+      line.style.animationDelay = (i * 60) + "ms";
+      line.textContent = `[${e.level}] ${e.message}`;
+      $("log-output").appendChild(line);
+    });
+
+    await waitForRecommendation(data.error_code, data.triggered_at);
   } catch (e) {
-    alert("분석 실패: " + e);
+    $("wait-status").textContent = "실행 실패: " + e;
   } finally {
     $("analyze").disabled = false;
     $("analyze").textContent = "분석";
   }
 });
 
-function renderResult(r) {
+async function waitForRecommendation(errorCode, since) {
+  $("wait-status").textContent =
+    "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
+
+  for (let i = 0; i < 20; i++) {
+    await sleep(1500);
+    const data = await getJSON(
+      `/api/v1/log-generator/latest-recommendation?error_code=${encodeURIComponent(errorCode)}&since=${encodeURIComponent(since)}`
+    );
+    if (data.status === "ready") {
+      $("wait-status").textContent = "";
+      renderRecommendation(errorCode, data.recommendation);
+      return;
+    }
+  }
+
+  $("wait-status").textContent =
+    "추천 결과 대기 시간 초과 — fluentbit/Elasticsearch/Qdrant 상태를 확인하세요.";
+}
+
+function renderRecommendation(errorCode, rec) {
+  currentErrorCode = errorCode;
   const result = $("result");
   result.classList.remove("hidden");
 
-  if (!r || r.status !== "recommended") {
-    currentErrorCode = null;
-    $("errcode").textContent = r ? r.status : "no-response";
-    $("cause").textContent = r && r.message
-      ? `'${r.message}' — 등록된 대응 규칙이 없습니다.`
-      : "추천을 생성할 수 없습니다.";
-    $("actions").innerHTML = "";
-    return;
-  }
-
-  currentErrorCode = r.error_code;
-  const rec = r.recommendation || {};
-  $("errcode").textContent = r.error_code;
+  $("errcode").textContent = errorCode;
   $("cause").textContent = rec.cause || rec.summary || "";
 
   const actions = rec.ranked_actions || [];

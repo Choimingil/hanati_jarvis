@@ -97,6 +97,16 @@ class ScenarioRunner:
         
         return []
 
+    def emit_once(self, scenario):
+        """정상 로그 1건 + 지정된 시나리오의 장애 이벤트를 확정적으로(확률 무시)
+        1회 내보낸다. 웹 콘솔의 "분석" 버튼처럼 특정 시나리오를 즉시
+        재현하고 싶을 때 쓴다 (무한 루프인 run()과 별개)."""
+        self._emit_normal_log()
+
+        for event in scenario.events():
+            time.sleep(event.delay)
+            self._emit_event(event)
+
     def run(self, scenario=None):
         scenarios = self._get_configured_scenarios()
         if scenario is not None:

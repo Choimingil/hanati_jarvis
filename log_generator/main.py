@@ -3,14 +3,13 @@ from pathlib import Path
 
 from logger.file_writer import FileWriter
 from logger.json_formatter import JsonFormatter
-from scenario.dns_failure_scenario import DNSFailureScenario
-from scenario.memory_leak_scenario import MemoryLeakScenario
-from scenario.external_api_failure_scenario import ExternalAPIFailureScenario
-from scenario.redis_cache_failure_scenario import RedisFailureScenario
-from scenario.disk_full_scenario import DiskFullScenario
-from scenario.database_connection_failure_scenario import DatabaseConnectionFailureScenario
+from registry import SCENARIO_REGISTRY
 from scenario.scenario_runner import ScenarioRunner
 from system.system_info import FailureBehavior, FailureScenarioConfig, NormalLogPattern, SystemInfo
+
+
+def _scenario(key: str):
+    return SCENARIO_REGISTRY[key][0]()
 
 
 # fluentbit/fluent-bit.conf가 tail하는 파일에 직접 쓴다. CWD와 무관하게
@@ -49,12 +48,12 @@ system = SystemInfo(
         probability=0.1,
         trigger_after=1.0,
         scenarios=[
-            FailureScenarioConfig(scenario=MemoryLeakScenario(), probability=0.05),
-            FailureScenarioConfig(scenario=DNSFailureScenario(), probability=0.03),
-            FailureScenarioConfig(scenario=ExternalAPIFailureScenario(), probability=0.03),
-            FailureScenarioConfig(scenario=RedisFailureScenario(), probability=0.03),
-            FailureScenarioConfig(scenario=DiskFullScenario(), probability=0.03),
-            FailureScenarioConfig(scenario=DatabaseConnectionFailureScenario(), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("memory_leak"), probability=0.05),
+            FailureScenarioConfig(scenario=_scenario("dns_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("external_api_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("redis_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("disk_full"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("db_connection_failure"), probability=0.03),
         ],
     ),
 )
