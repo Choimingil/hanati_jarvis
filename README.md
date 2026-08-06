@@ -4,18 +4,26 @@
 
 ## 로컬 인프라 자동 실행 (fluent-bit / Elasticsearch / Qdrant)
 
-`scripts/dev_infra.sh` 로 셋 다 없으면 설치하고 바로 기동한다 (macOS 기준,
-Elasticsearch/Qdrant는 Docker 컨테이너, fluent-bit는 brew로 설치). Docker
-Desktop은 미리 켜져 있어야 한다.
+**mock 백엔드 없음.** 셋 다 Docker 컨테이너로 띄운다 (fluent-bit도 포함,
+`fluentbit/fluent-bit.conf`/`parser.conf`를 그대로 마운트해서 씀). 셋 중
+하나라도 꺼져 있으면 관련 API 요청이 그대로 실패한다 — Docker Desktop을
+먼저 켜둘 것.
 
 ```bash
-scripts/dev_infra.sh up       # 설치(필요시) + 3개 전부 기동
+scripts/dev_infra.sh up       # 이미지 없으면 받아서 3개 전부 기동
 scripts/dev_infra.sh status   # 상태 확인
 scripts/dev_infra.sh down     # 전부 정지
 ```
 
-`up` 실행 후 안내되는 환경변수를 export하고 `scripts/run_app.sh`로 백엔드를
-띄우면 된다 (venv 없으면 생성 + 의존성 설치까지 자동):
+`config.py`의 `QDRANT_URL`/`ELASTICSEARCH_URL` 기본값이 위 컨테이너를
+가리키므로 별도 export 없이 바로 연동된다. 최초 1회 데이터 시딩:
+
+```bash
+python -m qdrant.seed
+python -m elastic.seed_cases
+```
+
+백엔드 실행 (venv 없으면 생성 + 의존성 설치까지 자동):
 
 ```bash
 scripts/run_app.sh
@@ -25,13 +33,13 @@ scripts/run_app.sh
 
 ## fluentbit 사용법
 
-1. fluentbit-test.py 실행 : python3 fluentbit-test,py
+fluent-bit는 `scripts/dev_infra.sh up`으로 Docker 컨테이너로 뜬다 (위
+"로컬 인프라 자동 실행" 참고). 동작 확인:
 
-2. fluentbit 디렉토리 내에서 fluent-bit -c ./fluent-bit.conf 수행
-
-3. 다른 터미널에서 fluentbit 디렉토리 진입 후 echo '{"timestamp":"2026-07-13T19:40:00+0900","level":"INFO","message":"HTTP output test"}' >> application.log 수행
-
-4. 파이썬 실행한 터미널에서 API 넘어온 것 확인
+1. `scripts/run_app.sh`로 백엔드 실행
+2. 다른 터미널에서 `fluentbit` 디렉토리 진입 후
+   `echo '{"timestamp":"2026-07-13T19:40:00+0900","level":"INFO","message":"HTTP output test"}' >> application.log` 수행
+3. 백엔드 실행한 터미널이나 `docker logs -f hanati-fluentbit`에서 API 넘어온 것 확인
 
 
 

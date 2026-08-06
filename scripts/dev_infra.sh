@@ -1,65 +1,45 @@
 #!/usr/bin/env bash
-# 로컬 개발용 fluent-bit / Elasticsearch / Qdrant 자동 설치·기동 스크립트 (macOS 기준)
+# 로컬 개발용 fluent-bit / Elasticsearch / Qdrant 자동 기동 스크립트 (Docker 기반)
 #
 # 사용법:
-#   scripts/dev_infra.sh up       # 설치 필요하면 설치 후 3개 전부 기동
+#   scripts/dev_infra.sh up       # 이미지 없으면 받아서 3개 전부 기동
 #   scripts/dev_infra.sh down     # 전부 정지
 #   scripts/dev_infra.sh status   # 상태만 확인
 #
-# Elasticsearch/Qdrant는 Docker 컨테이너로, fluent-bit는 brew로 설치해서
-# 로컬 프로세스로 띄운다. 전부 개발/테스트 전용 설정이다 (보안 비활성화).
+# 셋 다 Docker 컨테이너로 띄운다. fluent-bit는 fluentbit/ 디렉토리를 그대로
+# 마운트해서 fluent-bit.conf / parser.conf를 쓰고, 호스트에서 도는
+# app.py(scripts/run_app.sh)로 host.docker.internal을 통해 로그를 전달한다.
+# 전부 개발/테스트 전용 설정이다 (보안 비활성화).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ES_CONTAINER="hanati-es"
 QDRANT_CONTAINER="hanati-qdrant"
+FLUENTBIT_CONTAINER="hanati-fluentbit"
 ES_PORT="9200"
 QDRANT_PORT="6333"
-FLUENTBIT_LOG="/tmp/hanati-fluentbit.log"
-
-need_brew() {
-  command -v brew >/dev/null || { echo "brew 없음. https://brew.sh 에서 설치 후 재실행"; exit 1; }
-}
 
 need_docker() {
   command -v docker >/dev/null || { echo "docker 없음. Docker Desktop 설치 후 재실행"; exit 1; }
   docker info >/dev/null 2>&1 || { echo "docker 데몬이 안 떠 있음. Docker Desktop 실행 후 재실행"; exit 1; }
 }
 
-install_fluent_bit() {
-  if command -v fluent-bit >/dev/null; then
-    echo "[fluent-bit] 이미 설치됨"
-    return
-  fi
-  echo "[fluent-bit] 설치 중.."
-  need_brew
-  brew install fluent-bit
+container_running() {
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$1"
 }
 
-start_fluent_bit() {
-  if pgrep -f "fluent-bit -c" >/dev/null 2>&1; then
-    echo "[fluent-bit] 이미 실행 중"
-    return
-  fi
-  echo "[fluent-bit] 시작.."
-  (cd "$REPO_ROOT/fluentbit" && nohup fluent-bit -c ./fluent-bit.conf > "$FLUENTBIT_LOG" 2>&1 &)
-  sleep 1
-  echo "[fluent-bit] 실행됨 (로그: $FLUENTBIT_LOG)"
-}
-
-stop_fluent_bit() {
-  echo "[fluent-bit] 종료.."
-  pkill -f "fluent-bit -c" 2>/dev/null || true
+container_exists() {
+  docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "$1"
 }
 
 start_elasticsearch() {
   need_docker
-  if docker ps --format '{{.Names}}' | grep -qx "$ES_CONTAINER"; then
+  if container_running "$ES_CONTAINER"; then
     echo "[elasticsearch] 이미 실행 중"
     return
   fi
-  if docker ps -a --format '{{.Names}}' | grep -qx "$ES_CONTAINER"; then
+  if container_exists "$ES_CONTAINER"; then
     echo "[elasticsearch] 기존 컨테이너 재시작"
     docker start "$ES_CONTAINER" >/dev/null
   else
@@ -81,11 +61,11 @@ start_elasticsearch() {
 
 start_qdrant() {
   need_docker
-  if docker ps --format '{{.Names}}' | grep -qx "$QDRANT_CONTAINER"; then
+  if container_running "$QDRANT_CONTAINER"; then
     echo "[qdrant] 이미 실행 중"
     return
   fi
-  if docker ps -a --format '{{.Names}}' | grep -qx "$QDRANT_CONTAINER"; then
+  if container_exists "$QDRANT_CONTAINER"; then
     echo "[qdrant] 기존 컨테이너 재시작"
     docker start "$QDRANT_CONTAINER" >/dev/null
   else
@@ -103,7 +83,36 @@ start_qdrant() {
   echo " 시간 초과 (docker logs $QDRANT_CONTAINER 로 확인)"
 }
 
-stop_containers() {
+start_fluent_bit() {
+  need_docker
+  if container_running "$FLUENTBIT_CONTAINER"; then
+    echo "[fluent-bit] 이미 실행 중"
+    return
+  fi
+  if container_exists "$FLUENTBIT_CONTAINER"; then
+    echo "[fluent-bit] 기존 컨테이너 재시작"
+    docker start "$FLUENTBIT_CONTAINER" >/dev/null
+  else
+    echo "[fluent-bit] 컨테이너 생성 (fluentbit/ 디렉토리 마운트)"
+    # host.docker.internal: mac/windows는 기본 지원, 리눅스는 add-host로 보강
+    docker run -d --name "$FLUENTBIT_CONTAINER" \
+      -v "${REPO_ROOT}/fluentbit:/fluent-bit/etc" \
+      -w /fluent-bit/etc \
+      --add-host=host.docker.internal:host-gateway \
+      fluent/fluent-bit:3.1 \
+      -c /fluent-bit/etc/fluent-bit.conf >/dev/null
+  fi
+  sleep 1
+  if container_running "$FLUENTBIT_CONTAINER"; then
+    echo "[fluent-bit] 실행됨 (docker logs -f ${FLUENTBIT_CONTAINER} 로 확인)"
+  else
+    echo "[fluent-bit] 기동 실패, docker logs ${FLUENTBIT_CONTAINER} 로 확인"
+  fi
+}
+
+stop_all() {
+  echo "[fluent-bit] 컨테이너 정지.."
+  docker stop "$FLUENTBIT_CONTAINER" >/dev/null 2>&1 || true
   echo "[elasticsearch] 컨테이너 정지.."
   docker stop "$ES_CONTAINER" >/dev/null 2>&1 || true
   echo "[qdrant] 컨테이너 정지.."
@@ -113,44 +122,38 @@ stop_containers() {
 print_env_hint() {
   cat <<EOF
 
-다음 환경변수로 앱을 실행하면 로컬 인프라를 사용한다:
-
-  export QDRANT_URL=http://localhost:${QDRANT_PORT}
-  export ELASTICSEARCH_URL=http://localhost:${ES_PORT}
-  export ELASTICSEARCH_VERIFY_CERTS=false
-  export CASE_SEARCHER_BACKEND=hybrid   # qdrant / elastic 도 가능
+app.py는 QDRANT_URL/ELASTICSEARCH_URL 기본값이 위 컨테이너를 가리키도록
+되어 있어서 별도 export 없이 바로 연동된다. mock 백엔드는 없다 —
+셋 중 하나라도 꺼져 있으면 관련 요청이 그대로 실패한다.
 
 최초 1회 데이터 시딩:
   python -m qdrant.seed
   python -m elastic.seed_cases
 
-fluentbit -> 백엔드 파이프라인 확인은 TESTING.md 6번 참고
-(백엔드는 별도 터미널에서 'python app.py'로 직접 실행).
+앱 실행: scripts/run_app.sh
+fluentbit -> 백엔드 파이프라인 확인은 TESTING.md 6번 참고.
 EOF
 }
 
 cmd_status() {
-  pgrep -f "fluent-bit -c" >/dev/null 2>&1 && echo "fluent-bit: running" || echo "fluent-bit: stopped"
-  if command -v docker >/dev/null 2>&1; then
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$ES_CONTAINER" && echo "elasticsearch: running" || echo "elasticsearch: stopped"
-    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$QDRANT_CONTAINER" && echo "qdrant: running" || echo "qdrant: stopped"
-  else
-    echo "elasticsearch: docker 없음"
-    echo "qdrant: docker 없음"
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "docker 없음"
+    return
   fi
+  container_running "$FLUENTBIT_CONTAINER" && echo "fluent-bit: running" || echo "fluent-bit: stopped"
+  container_running "$ES_CONTAINER" && echo "elasticsearch: running" || echo "elasticsearch: stopped"
+  container_running "$QDRANT_CONTAINER" && echo "qdrant: running" || echo "qdrant: stopped"
 }
 
 case "${1:-up}" in
   up)
-    install_fluent_bit
     start_elasticsearch
     start_qdrant
     start_fluent_bit
     print_env_hint
     ;;
   down)
-    stop_fluent_bit
-    stop_containers
+    stop_all
     ;;
   status)
     cmd_status

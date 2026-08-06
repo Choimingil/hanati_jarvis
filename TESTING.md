@@ -5,11 +5,10 @@
 코드가 실제로 동작하는지 확인하는 절차를 정리한다. 코드 구조 자체가
 궁금하면 [ARCHITECTURE.md](ARCHITECTURE.md)를 먼저 보는 걸 추천한다.
 
-> **범위 안내**: 추천 문구를 생성하는 `recommendation_generator`(LLM 연동)는
-> 다른 팀원이 별도로 작업 중이라 이 문서/이번 작업에서는 다루지 않는다.
-> 지금은 `MockRecommendationGenerator`가 고정 포맷으로 응답한다. 이 문서는
-> 그 앞뒤 — 탐지/진단/**과거 사례 검색(Qdrant+Elasticsearch)**/운영자
-> 승인/스크립트 실행 — 이 실제로 동작하는지에 집중한다.
+> **mock 없음**: `CaseSearcher`(Qdrant/Elasticsearch), `LogRepository`
+> (Elasticsearch), `RecommendationGenerator`(LLM) 전부 실제 백엔드만
+> 있다. fluent-bit/Elasticsearch/Qdrant 중 하나라도 꺼져 있으면 해당
+> 기능은 그대로 실패한다 (`scripts/dev_infra.sh`로 셋 다 띄운다).
 
 ## 0. 전체 그림
 
@@ -29,19 +28,23 @@
 
 ```bash
 cd hanati_jarvis
-python3 -m venv venv          # 이미 있다면 생략
+scripts/dev_infra.sh up   # fluent-bit + Elasticsearch + Qdrant 전부 Docker로 기동
+python3 -m venv venv      # 이미 있다면 생략
 source venv/bin/activate
 pip install -r requirements.txt
+
+# 최초 1회 데이터 시딩
+python -m qdrant.seed
+python -m elastic.seed_cases
 ```
 
-## 2. 가장 빠른 스모크 테스트 (외부 의존성 없음, mock 모드)
+## 2. 스모크 테스트
 
-아무 환경변수도 지정하지 않으면 `CaseSearcher`/`LogRepository` 둘 다 mock으로
-동작한다. Qdrant, Elasticsearch 서버가 없어도 전체 API 흐름(탐지 → 진단 →
-추천 → 승인 → 실행)을 바로 확인할 수 있다.
+`config.py`의 `QDRANT_URL`/`ELASTICSEARCH_URL` 기본값이 `dev_infra.sh`가
+띄운 컨테이너를 가리켜서 별도 env 없이 바로 동작한다.
 
 ```bash
-python app.py
+scripts/run_app.sh
 # -> http://0.0.0.0:8080 에서 서빙
 ```
 
@@ -98,75 +101,25 @@ curl -s -X POST http://localhost:8080/api/v1/logs \
 # recommended_actions -> ["update_jdbc_driver", "modify_sqlnet"]
 ```
 
-## 3. Qdrant 기반 추천 테스트
+## 3. 과거 사례 검색 (Qdrant + Elasticsearch, 기본값 hybrid)
+
+`CASE_SEARCHER_BACKEND` 기본값은 `hybrid` — Qdrant(벡터 유사도)와
+Elasticsearch(키워드) 둘 다 조회해서 병합한다(동일 `incident_id`는 점수
+높은 쪽 채택). `qdrant` / `elastic` 값으로 한쪽만 쓰게 강제할 수도 있다:
 
 ```bash
-# incident_cases.py의 과거 사례를 Qdrant에 임베딩해서 업로드 (최초 1회)
-python -m qdrant.seed
-
-CASE_SEARCHER_BACKEND=qdrant python app.py
+CASE_SEARCHER_BACKEND=qdrant scripts/run_app.sh   # Qdrant만
+CASE_SEARCHER_BACKEND=elastic scripts/run_app.sh  # Elasticsearch만
 ```
 
-위 1번 curl(디스크 부족 로그)을 다시 보내보면, `past_cases`가 하드코딩된
-mock 응답 대신 Qdrant 벡터 검색 결과(유사도 `score` 포함, 여러 건)로 채워지는
-것을 확인할 수 있다.
+1번 curl(디스크 부족 로그)을 보내면 `past_cases`가 실제 검색 결과(유사도
+`score` 포함)로 채워진다. 둘 중 하나라도 꺼져 있으면(`scripts/dev_infra.sh
+down` 등) 해당 요청은 연결 에러로 실패한다 — mock으로 대체되지 않는다.
 
-## 4. Elasticsearch 기반 추천 테스트
+저장된 Elasticsearch 문서는 `python -m elastic.search_log`류 스크립트나
+Kibana/`curl localhost:9200/...`로 직접 확인 가능하다.
 
-로컬에 Elasticsearch가 없다면(예: 이 저장소를 처음 받은 환경) 아래처럼 보안
-없이 단일 노드로 띄운다. **개발/테스트 전용 설정이다 — 운영에는 사용하지
-말 것.**
-
-```bash
-docker run -d --name test-es \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  docker.elastic.co/elasticsearch/elasticsearch:8.15.0
-```
-
-```bash
-export ELASTICSEARCH_URL=http://localhost:9200
-export ELASTICSEARCH_USER=elastic
-export ELASTICSEARCH_PASSWORD=
-export ELASTICSEARCH_VERIFY_CERTS=false
-
-# 연결 확인
-python -m elastic.main
-
-# incident_cases.py의 과거 사례를 incident-cases 인덱스에 시딩 (최초 1회)
-python -m elastic.seed_cases
-
-# LogRepository도 Elasticsearch로 저장하고 싶다면 함께 지정
-LOG_REPOSITORY_BACKEND=elastic CASE_SEARCHER_BACKEND=elastic python app.py
-```
-
-1번의 curl을 다시 보내면 `past_cases`가 Elasticsearch 키워드 검색 결과로
-채워지고, `/health`의 `storage`가 `elastic`으로 표시된다. 저장된 문서는
-`python -m elastic.search_log`류 스크립트나 Kibana/`curl localhost:9200/...`로
-직접 확인 가능하다.
-
-> **이 환경에서 직접 검증한 것과 못한 것**: 이 세션에서는 로컬에 Docker가
-> 떠 있지 않아 실제 Elasticsearch 서버로 end-to-end 저장/조회까지는 확인하지
-> 못했다. `LOG_REPOSITORY_BACKEND=elastic`/`CASE_SEARCHER_BACKEND=elastic`
-> 로 실행했을 때 코드 경로가 정확히 Elasticsearch까지 도달하고, 서버가 없을
-> 땐 앱이 죽지 않고 `processing_failed`로 깔끔하게 에러를 반환하는 것까지는
-> 확인했다. 위 docker 명령으로 실제 서버를 띄운 뒤 한 번 더 검증해보는 걸
-> 권장한다.
-
-## 5. Hybrid 모드 (Qdrant + Elasticsearch 동시 활용)
-
-기획서의 "Qdrant와 Elasticsearch의 내용들을 토대로 추천"을 가장 그대로
-구현한 모드. 두 백엔드 모두 시딩되어 있어야 한다(3, 4번 먼저 수행).
-
-```bash
-CASE_SEARCHER_BACKEND=hybrid python app.py
-```
-
-`past_cases`에 Qdrant 벡터 검색과 Elasticsearch 키워드 검색 결과가 합쳐져서
-(동일 `incident_id`는 점수가 더 높은 쪽으로 병합) 반환된다.
-
-## 6. fluentbit + log_generator로 실제 파이프라인 태우기
+## 4. fluentbit + log_generator로 실제 파이프라인 태우기
 
 `log_generator/`가 정상/장애 로그를 만들어내고, fluentbit가 그 파일을 tail
 해서 `/api/v1/logs`로 전달하는 흐름이다. **처음 점검했을 때는 이 둘이
@@ -183,32 +136,38 @@ CASE_SEARCHER_BACKEND=hybrid python app.py
   절대경로로 계산한 `fluentbit/application.log`)에 `JsonFormatter`로 쓴다.
   CWD가 어디든 항상 같은 파일을 가리킨다.
 
-수정 후 아래 절차로 실행하면 된다:
+fluent-bit는 이제 `scripts/dev_infra.sh up`으로 Docker 컨테이너로 뜬다
+(`fluentbit/` 디렉토리를 통째로 마운트해서 `fluent-bit.conf`/`parser.conf`를
+그대로 쓰고, `Host host.docker.internal`로 호스트에서 도는 백엔드에
+전달한다). 절차:
 
 ```bash
-# 터미널 1: 백엔드
-python app.py
+# 터미널 1: 인프라 (fluent-bit 포함 3개 전부)
+scripts/dev_infra.sh up
 
-# 터미널 2: fluentbit
-cd fluentbit
-fluent-bit -c ./fluent-bit.conf
+# 터미널 2: 백엔드
+scripts/run_app.sh
 
 # 터미널 3: 로그 시뮬레이터
 cd log_generator
 python main.py
 # -> fluentbit/application.log 에 JSON 로그가 계속 쌓이고,
-#    fluentbit가 곧바로 tail해서 /api/v1/logs로 전달한다 (Ctrl+C로 중단)
+#    fluent-bit 컨테이너가 tail해서 host.docker.internal:8080 으로 전달 (Ctrl+C로 중단)
 ```
 
-**실제로 위 3개 프로세스를 동시에 띄워서 확인했다.** `python main.py`가 쓴
-정상 로그(`INFO`)는 fluentbit를 거쳐 `{"status":"ignored"}`로, 무작위로
+fluent-bit 컨테이너 로그는 `docker logs -f hanati-fluentbit`로 본다.
+
+**실제로 위 조합을 다시 띄워서 확인했다(Docker 전환 후 재검증).**
+`python main.py`가 쓴 정상 로그(`INFO`)는 `{"status":"ignored"}`로, 무작위로
 뽑힌 `ExternalAPIFailureScenario`/`MemoryLeakScenario` 등의 `ERROR` 로그는
-`{"status":"unknown_error"}`로 도착하는 것을 fluent-bit의 `Log_Response_Payload`
-로그에서 직접 확인했다. `DiskFullScenario`는 확률 기반이라 자연 발생을
-기다리는 대신 같은 파일에 강제로 한 번 더 써서(`probability=1.0`으로 고정)
-검증했는데, `{"status":"recommended","error_code":"DISK_FULL",...}` 까지
-fluentbit → 백엔드 경로로 정확히 도착했다 — 진단 스크립트 실행, mock 과거
-사례 검색, 추천안 생성까지 전부 정상 동작.
+`{"status":"unknown_error"}`로 도착하는 것을 `docker logs`의
+`Log_Response_Payload`에서 직접 확인했다. `DiskFullScenario`는 확률 기반이라
+자연 발생을 기다리는 대신 같은 파일에 강제로 한 번 더 써서
+(`probability=1.0`으로 고정) 검증했는데, `{"status":"recommended",
+"error_code":"DISK_FULL",...}` 까지 fluent-bit(도커) → 백엔드 →
+Qdrant+Elasticsearch(hybrid) → LLM 경로로 정확히 도착했다 —
+`past_cases`에 두 백엔드 결과가 섞여 있고 `generated_by`가 `llm`인 것까지
+확인.
 
 이제 6개 장애 시나리오가 모두 `error_detector.py`에서 인식된다
 (`DISK_FULL`, `DNS_RESOLUTION_FAILURE`, `DB_CONNECTION_FAILURE`,
@@ -223,9 +182,9 @@ fluentbit → 백엔드 경로로 정확히 도착했다 — 진단 스크립트
 > application.log` 데모도 동일한 파일을 대상으로 하기 때문에 여전히 그대로
 > 동작한다 (직접 재확인함).
 
-## 7. 웹 콘솔 (운영자 UI)
+## 5. 웹 콘솔 (운영자 UI)
 
-`python app.py` 로 서버를 띄운 뒤 브라우저에서 `http://localhost:8080/` 로
+`scripts/run_app.sh` 로 서버를 띄운 뒤 브라우저에서 `http://localhost:8080/` 로
 접속하면 운영자용 단일 페이지가 나온다.
 
 1. 장애 시나리오(=log_generator가 만드는 6개 오류)를 하나 고르고 **분석** 클릭
@@ -241,7 +200,7 @@ fluentbit → 백엔드 경로로 정확히 도착했다 — 진단 스크립트
 `recommendation_ranker.py`의 결정론적 랭킹으로 자동 대체되므로 키 없이도
 페이지가 정상 동작한다.
 
-## 8. 알려진 제한사항 / 다음에 할 일
+## 6. 알려진 제한사항 / 다음에 할 일
 
 - 실제 LLM 호출은 `OPENAI_API_KEY`가 있을 때만 이뤄지고, 없으면 결정론적
   fallback 랭킹으로 동작한다(`generated_by`가 `llm` ↔ `llm-fallback`으로 구분됨).
@@ -249,5 +208,6 @@ fluentbit → 백엔드 경로로 정확히 도착했다 — 진단 스크립트
   하는 단순 로직이다. Qdrant(코사인 유사도)와 Elasticsearch(BM25) 점수
   스케일이 서로 달라 단순 비교는 정확하지 않을 수 있다 — 지금은 두 소스를
   "함께 보여준다"는 최소 요건만 만족시킨 상태.
-- 이 환경에는 Elasticsearch가 없어 4번 항목은 코드 경로만 검증했고 실 서버
-  기준 재검증이 필요하다.
+- mock 백엔드는 전부 제거했다. fluent-bit/Elasticsearch/Qdrant 중 하나라도
+  꺼져 있으면 관련 요청은 연결 에러로 실패한다 (앱 자체는 뜨고 `/health`는
+  응답한다 - 개별 요청만 실패).

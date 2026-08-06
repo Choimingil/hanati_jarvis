@@ -7,6 +7,8 @@ from config import (
     LOG_REPOSITORY_BACKEND,
     RECOMMENDATION_BACKEND,
 )
+# NOTE: mock 백엔드 없음. LOG_REPOSITORY_BACKEND="elastic",
+# RECOMMENDATION_BACKEND="llm" 고정값 (config.py 참고).
 from routes.log_routes import log_blueprint
 from routes.remediation_routes import (
     remediation_blueprint,

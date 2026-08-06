@@ -147,20 +147,19 @@ REMEDIATION_SCRIPTS = {
 }
 
 
-# "mock" (기본값) / "qdrant" / "elastic" / "hybrid" 중 선택.
+# "qdrant" / "elastic" / "hybrid" (기본값) 중 선택. mock 없음 - Qdrant/
+# Elasticsearch가 꺼져 있으면 case_searcher 요청은 그대로 실패한다.
 # - qdrant  : QdrantCaseSearcher (벡터 유사도 검색)
 # - elastic : ElasticCaseSearcher (키워드 검색)
 # - hybrid  : 위 둘을 함께 조회해서 병합 (Qdrant + Elasticsearch 모두 근거로 추천)
 CASE_SEARCHER_BACKEND = os.getenv(
-    "CASE_SEARCHER_BACKEND", "mock"
+    "CASE_SEARCHER_BACKEND", "hybrid"
 )
 
-# QDRANT_URL이 설정되어 있으면 원격/Docker Qdrant 서버에
-# 접속하고, 없으면 QDRANT_PATH 경로에 로컬 파일 기반으로 저장한다.
-QDRANT_URL = os.getenv("QDRANT_URL")
-QDRANT_PATH = os.getenv(
-    "QDRANT_PATH",
-    os.path.join(BASE_DIR, "qdrant", "qdrant_data"),
+# scripts/dev_infra.sh가 띄우는 Qdrant 컨테이너 기본 주소.
+# 반드시 실제 Qdrant 서버를 가리켜야 한다 (로컬 파일 fallback 없음).
+QDRANT_URL = os.getenv(
+    "QDRANT_URL", "http://localhost:6333"
 )
 QDRANT_COLLECTION = os.getenv(
     "QDRANT_COLLECTION", "incident_cases"
@@ -175,24 +174,21 @@ EMBEDDING_VECTOR_SIZE = int(
 )
 
 
-# "llm" (기본값) 또는 "mock" 중 선택.
-# - llm  : LLMRecommendationGenerator. LLM(OpenAI 호환)에게 오류 원인과
-#          추천 스크립트 랭킹을 물어본다. OPENAI_API_KEY가 없으면 자동으로
-#          결정론적 fallback 랭킹으로 동작한다(앱은 죽지 않음).
-# - mock : MockRecommendationGenerator. LLM 없이 고정 로직으로 랭킹 생성.
-RECOMMENDATION_BACKEND = os.getenv(
-    "RECOMMENDATION_BACKEND", "llm"
-)
+# LLMRecommendationGenerator. LLM(OpenAI 호환)에게 오류 원인과 추천
+# 스크립트 랭킹을 물어본다. OPENAI_API_KEY가 없으면 llm_agent 쪽
+# 결정론적 fallback 랭킹으로 동작한다 - 이건 mock이 아니라 LLM 자체의
+# 내부 fallback이라 그대로 둔다.
+RECOMMENDATION_BACKEND = "llm"
 
 
-# "mock" (기본값) 또는 "elastic" 중 선택. elastic로 두면
-# repository가 ElasticLogRepository로 교체된다.
-LOG_REPOSITORY_BACKEND = os.getenv(
-    "LOG_REPOSITORY_BACKEND", "mock"
-)
+# repository는 항상 ElasticLogRepository. mock 없음 - Elasticsearch가
+# 꺼져 있으면 로그/진단/추천 저장 요청이 그대로 실패한다.
+LOG_REPOSITORY_BACKEND = "elastic"
 
+# scripts/dev_infra.sh가 띄우는 Elasticsearch 컨테이너는 개발용으로
+# xpack.security.enabled=false, 즉 http/무인증이라 기본값도 맞춰둔다.
 ELASTICSEARCH_URL = os.getenv(
-    "ELASTICSEARCH_URL", "https://localhost:9200"
+    "ELASTICSEARCH_URL", "http://localhost:9200"
 )
 ELASTICSEARCH_USER = os.getenv(
     "ELASTICSEARCH_USER", "elastic"

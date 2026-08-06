@@ -1,34 +1,18 @@
-from adapters.mock_adapters import (
-    MockCaseSearcher,
-    MockLogRepository,
-    MockRecommendationGenerator,
+from adapters.elastic_adapters import (
+    ElasticCaseSearcher,
+    ElasticLogRepository,
 )
-from config import (
-    CASE_SEARCHER_BACKEND,
-    LOG_REPOSITORY_BACKEND,
-    RECOMMENDATION_BACKEND,
-)
+from adapters.llm_adapters import LLMRecommendationGenerator
+from adapters.qdrant_adapters import QdrantCaseSearcher
+from config import CASE_SEARCHER_BACKEND
 from log_processor import LogProcessor
 
 
-if LOG_REPOSITORY_BACKEND == "elastic":
-    from adapters.elastic_adapters import (
-        ElasticLogRepository,
-    )
-
-    repository = ElasticLogRepository()
-else:
-    repository = MockLogRepository()
+repository = ElasticLogRepository()
 
 if CASE_SEARCHER_BACKEND == "hybrid":
-    from adapters.elastic_adapters import (
-        ElasticCaseSearcher,
-    )
     from adapters.hybrid_adapters import (
         HybridCaseSearcher,
-    )
-    from adapters.qdrant_adapters import (
-        QdrantCaseSearcher,
     )
 
     case_searcher = HybridCaseSearcher(
@@ -36,32 +20,11 @@ if CASE_SEARCHER_BACKEND == "hybrid":
         keyword_searcher=ElasticCaseSearcher(),
     )
 elif CASE_SEARCHER_BACKEND == "elastic":
-    from adapters.elastic_adapters import (
-        ElasticCaseSearcher,
-    )
-
     case_searcher = ElasticCaseSearcher()
-elif CASE_SEARCHER_BACKEND == "qdrant":
-    from adapters.qdrant_adapters import (
-        QdrantCaseSearcher,
-    )
-
+else:
     case_searcher = QdrantCaseSearcher()
-else:
-    case_searcher = MockCaseSearcher()
 
-if RECOMMENDATION_BACKEND == "mock":
-    recommendation_generator = (
-        MockRecommendationGenerator()
-    )
-else:
-    from adapters.llm_adapters import (
-        LLMRecommendationGenerator,
-    )
-
-    recommendation_generator = (
-        LLMRecommendationGenerator()
-    )
+recommendation_generator = LLMRecommendationGenerator()
 
 
 log_processor = LogProcessor(

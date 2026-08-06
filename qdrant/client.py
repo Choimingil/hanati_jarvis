@@ -5,17 +5,18 @@ from sentence_transformers import SentenceTransformer
 
 from config import (
     EMBEDDING_MODEL_NAME,
-    QDRANT_PATH,
     QDRANT_URL,
 )
 
 
 @lru_cache(maxsize=1)
 def get_client() -> QdrantClient:
-    if QDRANT_URL:
-        return QdrantClient(url=QDRANT_URL)
+    if not QDRANT_URL:
+        raise RuntimeError(
+            "QDRANT_URL not set - Qdrant server required, no local fallback"
+        )
 
-    return QdrantClient(path=QDRANT_PATH)
+    return QdrantClient(url=QDRANT_URL)
 
 
 @lru_cache(maxsize=1)

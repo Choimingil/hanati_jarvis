@@ -1,8 +1,8 @@
 """추천 스크립트 랭킹 / 원인 문구를 만드는 결정론적 헬퍼.
 
-LLM이 없을 때(`LLMRecommendationGenerator`의 fallback)와
-`MockRecommendationGenerator`가 공유해서, LLM 연동 여부와 무관하게
-항상 "추천도 높은 순 스크립트 리스트"를 만들 수 있게 한다.
+`LLMRecommendationGenerator`가 OPENAI_API_KEY 없을 때 fallback으로
+사용해서, LLM 연동 여부와 무관하게 항상 "추천도 높은 순 스크립트
+리스트"를 만들 수 있게 한다.
 """
 
 from typing import Any
