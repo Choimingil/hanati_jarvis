@@ -48,6 +48,7 @@ class FallbackGuidanceGenerator:
             "primary_problem_code": primary["problem_code"],
             "hypotheses": hypotheses,
             "resource_features": resource_context.get("features", {}),
+            "related_logs": resource_context.get("related_logs", []),
             "past_cases": past_cases,
             "requires_operator_confirmation": True,
             "automatic_remediation": False,

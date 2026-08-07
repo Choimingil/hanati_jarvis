@@ -64,6 +64,12 @@ _PAGE = """<!doctype html>
     width: 100%; padding: 10px 12px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--fg);
   }
+  input, textarea {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+    font: inherit;
+  }
+  textarea { min-height: 76px; resize: vertical; }
   .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
   .row > div { flex: 1 1 260px; }
   button {
@@ -149,12 +155,49 @@ _PAGE = """<!doctype html>
   .panel-toggle .chev { display: inline-block; transition: transform .15s ease; }
   .card.collapsed .panel-body { display: none; }
   .card.collapsed .panel-toggle .chev { transform: rotate(-90deg); }
+  .guidance-summary {
+    border-left: 3px solid #e59b22; padding: 5px 0 5px 14px;
+    margin: 8px 0 16px;
+  }
+  .hypothesis {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-top: 12px;
+  }
+  .hypothesis.primary { border-color: #e59b22; }
+  .hypothesis-head {
+    display: flex; justify-content: space-between; gap: 12px;
+    align-items: center; margin-bottom: 10px;
+  }
+  .hypothesis-title { font-weight: 700; }
+  .confidence { color: #e59b22; font-weight: 700; white-space: nowrap; }
+  .confidence-track {
+    height: 6px; border-radius: 999px; background: var(--bar);
+    overflow: hidden; margin: 8px 0 12px;
+  }
+  .confidence-fill { height: 100%; background: #e59b22; }
+  .guidance-list { margin: 6px 0 0; padding-left: 21px; font-size: 14px; }
+  .guidance-list li { margin: 4px 0; }
+  .guidance-section { margin-top: 14px; }
+  .feedback-choices { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+  button.feedback-choice {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); padding: 8px 12px;
+  }
+  button.feedback-choice.selected { background: var(--accent); color: white; }
+  .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feedback-grid .full { grid-column: 1 / -1; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .check-row input { width: auto; }
+  @media (max-width: 620px) {
+    .feedback-grid { grid-template-columns: 1fr; }
+    .feedback-grid .full { grid-column: auto; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Hanati Jarvis — 장애 대응 콘솔</h1>
-  <p class="sub">log_generator 시나리오 실행 → fluentbit 전달 → 오류 탐지 → 진단 → LLM 추천 → 조치 스크립트 실행</p>
+  <p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p>
 
   <div class="card">
     <div class="row">
@@ -212,6 +255,54 @@ _PAGE = """<!doctype html>
     <div id="actions"></div>
   </div>
 
+  <div id="guidance-result" class="card hidden">
+    <span id="guidance-code" class="pill">RESOURCE GUIDANCE</span>
+    <div><strong>리소스 기반 문제 제안</strong></div>
+    <div id="guidance-summary" class="guidance-summary"></div>
+
+    <div class="guidance-section"><strong>발생 로그</strong></div>
+    <pre id="guidance-log"></pre>
+
+    <div class="guidance-section"><strong>발견된 문제 가능성</strong>
+      <span class="muted">(신뢰도 높은 순)</span></div>
+    <div id="hypotheses"></div>
+
+    <div class="guidance-section"><strong>같은 호스트의 최근 ERROR 로그</strong></div>
+    <pre id="guidance-related-logs"></pre>
+
+    <div class="guidance-section"><strong>운영자 판단</strong>
+      <div class="muted">확인과 복구가 완료된 결과만 과거 장애 사례로 학습됩니다.</div>
+    </div>
+    <div id="feedback-choices" class="feedback-choices">
+      <button class="feedback-choice" data-verdict="confirmed">원인 정확</button>
+      <button class="feedback-choice" data-verdict="partial">일부 관련</button>
+      <button class="feedback-choice" data-verdict="rejected">관련 없음</button>
+      <button class="feedback-choice" data-verdict="needs_investigation">추가 조사</button>
+    </div>
+    <div class="feedback-grid">
+      <div>
+        <label for="feedback-root-cause">실제 원인</label>
+        <textarea id="feedback-root-cause" placeholder="확인된 실제 원인"></textarea>
+      </div>
+      <div>
+        <label for="feedback-action">수행한 조치</label>
+        <textarea id="feedback-action" placeholder="실제로 수행한 조치"></textarea>
+      </div>
+      <div>
+        <label for="feedback-operator">운영자</label>
+        <input id="feedback-operator" value="web-ui">
+      </div>
+      <div class="check-row">
+        <input id="feedback-recovered" type="checkbox">
+        <label for="feedback-recovered" style="margin:0">조치 후 복구됨</label>
+      </div>
+      <div class="full">
+        <button id="feedback-submit" disabled>분석 결과 저장</button>
+        <span id="feedback-status" class="muted" style="margin-left:8px"></span>
+      </div>
+    </div>
+  </div>
+
   <div id="exec" class="card hidden">
     <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
     <div id="exec-status"></div>
@@ -223,6 +314,8 @@ _PAGE = """<!doctype html>
 const $ = (id) => document.getElementById(id);
 const sel = $("scenario");
 let currentErrorCode = null;
+let currentGuidance = null;
+let selectedVerdict = null;
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -266,6 +359,7 @@ $("analyze").addEventListener("click", async () => {
   $("fluentbit-panel").classList.remove("hidden");
   $("internal-panel").classList.remove("hidden");
   $("result").classList.add("hidden");
+  $("guidance-result").classList.add("hidden");
   $("exec").classList.add("hidden");
   $("log-output").innerHTML = "";
   $("fluentbit-output").textContent = "";
@@ -273,6 +367,8 @@ $("analyze").addEventListener("click", async () => {
   $("es-output").textContent = "";
   $("wait-status").textContent = "";
   currentSince = null;
+  currentGuidance = null;
+  selectedVerdict = null;
 
   try {
     const { data } = await postJSON("/api/v1/log-generator/run", {
@@ -348,6 +444,10 @@ async function waitForRecommendation(errorCode, since) {
 }
 
 function renderRecommendation(errorCode, rec) {
+  if (rec && rec.status === "resource_guidance") {
+    renderResourceGuidance(rec);
+    return;
+  }
   currentErrorCode = errorCode;
   const result = $("result");
   result.classList.remove("hidden");
@@ -396,6 +496,132 @@ function renderRecommendation(errorCode, rec) {
     box.appendChild(el);
   });
 }
+
+function addList(container, title, items) {
+  const section = document.createElement("div");
+  section.className = "guidance-section";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  section.appendChild(heading);
+  const list = document.createElement("ul");
+  list.className = "guidance-list";
+  (items || []).forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.appendChild(li);
+  });
+  section.appendChild(list);
+  container.appendChild(section);
+}
+
+function renderResourceGuidance(guidance) {
+  currentGuidance = guidance;
+  selectedVerdict = null;
+  currentErrorCode = guidance.original_error_code || null;
+  $("result").classList.add("hidden");
+  $("guidance-result").classList.remove("hidden");
+  $("guidance-code").textContent =
+    guidance.primary_problem_code || "RESOURCE GUIDANCE";
+  $("guidance-summary").textContent = guidance.summary || "";
+  $("guidance-log").textContent =
+    `[${guidance.original_log?.level || "ERROR"}] `
+    + (guidance.original_log?.message || "");
+
+  const box = $("hypotheses");
+  box.innerHTML = "";
+  (guidance.hypotheses || []).forEach((hypothesis, index) => {
+    const pct = Math.round(
+      Math.max(0, Math.min(1, Number(hypothesis.confidence || 0))) * 100
+    );
+    const card = document.createElement("div");
+    card.className = "hypothesis" + (index === 0 ? " primary" : "");
+
+    const head = document.createElement("div");
+    head.className = "hypothesis-head";
+    const title = document.createElement("div");
+    title.className = "hypothesis-title";
+    title.textContent = `${index + 1}. ${hypothesis.title || hypothesis.problem_code}`;
+    const confidence = document.createElement("div");
+    confidence.className = "confidence";
+    confidence.textContent = `${pct}%`;
+    head.append(title, confidence);
+    card.appendChild(head);
+
+    const track = document.createElement("div");
+    track.className = "confidence-track";
+    const fill = document.createElement("div");
+    fill.className = "confidence-fill";
+    fill.style.width = `${pct}%`;
+    track.appendChild(fill);
+    card.appendChild(track);
+    addList(card, "분석 근거", hypothesis.evidence);
+    addList(card, "추가 확인 권장", hypothesis.suggested_diagnostics);
+    box.appendChild(card);
+  });
+
+  const related = guidance.related_logs || [];
+  $("guidance-related-logs").textContent = related.length
+    ? related.map((log) =>
+        `[${log.level || "ERROR"}] ${log.message || ""}`
+      ).join("\n")
+    : "같은 호스트에서 최근 ERROR 로그를 찾지 못했습니다.";
+
+  document.querySelectorAll(".feedback-choice").forEach((button) => {
+    button.classList.remove("selected");
+  });
+  $("feedback-root-cause").value = "";
+  $("feedback-action").value = "";
+  $("feedback-recovered").checked = false;
+  $("feedback-status").textContent = "";
+  $("feedback-submit").disabled = true;
+}
+
+document.querySelectorAll(".feedback-choice").forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedVerdict = button.dataset.verdict;
+    document.querySelectorAll(".feedback-choice").forEach((candidate) => {
+      candidate.classList.toggle("selected", candidate === button);
+    });
+    $("feedback-submit").disabled = false;
+  });
+});
+
+$("feedback-submit").addEventListener("click", async () => {
+  if (!currentGuidance || !selectedVerdict) return;
+  const rootCause = $("feedback-root-cause").value.trim();
+  const action = $("feedback-action").value.trim();
+  const recovered = $("feedback-recovered").checked;
+  if (selectedVerdict === "confirmed" && (!rootCause || !action || !recovered)) {
+    $("feedback-status").className = "status-err";
+    $("feedback-status").textContent =
+      "원인 정확은 실제 원인·조치·복구 확인이 모두 필요합니다.";
+    return;
+  }
+
+  $("feedback-submit").disabled = true;
+  $("feedback-status").className = "status-pending";
+  $("feedback-status").textContent = "저장 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/guidance/feedback", {
+      guidance_id: currentGuidance.guidance_id,
+      operator: $("feedback-operator").value.trim() || "web-ui",
+      verdict: selectedVerdict,
+      confirmed_root_cause: rootCause || null,
+      successful_action: action || null,
+      recovered,
+      confirmed_error_code: currentGuidance.original_error_code || null,
+    });
+    $("feedback-status").className = ok ? "status-ok" : "status-err";
+    $("feedback-status").textContent = data.promoted_to_incident_case
+      ? "검증된 장애 사례로 저장되고 Qdrant에 등록되었습니다."
+      : (ok ? "운영자 피드백이 저장되었습니다." : JSON.stringify(data));
+    if (!ok) $("feedback-submit").disabled = false;
+  } catch (error) {
+    $("feedback-status").className = "status-err";
+    $("feedback-status").textContent = "저장 실패: " + error;
+    $("feedback-submit").disabled = false;
+  }
+});
 
 function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {

@@ -89,8 +89,16 @@ def latest_recommendation():
         response = client.search(
             index=ELASTIC_RECOMMENDATION_INDEX,
             query={
-                "match": {
-                    "recommendation.error_code": error_code
+                "bool": {
+                    "should": [
+                        {"match": {
+                            "recommendation.error_code": error_code
+                        }},
+                        {"match": {
+                            "guidance.original_error_code": error_code
+                        }},
+                    ],
+                    "minimum_should_match": 1,
                 }
             },
             size=20,
@@ -115,7 +123,10 @@ def latest_recommendation():
 
     return jsonify({
         "status": "ready",
-        "recommendation": latest["recommendation"],
+        "recommendation": (
+            latest.get("recommendation")
+            or latest.get("guidance")
+        ),
     })
 
 
