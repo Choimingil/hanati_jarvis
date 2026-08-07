@@ -95,8 +95,17 @@ class OperationalIncidentService:
                 "latest_recommendation": None,
                 "version": 1,
             }
-            self.repository.create_operational_incident(incident)
-            return incident
+            try:
+                self.repository.create_operational_incident(incident)
+                return incident
+            except Exception:
+                # 같은 fingerprint가 동시에 최초 유입되면 한 요청만 create에
+                # 성공한다. 나머지는 생성된 Incident를 다시 읽어 집계한다.
+                existing = self.repository.get_operational_incident(
+                    incident_id
+                )
+                if existing is None:
+                    raise
 
         hosts = set(existing.get("affected_hosts") or [])
         hosts.add(host)
