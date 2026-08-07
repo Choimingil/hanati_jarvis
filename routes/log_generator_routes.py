@@ -7,6 +7,7 @@
 두 엔드포인트로 구성된다.
 """
 
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -127,6 +128,109 @@ def latest_recommendation():
             latest.get("recommendation")
             or latest.get("guidance")
         ),
+    })
+
+
+@log_generator_blueprint.get(
+    "/api/v1/log-generator/incidents"
+)
+def recent_incidents():
+    """최근 추천 결과를 운영자용 장애 목록으로 집계한다."""
+    minutes = request.args.get("minutes", default=60, type=int)
+    minutes = max(1, min(minutes or 60, 1440))
+    client = get_client()
+
+    try:
+        response = client.search(
+            index=ELASTIC_RECOMMENDATION_INDEX,
+            query={
+                "range": {
+                    "timestamp": {
+                        "gte": f"now-{minutes}m",
+                    }
+                }
+            },
+            sort=[{"timestamp": "desc"}],
+            size=500,
+            ignore_unavailable=True,
+        )
+    except Exception:
+        return jsonify({
+            "status": "unavailable",
+            "incidents": [],
+        })
+
+    grouped = {}
+    for hit in response.get("hits", {}).get("hits", []):
+        source = hit.get("_source", {})
+        log = source.get("log") or {}
+        recommendation = (
+            source.get("recommendation")
+            or source.get("guidance")
+            or {}
+        )
+        error_code = (
+            recommendation.get("error_code")
+            or recommendation.get("primary_problem_code")
+            or recommendation.get("original_error_code")
+            or "UNKNOWN_ERROR"
+        )
+        service = str(log.get("service") or "unknown")
+        environment = str(log.get("environment") or "unknown")
+        message = str(log.get("message") or "")
+        fingerprint_source = "|".join([
+            environment,
+            service,
+            error_code,
+            message[:160],
+        ])
+        incident_id = "INC-" + hashlib.sha1(
+            fingerprint_source.encode("utf-8")
+        ).hexdigest()[:10].upper()
+        timestamp = source.get("timestamp") or log.get("timestamp") or ""
+        host = str(log.get("host") or "unknown")
+
+        incident = grouped.setdefault(incident_id, {
+            "incident_id": incident_id,
+            "service": service,
+            "environment": environment,
+            "error_code": error_code,
+            "message": message,
+            "count": 0,
+            "hosts": set(),
+            "first_seen": timestamp,
+            "last_seen": timestamp,
+            "status": "ACTION_REQUIRED",
+            "recommendation": recommendation,
+        })
+        incident["count"] += 1
+        incident["hosts"].add(host)
+        incident["first_seen"] = min(
+            incident["first_seen"], timestamp
+        )
+        if timestamp >= incident["last_seen"]:
+            incident["last_seen"] = timestamp
+            incident["recommendation"] = recommendation
+
+    incidents = []
+    for incident in grouped.values():
+        count = incident["count"]
+        incident["hosts"] = sorted(incident["hosts"])
+        incident["host_count"] = len(incident["hosts"])
+        incident["severity"] = (
+            "CRITICAL" if count >= 20
+            else "HIGH" if count >= 5
+            else "MEDIUM"
+        )
+        incidents.append(incident)
+
+    incidents.sort(
+        key=lambda item: item["last_seen"],
+        reverse=True,
+    )
+    return jsonify({
+        "status": "ready",
+        "incidents": incidents,
     })
 
 
