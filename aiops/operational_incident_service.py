@@ -28,7 +28,7 @@ def normalize_message(message: str) -> str:
         "{uuid}",
         value,
     )
-    value = re.sub(r"\b\d+(?:\.\d+)?\b", "{number}", value)
+    value = re.sub(r"\d+(?:\.\d+)?", "{number}", value)
     value = re.sub(r"\s+", " ", value).strip()
     return value[:240]
 
