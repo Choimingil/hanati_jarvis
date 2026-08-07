@@ -357,6 +357,7 @@ _PAGE = """<!doctype html>
 const $ = (id) => document.getElementById(id);
 const sel = $("scenario");
 let currentErrorCode = null;
+let currentRecommendation = null;
 let currentGuidance = null;
 let selectedVerdict = null;
 let incidentItems = [];
@@ -590,6 +591,7 @@ function renderRecommendation(errorCode, rec) {
     return;
   }
   currentErrorCode = errorCode;
+  currentRecommendation = rec;
   const result = $("result");
   result.classList.remove("hidden");
 
@@ -624,11 +626,14 @@ function renderRecommendation(errorCode, rec) {
         <button class="diagnose">진단 요청</button>
       </div>`;
 
+    const action = (rec.actions || []).find(
+      (candidate) => candidate.script_id === rb.script_id
+    );
     el.querySelector(".approve").addEventListener(
-      "click", () => decideRunbook(rb.script_id, el, "approve")
+      "click", () => decideRunbook(rb.script_id, action, el, "approve")
     );
     el.querySelector(".reject").addEventListener(
-      "click", () => decideRunbook(rb.script_id, el, "reject")
+      "click", () => decideRunbook(rb.script_id, action, el, "reject")
     );
     el.querySelector(".diagnose").addEventListener(
       "click", () => requestDiagnosis(errorCode, el)
@@ -770,8 +775,11 @@ function setRunbookButtonsDisabled(el, disabled) {
   });
 }
 
-async function decideRunbook(scriptId, el, decision) {
-  if (!currentErrorCode) return;
+async function decideRunbook(scriptId, action, el, decision) {
+  if (!currentErrorCode || !currentRecommendation || !action) {
+    el.querySelector(".decision").textContent = "최신 Incident 추천을 다시 불러오세요.";
+    return;
+  }
   setRunbookButtonsDisabled(el, true);
 
   const endpoint = decision === "approve"
@@ -786,7 +794,11 @@ async function decideRunbook(scriptId, el, decision) {
 
   try {
     const { status, data } = await postJSON(endpoint, {
-      script_id: scriptId, error_code: currentErrorCode, approved_by: "web-ui",
+      incident_id: currentRecommendation.incident_id,
+      recommendation_id: currentRecommendation.recommendation_id,
+      action_id: action.action_id,
+      incident_version: currentRecommendation.incident_version,
+      approved_by: "web-ui",
     });
     const ok = data.status === "success" || data.status === "rejected";
     const s = $("exec-status");
@@ -800,6 +812,7 @@ async function decideRunbook(scriptId, el, decision) {
     el.classList.add("decided");
     el.querySelector(".decision").textContent =
       decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
+    await loadIncidents();
   } catch (e) {
     $("exec-status").className = "status-err";
     $("exec-status").textContent = "요청 실패: " + e;
