@@ -184,7 +184,9 @@ scripts/run_app.sh
 3. Flask 백엔드 실행
 4. psutil Agent 실행
 5. 기본 30초마다 시스템 메트릭 전송
-6. 백엔드 종료 시 Agent 함께 종료
+6. 시작 시 14일 이전 시스템 메트릭 삭제
+7. 이후 기본 24시간마다 보존 작업 반복
+8. 백엔드 종료 시 Agent와 보존 작업 함께 종료
 
 Agent를 비활성화하려면:
 
@@ -197,6 +199,18 @@ Agent만 한 번 실행하려면:
 ```bash
 python -m collector.agent --once
 ```
+
+메트릭 보존 작업만 한 번 실행하려면:
+
+```bash
+python -m elastic.metric_retention --once
+```
+
+보존 작업은 `application-system-metrics`에서 `timestamp`가 현재보다
+14일 이상 오래된 문서만 `delete_by_query`로 삭제한다. 최근 메트릭과
+검증된 장애 사례, 추천, 조치 및 운영자 피드백 인덱스는 삭제하지 않는다.
+Elasticsearch 연결 실패 시 현재 실행은 실패 기록만 남기고 다음 주기에
+재시도하므로 웹 앱과 메트릭 수집은 계속 동작한다.
 
 운영자 콘솔은 `http://localhost:8080/`, 상태 확인은
 `http://localhost:8080/health`에서 가능하다.
@@ -283,6 +297,9 @@ Qdrant의 `incident_cases` 컬렉션에는 장애 요약 임베딩과 오류 코
 - `METRICS_COLLECT_INTERVAL_SECONDS` 기본 `30`
 - `METRICS_PROCESS_LIMIT` 기본 `20`
 - `METRICS_AGENT_ENABLED` 기본 `true`
+- `METRICS_RETENTION_ENABLED` 기본 `true`
+- `METRICS_RETENTION_DAYS` 기본 `14`
+- `METRICS_RETENTION_INTERVAL_SECONDS` 기본 `86400`(24시간)
 
 ### 검색·저장
 
