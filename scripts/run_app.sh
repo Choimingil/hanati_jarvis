@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 메인 서비스(app.py) 실행 스크립트. venv 없으면 만들고 의존성 설치까지 자동으로 한다.
+# 메인 서비스(app.py)와 시스템 메트릭 Agent를 함께 실행한다.
+# venv가 없으면 만들고 의존성 설치까지 자동으로 한다.
 #
 # 사용법:
 #   scripts/run_app.sh
@@ -33,4 +34,37 @@ echo "[app] 기동 (host=${API_HOST:-0.0.0.0} port=${API_PORT:-8080})"
 echo "[app] case_search=${CASE_SEARCHER_BACKEND:-mock} storage=${LOG_REPOSITORY_BACKEND:-mock} recommendation=${RECOMMENDATION_BACKEND:-llm}"
 echo "[app] 웹 콘솔: http://localhost:${API_PORT:-8080}/"
 
-exec python app.py
+APP_PID=""
+METRICS_PID=""
+
+cleanup() {
+  trap - EXIT INT TERM
+
+  if [ -n "$METRICS_PID" ] && kill -0 "$METRICS_PID" 2>/dev/null; then
+    echo "[metrics] 종료 중.."
+    kill "$METRICS_PID" 2>/dev/null || true
+  fi
+
+  if [ -n "$APP_PID" ] && kill -0 "$APP_PID" 2>/dev/null; then
+    echo "[app] 종료 중.."
+    kill "$APP_PID" 2>/dev/null || true
+  fi
+
+  wait "$METRICS_PID" 2>/dev/null || true
+  wait "$APP_PID" 2>/dev/null || true
+}
+
+trap cleanup EXIT INT TERM
+
+python app.py &
+APP_PID=$!
+
+if [ "${METRICS_AGENT_ENABLED:-true}" = "true" ]; then
+  echo "[metrics] psutil Agent 기동 (interval=${METRICS_COLLECT_INTERVAL_SECONDS:-30}s)"
+  python -m collector.agent &
+  METRICS_PID=$!
+  wait -n "$APP_PID" "$METRICS_PID"
+else
+  echo "[metrics] 비활성화됨 (METRICS_AGENT_ENABLED=false)"
+  wait "$APP_PID"
+fi
