@@ -16,12 +16,14 @@ from aiops.incident_indexer import QdrantIncidentIndexer
 from aiops.recovery_verifier import RecoveryVerifier
 from aiops.fallback_guidance_generator import FallbackGuidanceGenerator
 from aiops.operator_feedback_service import OperatorFeedbackService
+from aiops.operational_incident_service import OperationalIncidentService
 from aiops.recommendation_quality_gate import RecommendationQualityGate
 from aiops.resource_context_loader import ResourceContextLoader
 from aiops.resource_hypothesis_engine import ResourceHypothesisEngine
 
 
 repository = ElasticLogRepository()
+operational_incident_service = OperationalIncidentService(repository)
 
 if CASE_SEARCHER_BACKEND == "hybrid":
     from adapters.hybrid_adapters import (
@@ -54,6 +56,7 @@ log_processor = LogProcessor(
     ),
     resource_hypothesis_engine=ResourceHypothesisEngine(),
     fallback_guidance_generator=FallbackGuidanceGenerator(),
+    incident_service=operational_incident_service,
 )
 
 recovery_verifier = RecoveryVerifier()
