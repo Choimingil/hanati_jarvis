@@ -4,6 +4,7 @@ from config import (
     ELASTIC_DIAGNOSIS_INDEX,
     ELASTIC_INCIDENT_CASES_INDEX,
     ELASTIC_LOG_INDEX,
+    ELASTIC_METRICS_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
     ELASTIC_REMEDIATION_INDEX,
 )
@@ -52,6 +53,12 @@ class ElasticLogRepository(LogRepository):
         document: dict[str, Any],
     ) -> None:
         self._index(ELASTIC_REMEDIATION_INDEX, document)
+
+    def save_metric(
+        self,
+        document: dict[str, Any],
+    ) -> None:
+        self._index(ELASTIC_METRICS_INDEX, document)
 
     def remediation_history(
         self,

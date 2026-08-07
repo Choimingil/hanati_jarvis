@@ -48,6 +48,33 @@ fluentbit api 주소
 
 http://localhost:8080/api/v1/logs POST
 
+## 시스템 메트릭 수집 Agent
+
+`psutil` 기반 Agent가 호스트 CPU/메모리/디스크/네트워크와 CPU 사용률이
+높은 프로세스 목록을 수집해 Elasticsearch의
+`application-system-metrics` 인덱스에 저장한다. 프로세스 명령행과 환경변수는
+민감정보 노출을 막기 위해 수집하지 않는다.
+
+백엔드를 먼저 실행한 뒤 다음 명령으로 한 번 수집하거나 계속 수집한다.
+
+```bash
+python -m collector.agent --once
+python -m collector.agent
+```
+
+기본 전송 주소는 `http://127.0.0.1:8080/api/v1/metrics`, 수집 간격은 30초,
+프로세스는 상위 20개다. 아래 환경변수로 변경할 수 있다.
+
+- `METRICS_API_URL`
+- `METRICS_COLLECT_INTERVAL_SECONDS`
+- `METRICS_PROCESS_LIMIT`
+- `ELASTIC_METRICS_INDEX`
+
+Linux에서 전체 프로세스의 네트워크 연결을 조회하려면 Agent 실행 계정에
+추가 권한이 필요할 수 있다. 권한이 없으면 스냅샷의
+`network.connections.access_denied`가 `true`가 되고 나머지 정보는 계속
+수집된다.
+
 
 
 

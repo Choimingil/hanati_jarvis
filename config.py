@@ -4,6 +4,16 @@ import os
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8080"))
 
+METRICS_API_URL = os.getenv(
+    "METRICS_API_URL", "http://127.0.0.1:8080/api/v1/metrics"
+)
+METRICS_COLLECT_INTERVAL_SECONDS = int(
+    os.getenv("METRICS_COLLECT_INTERVAL_SECONDS", "30")
+)
+METRICS_PROCESS_LIMIT = int(
+    os.getenv("METRICS_PROCESS_LIMIT", "20")
+)
+
 SCRIPT_TIMEOUT_SECONDS = int(
     os.getenv("SCRIPT_TIMEOUT_SECONDS", "30")
 )
@@ -218,6 +228,9 @@ ELASTIC_RECOMMENDATION_INDEX = os.getenv(
 ELASTIC_REMEDIATION_INDEX = os.getenv(
     "ELASTIC_REMEDIATION_INDEX",
     "application-remediations",
+)
+ELASTIC_METRICS_INDEX = os.getenv(
+    "ELASTIC_METRICS_INDEX", "application-system-metrics"
 )
 
 # Qdrant의 incident_cases 컬렉션과 동일한 과거 대응 사례를

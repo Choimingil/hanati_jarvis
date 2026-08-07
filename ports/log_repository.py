@@ -33,6 +33,13 @@ class LogRepository(ABC):
         pass
 
     @abstractmethod
+    def save_metric(
+        self,
+        document: dict[str, Any],
+    ) -> None:
+        pass
+
+    @abstractmethod
     def remediation_history(
         self,
         script_id: str,

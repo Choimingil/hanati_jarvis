@@ -33,6 +33,14 @@ routes/remediation_routes.py (remediation_blueprint)
     - repository.save_remediation()으로 실행 결과 저장
 ```
 
+호스트 관측 정보는 별도 경로로 처리한다.
+
+```
+collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
+    → routes/metrics_routes.py → ElasticLogRepository.save_metric()
+    → application-system-metrics
+```
+
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.
 `dependencies.py`가 환경변수를 보고 어떤 구현체를 주입할지 결정한다
@@ -164,6 +172,7 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 | 파일 | 역할 |
 |---|---|
 | `routes/log_routes.py` | `log_blueprint` — `POST /api/v1/logs`. 단건/배열 JSON을 받아 각각 `dependencies.log_processor.process()`로 전달하고 결과 리스트를 반환 (탐지 → 진단 → 추천까지). |
+| `routes/metrics_routes.py` | `metrics_blueprint` — `POST /api/v1/metrics`. 시스템 스냅샷의 필수 필드를 검증하고 Elasticsearch 메트릭 인덱스에 저장. |
 | `routes/remediation_routes.py` | `remediation_blueprint` — `POST /api/v1/remediations/approve`. 운영자가 추천된 `script_id`/`error_code`/`approved_by`를 보내면, `ERROR_RULES`의 `remediation_candidates`에 있는 스크립트인지 검증한 뒤 `script_runner.run_script()`로 실행하고 `dependencies.repository.save_remediation()`으로 결과를 저장한다. **이전에는 `app.py`에 등록되지 않고 삭제된 `elastic_repository.py`를 참조해 로드조차 안 되던 미사용 코드였는데, 이번에 `dependencies.repository`를 쓰도록 고치고 `app.py`에 등록해서 정상 동작하도록 복구했다.** (부수적으로 `run_script()`가 절대 반환하지 않는 `"executed"` 상태와 비교하던 상태 코드 버그도 `"success"`로 수정.) |
 | `routes/web_routes.py` | `web_blueprint` — `GET /`. 운영자용 단일 페이지(HTML/CSS/JS 인라인, 외부 의존성 없음). 장애 시나리오를 골라 `/api/v1/logs`로 분석하면 오류 원인과 추천도 높은 순 조치 스크립트 리스트를 보여주고, 그중 하나를 선택하면 `/api/v1/remediations/approve`로 실제 실행한 결과(stdout)를 표시한다. |
 
