@@ -36,6 +36,7 @@ echo "[app] 웹 콘솔: http://localhost:${API_PORT:-8080}/"
 
 APP_PID=""
 METRICS_PID=""
+RETENTION_PID=""
 
 cleanup() {
   trap - EXIT INT TERM
@@ -45,12 +46,18 @@ cleanup() {
     kill "$METRICS_PID" 2>/dev/null || true
   fi
 
+  if [ -n "$RETENTION_PID" ] && kill -0 "$RETENTION_PID" 2>/dev/null; then
+    echo "[metrics-retention] 종료 중.."
+    kill "$RETENTION_PID" 2>/dev/null || true
+  fi
+
   if [ -n "$APP_PID" ] && kill -0 "$APP_PID" 2>/dev/null; then
     echo "[app] 종료 중.."
     kill "$APP_PID" 2>/dev/null || true
   fi
 
   wait "$METRICS_PID" 2>/dev/null || true
+  wait "$RETENTION_PID" 2>/dev/null || true
   wait "$APP_PID" 2>/dev/null || true
 }
 
@@ -59,11 +66,23 @@ trap cleanup EXIT INT TERM
 python app.py &
 APP_PID=$!
 
+if [ "${METRICS_RETENTION_ENABLED:-true}" = "true" ]; then
+  echo "[metrics-retention] 기동 (retention=${METRICS_RETENTION_DAYS:-14}d interval=${METRICS_RETENTION_INTERVAL_SECONDS:-86400}s)"
+  python -m elastic.metric_retention &
+  RETENTION_PID=$!
+else
+  echo "[metrics-retention] 비활성화됨 (METRICS_RETENTION_ENABLED=false)"
+fi
+
 if [ "${METRICS_AGENT_ENABLED:-true}" = "true" ]; then
   echo "[metrics] psutil Agent 기동 (interval=${METRICS_COLLECT_INTERVAL_SECONDS:-30}s)"
   python -m collector.agent &
   METRICS_PID=$!
-  wait -n "$APP_PID" "$METRICS_PID"
+  if [ -n "$RETENTION_PID" ]; then
+    wait -n "$APP_PID" "$METRICS_PID" "$RETENTION_PID"
+  else
+    wait -n "$APP_PID" "$METRICS_PID"
+  fi
 else
   echo "[metrics] 비활성화됨 (METRICS_AGENT_ENABLED=false)"
   wait "$APP_PID"
