@@ -5,8 +5,10 @@ from config import (
     ELASTIC_INCIDENT_CASES_INDEX,
     ELASTIC_LOG_INDEX,
     ELASTIC_METRICS_INDEX,
+    ELASTIC_OPERATOR_FEEDBACK_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
     ELASTIC_RECOVERY_INDEX,
+    ELASTIC_RESOURCE_GUIDANCE_INDEX,
     ELASTIC_REMEDIATION_INDEX,
 )
 from elastic.client import get_client
@@ -128,6 +130,33 @@ class ElasticLogRepository(LogRepository):
         self, document: dict[str, Any]
     ) -> None:
         self._index(ELASTIC_RECOVERY_INDEX, document)
+
+    def save_resource_guidance(
+        self, document: dict[str, Any]
+    ) -> None:
+        self.client.index(
+            index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
+            id=document["guidance_id"],
+            document=document,
+            refresh="wait_for",
+        )
+
+    def get_resource_guidance(
+        self, guidance_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
+                id=guidance_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def save_operator_feedback(
+        self, document: dict[str, Any]
+    ) -> None:
+        self._index(ELASTIC_OPERATOR_FEEDBACK_INDEX, document)
 
     def remediation_history(
         self,

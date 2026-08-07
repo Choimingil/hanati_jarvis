@@ -31,6 +31,12 @@ ANOMALY_CLOSE_WAIT_THRESHOLD = int(
 ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD = int(
     os.getenv("ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD", "20")
 )
+RESOURCE_CPU_PERCENT_THRESHOLD = float(
+    os.getenv("RESOURCE_CPU_PERCENT_THRESHOLD", "90")
+)
+RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD = float(
+    os.getenv("RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD", "60")
+)
 
 SCRIPT_TIMEOUT_SECONDS = int(
     os.getenv("SCRIPT_TIMEOUT_SECONDS", "30")
@@ -252,6 +258,12 @@ ELASTIC_METRICS_INDEX = os.getenv(
 )
 ELASTIC_RECOVERY_INDEX = os.getenv(
     "ELASTIC_RECOVERY_INDEX", "application-recovery-verifications"
+)
+ELASTIC_RESOURCE_GUIDANCE_INDEX = os.getenv(
+    "ELASTIC_RESOURCE_GUIDANCE_INDEX", "application-resource-guidance"
+)
+ELASTIC_OPERATOR_FEEDBACK_INDEX = os.getenv(
+    "ELASTIC_OPERATOR_FEEDBACK_INDEX", "application-operator-feedback"
 )
 
 # Qdrant의 incident_cases 컬렉션과 동일한 과거 대응 사례를

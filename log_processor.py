@@ -23,12 +23,20 @@ class LogProcessor:
         case_searcher: CaseSearcher,
         recommendation_generator:
             RecommendationGenerator,
+        quality_gate=None,
+        resource_context_loader=None,
+        resource_hypothesis_engine=None,
+        fallback_guidance_generator=None,
     ) -> None:
         self.repository = repository
         self.case_searcher = case_searcher
         self.recommendation_generator = (
             recommendation_generator
         )
+        self.quality_gate = quality_gate
+        self.resource_context_loader = resource_context_loader
+        self.resource_hypothesis_engine = resource_hypothesis_engine
+        self.fallback_guidance_generator = fallback_guidance_generator
 
     def process(
         self,
@@ -52,10 +60,11 @@ class LogProcessor:
         )
 
         if error_code is None:
-            return {
-                "status": "unknown_error",
-                "message": log["message"],
-            }
+            return self._resource_fallback(
+                log=log,
+                reason="unknown_error_code",
+                original_error_code=None,
+            )
 
         rule = ERROR_RULES[error_code]
 
@@ -68,14 +77,17 @@ class LogProcessor:
             ),
         )
 
-        past_cases = self.case_searcher.search(
-            error_code=error_code,
-            message=log["message"],
-            limit=3,
-        )
+        try:
+            past_cases = self.case_searcher.search(
+                error_code=error_code,
+                message=log["message"],
+                limit=3,
+            )
+        except Exception:
+            past_cases = []
 
-        recommendation = (
-            self.recommendation_generator.generate(
+        try:
+            recommendation = self.recommendation_generator.generate(
                 error_code=error_code,
                 message=log["message"],
                 diagnosis_results=(
@@ -87,7 +99,21 @@ class LogProcessor:
                     [],
                 ),
             )
-        )
+        except Exception:
+            recommendation = None
+
+        if self.quality_gate is not None:
+            fallback, reason = self.quality_gate.requires_fallback(
+                error_code,
+                rule.get("remediation_candidates", []),
+                recommendation,
+            )
+            if fallback:
+                return self._resource_fallback(
+                    log=log,
+                    reason=reason,
+                    original_error_code=error_code,
+                )
 
         self.repository.save_recommendation({
             "timestamp": now_iso(),
@@ -103,6 +129,68 @@ class LogProcessor:
             ),
             "recommendation": recommendation,
         }
+
+    def _resource_fallback(
+        self,
+        log: dict[str, Any],
+        reason: str,
+        original_error_code: str | None,
+    ) -> dict[str, Any]:
+        if not all([
+            self.resource_context_loader,
+            self.resource_hypothesis_engine,
+            self.fallback_guidance_generator,
+        ]):
+            return {
+                "status": "unknown_error",
+                "message": log["message"],
+            }
+
+        resource_context = self.resource_context_loader.load(log)
+        hypotheses = self.resource_hypothesis_engine.analyze(
+            resource_context["features"]
+        )
+        related_error_code = next((
+            hypothesis.get("related_error_code")
+            for hypothesis in hypotheses
+            if hypothesis.get("related_error_code")
+        ), None)
+        search_code = (
+            related_error_code
+            or original_error_code
+            or "UNKNOWN_RESOURCE_ISSUE"
+        )
+        try:
+            past_cases = self.case_searcher.search(
+                error_code=search_code,
+                message=(
+                    log["message"] + " "
+                    + " ".join(
+                        hypothesis["title"] for hypothesis in hypotheses
+                    )
+                ),
+                limit=3,
+            )
+        except Exception:
+            past_cases = []
+
+        guidance = self.fallback_guidance_generator.generate(
+            log=log,
+            reason=reason,
+            resource_context=resource_context,
+            hypotheses=hypotheses,
+            past_cases=past_cases,
+        )
+        guidance["original_error_code"] = original_error_code
+        self.repository.save_resource_guidance(guidance)
+        self.repository.save_recommendation({
+            "timestamp": now_iso(),
+            "source": "resource_fallback",
+            "guidance_id": guidance["guidance_id"],
+            "log": log,
+            "guidance": guidance,
+        })
+        return guidance
 
     def _run_diagnostics(
         self,

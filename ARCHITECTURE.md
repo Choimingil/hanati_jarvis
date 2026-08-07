@@ -56,6 +56,11 @@ collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
 | `context_builder.py` | 수치 근거와 관련 로그를 LLM 입력으로 구성 |
 | `recovery_verifier.py` | Runbook 실행 전후 특징값을 비교해 실제 복구 여부 판정 |
 | `analysis_service.py` | 위 단계를 순서대로 실행하고 5분 중복 탐지 쿨다운 적용 |
+| `recommendation_quality_gate.py` | 기존 Runbook 추천이 비어 있거나 저신뢰인지 판정 |
+| `resource_context_loader.py` | ERROR 로그 호스트의 최근 15분 메트릭과 특징 로드 |
+| `resource_hypothesis_engine.py` | 추천 실패 시 CPU·메모리·디스크·연결·네트워크 가설 생성 |
+| `fallback_guidance_generator.py` | 가설과 검증 사례만 근거로 운영자용 추가 진단 가이드 생성 |
+| `operator_feedback_service.py` | 운영자 판단 저장, 확인+복구된 결과만 장애 사례로 승격 |
 
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.

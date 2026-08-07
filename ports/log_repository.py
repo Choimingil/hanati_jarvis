@@ -72,6 +72,24 @@ class LogRepository(ABC):
         pass
 
     @abstractmethod
+    def save_resource_guidance(
+        self, document: dict[str, Any]
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def get_resource_guidance(
+        self, guidance_id: str
+    ) -> dict[str, Any] | None:
+        pass
+
+    @abstractmethod
+    def save_operator_feedback(
+        self, document: dict[str, Any]
+    ) -> None:
+        pass
+
+    @abstractmethod
     def remediation_history(
         self,
         script_id: str,

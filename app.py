@@ -13,6 +13,7 @@ from routes.log_generator_routes import (
     log_generator_blueprint,
 )
 from routes.log_routes import log_blueprint
+from routes.guidance_routes import guidance_blueprint
 from routes.metrics_routes import metrics_blueprint
 from routes.remediation_routes import (
     remediation_blueprint,
@@ -24,6 +25,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
 
     app.register_blueprint(log_blueprint)
+    app.register_blueprint(guidance_blueprint)
     app.register_blueprint(metrics_blueprint)
     app.register_blueprint(remediation_blueprint)
     app.register_blueprint(log_generator_blueprint)

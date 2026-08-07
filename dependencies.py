@@ -14,6 +14,11 @@ from aiops.incident_case_builder import IncidentCaseBuilder
 from aiops.incident_correlator import IncidentCorrelator
 from aiops.incident_indexer import QdrantIncidentIndexer
 from aiops.recovery_verifier import RecoveryVerifier
+from aiops.fallback_guidance_generator import FallbackGuidanceGenerator
+from aiops.operator_feedback_service import OperatorFeedbackService
+from aiops.recommendation_quality_gate import RecommendationQualityGate
+from aiops.resource_context_loader import ResourceContextLoader
+from aiops.resource_hypothesis_engine import ResourceHypothesisEngine
 
 
 repository = ElasticLogRepository()
@@ -43,6 +48,12 @@ log_processor = LogProcessor(
     recommendation_generator=(
         recommendation_generator
     ),
+    quality_gate=RecommendationQualityGate(),
+    resource_context_loader=ResourceContextLoader(
+        repository, MetricFeatureExtractor()
+    ),
+    resource_hypothesis_engine=ResourceHypothesisEngine(),
+    fallback_guidance_generator=FallbackGuidanceGenerator(),
 )
 
 recovery_verifier = RecoveryVerifier()
@@ -57,4 +68,9 @@ metric_analysis_service = MetricAnalysisService(
     case_builder=IncidentCaseBuilder(),
     incident_indexer=QdrantIncidentIndexer(),
     context_builder=ContextBuilder(),
+)
+
+operator_feedback_service = OperatorFeedbackService(
+    repository=repository,
+    incident_indexer=QdrantIncidentIndexer(),
 )
