@@ -15,6 +15,11 @@ class _Repository:
         self.documents.append(document)
 
 
+class _AnalysisService:
+    def analyze(self, document):
+        return []
+
+
 class SystemCollectorTest(unittest.TestCase):
     def test_snapshot_has_required_sections_and_process_limit(self):
         snapshot = SystemCollector(process_limit=2).collect()
@@ -33,6 +38,7 @@ class MetricsRouteTest(unittest.TestCase):
         cls.repository = _Repository()
         dependencies = types.ModuleType("dependencies")
         dependencies.repository = cls.repository
+        dependencies.metric_analysis_service = _AnalysisService()
         sys.modules["dependencies"] = dependencies
 
         from routes.metrics_routes import metrics_blueprint

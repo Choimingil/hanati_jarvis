@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from dependencies import repository
+from dependencies import metric_analysis_service, repository
 
 
 metrics_blueprint = Blueprint("metrics", __name__)
@@ -32,4 +32,17 @@ def ingest_metrics():
             "message": str(exc),
         }), 503
 
-    return jsonify({"status": "stored"}), 201
+    try:
+        analysis = metric_analysis_service.analyze(payload)
+    except Exception as exc:
+        return jsonify({
+            "status": "stored",
+            "analysis_status": "failed",
+            "analysis_error": str(exc),
+        }), 201
+
+    return jsonify({
+        "status": "stored",
+        "analysis_status": "completed",
+        "detections": analysis,
+    }), 201

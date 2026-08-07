@@ -6,6 +6,7 @@ from config import (
     ELASTIC_LOG_INDEX,
     ELASTIC_METRICS_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
+    ELASTIC_RECOVERY_INDEX,
     ELASTIC_REMEDIATION_INDEX,
 )
 from elastic.client import get_client
@@ -59,6 +60,74 @@ class ElasticLogRepository(LogRepository):
         document: dict[str, Any],
     ) -> None:
         self._index(ELASTIC_METRICS_INDEX, document)
+
+    def recent_metrics(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_METRICS_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host.hostname.keyword": host}},
+                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            sort=[{"timestamp": "asc"}],
+            size=1000,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    def recent_error_logs(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_LOG_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host": host}},
+                {"term": {"level": "ERROR"}},
+                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            sort=[{"timestamp": "desc"}],
+            size=20,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    def save_incident(self, document: dict[str, Any]) -> None:
+        self.client.index(
+            index=ELASTIC_INCIDENT_CASES_INDEX,
+            id=document["incident_id"],
+            document=document,
+            refresh="wait_for",
+        )
+
+    def has_recent_incident(
+        self, host: str, detection_code: str, minutes: int
+    ) -> bool:
+        response = self.client.count(
+            index=ELASTIC_INCIDENT_CASES_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host.keyword": host}},
+                {"term": {"detection_code.keyword": detection_code}},
+                {"range": {"created_at": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            ignore_unavailable=True,
+        )
+        return response.get("count", 0) > 0
+
+    def get_incident(self, incident_id: str) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_INCIDENT_CASES_INDEX,
+                id=incident_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def save_recovery_verification(
+        self, document: dict[str, Any]
+    ) -> None:
+        self._index(ELASTIC_RECOVERY_INDEX, document)
 
     def remediation_history(
         self,

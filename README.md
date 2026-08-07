@@ -79,6 +79,37 @@ Linux에서 전체 프로세스의 네트워크 연결을 조회하려면 Agent 
 `network.connections.access_denied`가 `true`가 되고 나머지 정보는 계속
 수집된다.
 
+### 메트릭 기반 자동 탐지·가이드
+
+메트릭 저장 후 다음 분석이 자동으로 실행된다.
+
+1. 최근 15분 스냅샷에서 1분/5분/15분 특징값 계산
+2. 메모리 증가, 디스크 포화, CLOSE_WAIT, 네트워크 오류 증가 탐지
+3. 같은 호스트의 최근 ERROR 로그 연관 분석
+4. Elasticsearch/Qdrant에서 동일 오류 유형의 과거 사례 검색
+5. 현재 근거와 과거 사례를 LLM에 전달해 Runbook 추천
+6. 완성된 장애 사례를 `incident-cases`와 Qdrant에 저장
+
+동일 호스트·탐지 코드의 장애는 기본 5분 동안 다시 생성하지 않는다.
+임계값과 쿨다운은 환경변수로 조정할 수 있다.
+
+- `INCIDENT_COOLDOWN_MINUTES`
+- `ANOMALY_MEMORY_PERCENT_THRESHOLD`
+- `ANOMALY_MEMORY_GROWTH_THRESHOLD`
+- `ANOMALY_DISK_PERCENT_THRESHOLD`
+- `ANOMALY_CLOSE_WAIT_THRESHOLD`
+- `ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD`
+
+조치 후 새 메트릭이 수집되면 다음 API로 실제 복구 여부를 검증할 수 있다.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/remediations/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"incident_id":"장애 UUID"}'
+```
+
+검증 결과는 `application-recovery-verifications` 인덱스에 저장된다.
+
 
 
 

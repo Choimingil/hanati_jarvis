@@ -40,6 +40,38 @@ class LogRepository(ABC):
         pass
 
     @abstractmethod
+    def recent_metrics(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def recent_error_logs(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        pass
+
+    @abstractmethod
+    def save_incident(self, document: dict[str, Any]) -> None:
+        pass
+
+    @abstractmethod
+    def has_recent_incident(
+        self, host: str, detection_code: str, minutes: int
+    ) -> bool:
+        pass
+
+    @abstractmethod
+    def get_incident(self, incident_id: str) -> dict[str, Any] | None:
+        pass
+
+    @abstractmethod
+    def save_recovery_verification(
+        self, document: dict[str, Any]
+    ) -> None:
+        pass
+
+    @abstractmethod
     def remediation_history(
         self,
         script_id: str,

@@ -5,7 +5,7 @@ from config import (
     ERROR_RULES,
     REMEDIATION_SCRIPTS,
 )
-from dependencies import repository
+from dependencies import recovery_verifier, repository
 from script_runner import run_script
 from utils.time_utils import now_iso
 
@@ -167,3 +167,29 @@ def request_diagnosis():
         "error_code": error_code,
         "diagnosis_results": diagnosis_results,
     })
+
+
+@remediation_blueprint.post("/api/v1/remediations/verify")
+def verify_remediation():
+    body = request.get_json(silent=True) or {}
+    incident_id = body.get("incident_id")
+    if not incident_id:
+        return jsonify({
+            "status": "invalid_request",
+            "missing_fields": ["incident_id"],
+        }), 400
+
+    incident = repository.get_incident(incident_id)
+    if incident is None:
+        return jsonify({
+            "status": "not_found",
+            "incident_id": incident_id,
+        }), 404
+
+    snapshots = repository.recent_metrics(
+        incident.get("host", "unknown"), minutes=5
+    )
+    verification = recovery_verifier.verify(incident, snapshots)
+    verification["verified_at"] = now_iso()
+    repository.save_recovery_verification(verification)
+    return jsonify(verification)

@@ -38,8 +38,24 @@ routes/remediation_routes.py (remediation_blueprint)
 ```
 collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
     → routes/metrics_routes.py → ElasticLogRepository.save_metric()
-    → application-system-metrics
+    → MetricFeatureExtractor (1m/5m/15m)
+    → AnomalyDetector → IncidentCorrelator
+    → ContextBuilder → 과거 사례 검색 → LLM Runbook 추천
+    → IncidentCaseBuilder → Elasticsearch + Qdrant
 ```
+
+`aiops/`는 메트릭 기반 분석을 담당한다.
+
+| 파일 | 역할 |
+|---|---|
+| `feature_extractor.py` | 최근 메트릭을 1분/5분/15분 CPU·메모리·디스크·연결 변화 특징으로 변환 |
+| `anomaly_detector.py` | 설명 가능한 임계값/변화율 규칙으로 기존 오류 코드에 연결 |
+| `incident_correlator.py` | 같은 호스트의 최근 ERROR 로그를 탐지 근거에 결합 |
+| `incident_case_builder.py` | 메트릭·로그·추천을 재사용 가능한 장애 사례로 생성 |
+| `incident_indexer.py` | 사례 요약을 임베딩해 Qdrant에 저장 |
+| `context_builder.py` | 수치 근거와 관련 로그를 LLM 입력으로 구성 |
+| `recovery_verifier.py` | Runbook 실행 전후 특징값을 비교해 실제 복구 여부 판정 |
+| `analysis_service.py` | 위 단계를 순서대로 실행하고 5분 중복 탐지 쿨다운 적용 |
 
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.

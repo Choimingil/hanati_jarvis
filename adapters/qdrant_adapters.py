@@ -1,5 +1,7 @@
 from typing import Any
 
+from qdrant_client.models import FieldCondition, Filter, MatchValue
+
 from config import QDRANT_COLLECTION
 from ports.case_searcher import CaseSearcher
 from qdrant.client import encode, get_client
@@ -21,7 +23,12 @@ class QdrantCaseSearcher(CaseSearcher):
         results = client.query_points(
             collection_name=QDRANT_COLLECTION,
             query=query_vector,
+            query_filter=Filter(must=[FieldCondition(
+                key="error_code",
+                match=MatchValue(value=error_code),
+            )]),
             limit=limit,
+            with_payload=True,
         ).points
 
         return [
