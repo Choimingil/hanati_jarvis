@@ -49,7 +49,7 @@ _PAGE = """<!doctype html>
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
   }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 64px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
   .card {
@@ -188,6 +188,30 @@ _PAGE = """<!doctype html>
   .feedback-grid .full { grid-column: 1 / -1; }
   .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   .check-row input { width: auto; }
+  .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .incident-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+  .incident-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px; }
+  .incident-stat span { display:block; color:var(--muted); font-size:12px; }
+  .incident-stat strong { display:block; margin-top:3px; }
+  .incident-layout { display:grid; grid-template-columns:minmax(280px,.9fr) minmax(360px,1.5fr); gap:16px; align-items:start; margin-bottom:18px; }
+  .incident-list { display:flex; flex-direction:column; gap:8px; }
+  button.incident-item { width:100%; text-align:left; color:var(--fg); background:var(--card); border:1px solid var(--border); padding:13px; border-radius:10px; font-weight:400; white-space:normal; }
+  button.incident-item.selected { border-color:var(--accent); background:var(--bar); }
+  .incident-item-head,.incident-detail-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+  .incident-service { font-weight:700; }
+  .incident-meta { color:var(--muted); font-size:12px; margin-top:4px; }
+  .incident-count { white-space:nowrap; font-weight:700; }
+  .incident-state { display:inline-block; background:var(--bar); color:var(--accent); border-radius:999px; padding:3px 8px; margin-top:8px; font-size:11px; }
+  .severity { font-weight:700; color:var(--err); }
+  .incident-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:14px 0; padding:14px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .incident-detail-grid span { display:block; color:var(--muted); font-size:12px; }
+  .empty-state { color:var(--muted); padding:18px 0; }
+  .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
+  button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
+  .scenario-card { margin-top:18px; }
+  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } .incident-layout { grid-template-columns:1fr; } }
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
     .feedback-grid .full { grid-column: auto; }
@@ -196,10 +220,21 @@ _PAGE = """<!doctype html>
 </head>
 <body>
 <div class="wrap">
-  <h1>Hanati Jarvis — 장애 대응 콘솔</h1>
-  <p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p>
-
-  <div class="card">
+  <div class="console-head">
+    <div><h1>Hanati Jarvis — 장애 대응 콘솔</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
+    <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle">로그 조회</button></div>
+  </div>
+  <div class="incident-stats">
+    <div class="incident-stat"><span>진행 중</span><strong id="stat-open">0건</strong></div>
+    <div class="incident-stat"><span>긴급</span><strong id="stat-critical">0건</strong></div>
+    <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
+    <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
+  </div>
+  <div class="incident-layout">
+    <section><div class="card-head" style="margin-bottom:10px"><strong>장애 목록</strong><span id="incident-refresh-state" class="muted">실시간 갱신</span></div><div id="incident-list" class="incident-list"><div class="empty-state">최근 장애를 불러오는 중…</div></div></section>
+    <section id="incident-detail" class="card"><div class="empty-state">왼쪽에서 장애를 선택하면 상세 분석이 표시됩니다.</div></section>
+  </div>
+  <div class="card scenario-card">
     <div class="row">
       <div>
         <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
@@ -208,7 +243,15 @@ _PAGE = """<!doctype html>
       <button id="analyze" disabled>분석</button>
     </div>
   </div>
-
+  <div id="log-tabs-panel" class="card hidden">
+    <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
+    <div class="log-tabs" style="margin-top:12px">
+      <button class="log-tab selected" data-panel="log">log_generator</button>
+      <button class="log-tab" data-panel="fluentbit-panel">Fluent Bit</button>
+      <button class="log-tab" data-panel="internal-panel" data-subsource="elasticsearch">Elasticsearch</button>
+      <button class="log-tab" data-panel="internal-panel" data-subsource="qdrant">Qdrant</button>
+    </div>
+  </div>
   <div id="log" class="card hidden logs-section">
     <div class="card-head">
       <div><strong>log_generator 실행 로그</strong>
@@ -316,12 +359,111 @@ const sel = $("scenario");
 let currentErrorCode = null;
 let currentGuidance = null;
 let selectedVerdict = null;
+let incidentItems = [];
+let selectedIncidentId = null;
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
   btn.addEventListener("click", () => {
     btn.closest(".card").classList.toggle("collapsed");
   });
 });
+
+function esc(value) {
+  const div = document.createElement("div");
+  div.textContent = value == null ? "" : String(value);
+  return div.innerHTML;
+}
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString("ko-KR");
+}
+function incidentCause(rec) {
+  return (rec && (rec.cause || rec.summary)) || "분석 결과를 확인하세요.";
+}
+function renderIncidentList() {
+  const list = $("incident-list");
+  list.innerHTML = "";
+  if (!incidentItems.length) {
+    list.innerHTML = '<div class="empty-state">최근 60분간 분석된 장애가 없습니다.</div>';
+    return;
+  }
+  incidentItems.forEach((incident) => {
+    const button = document.createElement("button");
+    button.className = "incident-item" + (incident.incident_id === selectedIncidentId ? " selected" : "");
+    button.innerHTML = '<div class="incident-item-head"><div><div class="incident-service">'
+      + esc(incident.service) + '</div><div class="incident-meta">' + esc(incident.error_code)
+      + '</div></div><span class="incident-count">' + incident.count + '회</span></div>'
+      + '<div class="incident-meta">' + incident.host_count + '개 호스트 · 최근 '
+      + formatTime(incident.last_seen) + '</div><span class="incident-state">조치 확인 필요</span>';
+    button.addEventListener("click", () => selectIncident(incident.incident_id));
+    list.appendChild(button);
+  });
+}
+function selectIncident(incidentId) {
+  const incident = incidentItems.find((item) => item.incident_id === incidentId);
+  if (!incident) return;
+  selectedIncidentId = incidentId;
+  currentSince = incident.first_seen;
+  renderIncidentList();
+  $("incident-detail").innerHTML = '<div class="incident-detail-head"><div><strong>'
+    + esc(incident.error_code) + ' · ' + esc(incident.incident_id)
+    + '</strong><div class="incident-meta">' + esc(incident.service) + ' · '
+    + esc(incident.environment) + '</div></div><span class="severity">'
+    + esc(incident.severity) + '</span></div><div class="incident-detail-grid"><div><span>발생 시간</span><strong>'
+    + formatTime(incident.first_seen) + ' ~ ' + formatTime(incident.last_seen)
+    + '</strong></div><div><span>영향 범위</span><strong>' + incident.host_count
+    + ' hosts</strong></div><div><span>관련 분석</span><strong>' + incident.count
+    + '건</strong></div></div><strong>AI 추정 원인</strong><div class="cause">'
+    + esc(incidentCause(incident.recommendation)) + '</div>';
+  renderRecommendation(incident.error_code, incident.recommendation || {});
+}
+async function loadIncidents() {
+  $("incident-refresh-state").textContent = "갱신 중…";
+  try {
+    const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
+    incidentItems = data.incidents || [];
+    $("stat-open").textContent = incidentItems.length + "건";
+    $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
+    $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
+    $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
+    renderIncidentList();
+    $("incident-refresh-state").textContent = "방금 갱신";
+  } catch (error) {
+    $("incident-refresh-state").textContent = "갱신 실패";
+  }
+}
+function showLogSource(panelId, subsource) {
+  document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
+  const panel = $(panelId);
+  if (panel) panel.classList.remove("hidden");
+  if (panelId === "internal-panel") {
+    $("qdrant-output").parentElement.style.display = subsource === "elasticsearch" ? "none" : "";
+    $("es-output").parentElement.style.display = subsource === "qdrant" ? "none" : "";
+  }
+}
+function setLogsVisible(visible) {
+  $("log-tabs-panel").classList.toggle("hidden", !visible);
+  if (visible) {
+    const active = document.querySelector(".log-tab.selected");
+    showLogSource(active.dataset.panel, active.dataset.subsource);
+    pollActivity();
+  } else {
+    document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
+  }
+  $("log-toggle").textContent = visible ? "로그 닫기" : "로그 조회";
+}
+$("refresh-incidents").addEventListener("click", loadIncidents);
+$("log-toggle").addEventListener("click", () => setLogsVisible($("log-tabs-panel").classList.contains("hidden")));
+$("log-close").addEventListener("click", () => setLogsVisible(false));
+document.querySelectorAll(".log-tab").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".log-tab").forEach((candidate) => candidate.classList.toggle("selected", candidate === button));
+    showLogSource(button.dataset.panel, button.dataset.subsource);
+  });
+});
+loadIncidents();
+setInterval(loadIncidents, 15000);
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -355,9 +497,7 @@ let currentSince = null;
 $("analyze").addEventListener("click", async () => {
   $("analyze").disabled = true;
   $("analyze").textContent = "시나리오 실행 중…";
-  $("log").classList.remove("hidden");
-  $("fluentbit-panel").classList.remove("hidden");
-  $("internal-panel").classList.remove("hidden");
+  setLogsVisible(true);
   $("result").classList.add("hidden");
   $("guidance-result").classList.add("hidden");
   $("exec").classList.add("hidden");
@@ -435,6 +575,7 @@ async function waitForRecommendation(errorCode, since) {
     if (data.status === "ready") {
       $("wait-status").textContent = "";
       renderRecommendation(errorCode, data.recommendation);
+      await loadIncidents();
       return;
     }
   }
