@@ -146,18 +146,33 @@ def _validate_action_request(body):
 @remediation_blueprint.post("/api/v1/remediations/approve")
 def approve_remediation():
     body = request.get_json(silent=True)
-    context, error = _validate_action_request(body)
-    if error is not None:
-        return jsonify(error[0]), error[1]
-
-    execution_id = _execution_id(body, "approve")
-    existing = repository.get_remediation_execution(execution_id)
+    execution_id = (
+        _execution_id(body, "approve")
+        if isinstance(body, dict) and all(
+            body.get(key) is not None
+            for key in (
+                "incident_id",
+                "recommendation_id",
+                "action_id",
+            )
+        )
+        else None
+    )
+    existing = (
+        repository.get_remediation_execution(execution_id)
+        if execution_id else None
+    )
     if existing is not None:
         return jsonify({
             **existing.get("result", {}),
             "execution_id": execution_id,
             "status": "already_processed",
         })
+
+    context, error = _validate_action_request(body)
+    if error is not None:
+        return jsonify(error[0]), error[1]
+    execution_id = _execution_id(body, "approve")
 
     incident = operational_incident_service.transition(
         context["incident"],
@@ -205,18 +220,33 @@ def approve_remediation():
 @remediation_blueprint.post("/api/v1/remediations/reject")
 def reject_remediation():
     body = request.get_json(silent=True)
-    context, error = _validate_action_request(body)
-    if error is not None:
-        return jsonify(error[0]), error[1]
-
-    execution_id = _execution_id(body, "reject")
-    existing = repository.get_remediation_execution(execution_id)
+    execution_id = (
+        _execution_id(body, "reject")
+        if isinstance(body, dict) and all(
+            body.get(key) is not None
+            for key in (
+                "incident_id",
+                "recommendation_id",
+                "action_id",
+            )
+        )
+        else None
+    )
+    existing = (
+        repository.get_remediation_execution(execution_id)
+        if execution_id else None
+    )
     if existing is not None:
         return jsonify({
             **existing.get("result", {}),
             "execution_id": execution_id,
             "status": "already_processed",
         })
+
+    context, error = _validate_action_request(body)
+    if error is not None:
+        return jsonify(error[0]), error[1]
+    execution_id = _execution_id(body, "reject")
 
     result = {
         "script_id": context["script_id"],
