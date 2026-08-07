@@ -141,6 +141,28 @@ Qdrant에 저장한다.
 
 LLM이 제안했다는 이유만으로 학습 사례가 되지 않는다.
 
+### 1.6 운영 Incident와 Runbook 승인 연결
+
+ERROR 로그는 환경·서비스·오류 코드·동적 숫자를 제거한 메시지 패턴으로
+fingerprint를 만든다. 동일 fingerprint는 `application-incidents`의 같은
+Incident로 집계되고 발생 횟수, 영향 호스트, 최초·최근 시각이 갱신된다.
+
+```text
+ERROR 수신
+→ Incident 생성 또는 기존 Incident 갱신
+→ ANALYZING
+→ Recommendation 생성 및 Incident 버전 고정
+→ ACTION_REQUIRED 또는 INVESTIGATING
+→ 운영자가 Incident에 연결된 Action 승인
+→ REMEDIATING
+→ 성공 시 MONITORING / 실패 시 ACTION_REQUIRED
+```
+
+Recommendation에는 `recommendation_id`, `incident_id`,
+`incident_version`, 만료 시각, 승인 가능한 `action_id`가 저장된다.
+승인 API는 최신 Incident 버전과 실제 추천 소속 Action인지 검증하며,
+동일 Incident·Recommendation·Action의 중복 실행은 기존 결과를 반환한다.
+
 ## 2. 실행 방법
 
 ### 2.1 인프라 실행
@@ -241,7 +263,8 @@ Fluent Bit은 `fluentbit/application.log`를 읽어
 | `GET` | `/health` | 백엔드 설정 및 상태 확인 |
 | `POST` | `/api/v1/logs` | 단건/배열 로그 분석 |
 | `POST` | `/api/v1/metrics` | 시스템 메트릭 저장 및 자동 분석 |
-| `POST` | `/api/v1/remediations/approve` | Runbook 승인 및 실행 |
+| `GET` | `/api/v1/log-generator/incidents` | 영속화된 최근 Incident 목록 |
+| `POST` | `/api/v1/remediations/approve` | Incident에 연결된 Runbook 승인 및 실행 |
 | `POST` | `/api/v1/remediations/reject` | Runbook 거부 기록 |
 | `POST` | `/api/v1/remediations/diagnose` | 진단 스크립트 재실행 |
 | `POST` | `/api/v1/remediations/verify` | 조치 전후 메트릭으로 복구 검증 |
@@ -284,6 +307,7 @@ curl -X POST http://localhost:8080/api/v1/remediations/verify \
 | `application-operator-feedback` | 가설에 대한 운영자 판단 |
 | `application-recovery-verifications` | 조치 전후 복구 판정 |
 | `incident-cases` | 검증된 과거 장애 사례 |
+| `application-incidents` | 운영 중 Incident 상태·버전·최신 추천 |
 
 Qdrant의 `incident_cases` 컬렉션에는 장애 요약 임베딩과 오류 코드 payload를
 저장한다. 검색 시 의미 유사도와 오류 코드 필터를 함께 적용한다.
@@ -310,6 +334,8 @@ Qdrant의 `incident_cases` 컬렉션에는 장애 요약 임베딩과 오류 코
 - `QDRANT_COLLECTION`
 - `CASE_SEARCHER_BACKEND`: `qdrant`, `elastic`, `hybrid`(기본)
 - `OPENAI_API_KEY`
+- `ELASTIC_INCIDENT_INDEX` 기본 `application-incidents`
+- `RECOMMENDATION_TTL_MINUTES` 기본 `30`
 
 ### 탐지·품질 기준
 
