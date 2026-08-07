@@ -1,3 +1,6 @@
+import hashlib
+from datetime import UTC, datetime
+
 from flask import Blueprint, jsonify, request
 
 from config import (
@@ -5,7 +8,11 @@ from config import (
     ERROR_RULES,
     REMEDIATION_SCRIPTS,
 )
-from dependencies import recovery_verifier, repository
+from dependencies import (
+    operational_incident_service,
+    recovery_verifier,
+    repository,
+)
 from script_runner import run_script
 from utils.time_utils import now_iso
 
@@ -16,120 +23,221 @@ remediation_blueprint = Blueprint(
 )
 
 
-def _validate_runbook_request(body):
-    """approve/reject 공통 검증: script_id가 해당 error_code의 Runbook
-    (remediation_candidates)에 실제 속하는지 확인한다.
-    통과하면 None, 아니면 (jsonify 응답, status_code) 튜플을 돌려준다."""
+def _execution_id(body: dict, decision: str) -> str:
+    source = "|".join([
+        body["incident_id"],
+        body["recommendation_id"],
+        body["action_id"],
+        decision,
+    ])
+    return "EXEC-" + hashlib.sha256(
+        source.encode("utf-8")
+    ).hexdigest()[:16].upper()
+
+
+def _validate_action_request(body):
     if not isinstance(body, dict):
-        return {
+        return None, ({
             "status": "invalid_request",
             "reason": "JSON object is required",
-        }, 400
+        }, 400)
 
-    required_fields = ["script_id", "error_code", "approved_by"]
-    missing_fields = [
-        field for field in required_fields if not body.get(field)
+    required = [
+        "incident_id",
+        "recommendation_id",
+        "action_id",
+        "incident_version",
+        "approved_by",
     ]
-
-    if missing_fields:
-        return {
+    missing = [field for field in required if body.get(field) is None]
+    if missing:
+        return None, ({
             "status": "invalid_request",
-            "missing_fields": missing_fields,
-        }, 400
+            "missing_fields": missing,
+        }, 400)
 
-    error_code = body["error_code"]
-    script_id = body["script_id"]
+    incident = repository.get_operational_incident(
+        body["incident_id"]
+    )
+    if incident is None:
+        return None, ({
+            "status": "not_found",
+            "reason": "incident not found",
+        }, 404)
+    if incident.get("status") not in {
+        "ACTION_REQUIRED", "REMEDIATING"
+    }:
+        return None, ({
+            "status": "blocked",
+            "reason": "incident is not actionable",
+            "incident_status": incident.get("status"),
+        }, 409)
+
+    recommendation = repository.get_recommendation(
+        body["recommendation_id"]
+    )
+    if recommendation is None:
+        return None, ({
+            "status": "not_found",
+            "reason": "recommendation not found",
+        }, 404)
+    if (
+        recommendation.get("incident_id") != body["incident_id"]
+        or incident.get("latest_recommendation_id")
+        != body["recommendation_id"]
+    ):
+        return None, ({
+            "status": "blocked",
+            "reason": "recommendation does not belong to incident",
+        }, 409)
+
+    expected = int(body["incident_version"])
+    if (
+        int(incident.get("version", 0)) != expected
+        or int(recommendation.get("incident_version", 0)) != expected
+    ):
+        return None, ({
+            "status": "stale_recommendation",
+            "current_version": incident.get("version"),
+        }, 409)
+
+    expires_at = recommendation.get("expires_at")
+    if expires_at:
+        expiry = datetime.fromisoformat(
+            expires_at.replace("Z", "+00:00")
+        )
+        if expiry < datetime.now(UTC):
+            return None, ({
+                "status": "expired_recommendation",
+                "reason": "runbook recommendation expired",
+            }, 409)
+
+    action = next((
+        item for item in recommendation.get("actions", [])
+        if item.get("action_id") == body["action_id"]
+    ), None)
+    if action is None:
+        return None, ({
+            "status": "blocked",
+            "reason": "action is not part of recommendation",
+        }, 403)
+
+    script_id = action.get("script_id")
+    error_code = incident.get("error_code")
     rule = ERROR_RULES.get(error_code)
-
-    if rule is None:
-        return {
+    if (
+        rule is None
+        or script_id not in rule.get("remediation_candidates", [])
+    ):
+        return None, ({
             "status": "blocked",
-            "reason": "unknown error code",
-            "error_code": error_code,
-        }, 400
+            "reason": "script is not allowed for incident",
+        }, 403)
 
-    allowed_candidates = rule.get("remediation_candidates", [])
-
-    if script_id not in allowed_candidates:
-        return {
-            "status": "blocked",
-            "reason": (
-                "script is not an allowed remediation "
-                "runbook for this error code"
-            ),
-            "error_code": error_code,
-            "script_id": script_id,
-        }, 403
-
-    return None
+    return {
+        "incident": incident,
+        "recommendation": recommendation,
+        "action": action,
+        "script_id": script_id,
+        "error_code": error_code,
+    }, None
 
 
-@remediation_blueprint.route(
-    "/api/v1/remediations/approve",
-    methods=["POST"],
-)
+@remediation_blueprint.post("/api/v1/remediations/approve")
 def approve_remediation():
     body = request.get_json(silent=True)
-    error = _validate_runbook_request(body)
+    context, error = _validate_action_request(body)
     if error is not None:
         return jsonify(error[0]), error[1]
 
-    script_id = body["script_id"]
-    error_code = body["error_code"]
-    approved_by = body["approved_by"]
+    execution_id = _execution_id(body, "approve")
+    existing = repository.get_remediation_execution(execution_id)
+    if existing is not None:
+        return jsonify({
+            **existing.get("result", {}),
+            "execution_id": execution_id,
+            "status": "already_processed",
+        })
 
+    incident = operational_incident_service.transition(
+        context["incident"],
+        "REMEDIATING",
+        {"active_execution_id": execution_id},
+    )
     result = run_script(
-        script_id,
+        context["script_id"],
         REMEDIATION_SCRIPTS,
     )
-
-    repository.save_remediation({
-        "timestamp": now_iso(),
-        "error_code": error_code,
-        "script_id": script_id,
-        "approved_by": approved_by,
+    execution = {
+        "execution_id": execution_id,
+        "incident_id": body["incident_id"],
+        "recommendation_id": body["recommendation_id"],
+        "action_id": body["action_id"],
+        "script_id": context["script_id"],
+        "error_code": context["error_code"],
+        "approved_by": body["approved_by"],
+        "approved_at": now_iso(),
         "result": result,
-    })
+    }
+    repository.save_remediation_execution(execution)
 
-    status_code = (
-        200
-        if result["status"] == "success"
-        else 400
+    next_status = (
+        "MONITORING"
+        if result.get("status") == "success"
+        else "ACTION_REQUIRED"
     )
+    operational_incident_service.transition(
+        incident,
+        next_status,
+        {
+            "last_execution_id": execution_id,
+            "active_execution_id": None,
+        },
+    )
+    status_code = 200 if result.get("status") == "success" else 400
+    return jsonify({
+        **result,
+        "execution_id": execution_id,
+        "incident_status": next_status,
+    }), status_code
 
-    return jsonify(result), status_code
 
-
-@remediation_blueprint.route(
-    "/api/v1/remediations/reject",
-    methods=["POST"],
-)
+@remediation_blueprint.post("/api/v1/remediations/reject")
 def reject_remediation():
     body = request.get_json(silent=True)
-    error = _validate_runbook_request(body)
+    context, error = _validate_action_request(body)
     if error is not None:
         return jsonify(error[0]), error[1]
 
-    script_id = body["script_id"]
-    error_code = body["error_code"]
-    approved_by = body["approved_by"]
-    reason = body.get("reason", "")
+    execution_id = _execution_id(body, "reject")
+    existing = repository.get_remediation_execution(execution_id)
+    if existing is not None:
+        return jsonify({
+            **existing.get("result", {}),
+            "execution_id": execution_id,
+            "status": "already_processed",
+        })
 
     result = {
-        "script_id": script_id,
+        "script_id": context["script_id"],
         "status": "rejected",
-        "reason": reason,
+        "reason": body.get("reason", ""),
     }
-
-    repository.save_remediation({
-        "timestamp": now_iso(),
-        "error_code": error_code,
-        "script_id": script_id,
-        "approved_by": approved_by,
+    repository.save_remediation_execution({
+        "execution_id": execution_id,
+        "incident_id": body["incident_id"],
+        "recommendation_id": body["recommendation_id"],
+        "action_id": body["action_id"],
+        "script_id": context["script_id"],
+        "error_code": context["error_code"],
+        "approved_by": body["approved_by"],
+        "approved_at": now_iso(),
         "result": result,
     })
-
-    return jsonify(result)
+    return jsonify({
+        **result,
+        "execution_id": execution_id,
+    })
 
 
 @remediation_blueprint.route(
