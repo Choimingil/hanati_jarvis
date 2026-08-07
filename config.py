@@ -281,3 +281,11 @@ ELASTIC_OPERATOR_FEEDBACK_INDEX = os.getenv(
 ELASTIC_INCIDENT_CASES_INDEX = os.getenv(
     "ELASTIC_INCIDENT_CASES_INDEX", "incident-cases"
 )
+
+# 운영 중인 장애 상태. 검증된 과거 사례(incident-cases)와 분리한다.
+ELASTIC_INCIDENT_INDEX = os.getenv(
+    "ELASTIC_INCIDENT_INDEX", "application-incidents"
+)
+RECOMMENDATION_TTL_MINUTES = int(
+    os.getenv("RECOMMENDATION_TTL_MINUTES", "30")
+)
