@@ -3,6 +3,7 @@ from typing import Any
 from config import (
     ELASTIC_DIAGNOSIS_INDEX,
     ELASTIC_INCIDENT_CASES_INDEX,
+    ELASTIC_INCIDENT_INDEX,
     ELASTIC_LOG_INDEX,
     ELASTIC_METRICS_INDEX,
     ELASTIC_OPERATOR_FEEDBACK_INDEX,
@@ -47,9 +48,24 @@ class ElasticLogRepository(LogRepository):
         self,
         document: dict[str, Any],
     ) -> None:
-        self._index(
-            ELASTIC_RECOMMENDATION_INDEX, document
+        recommendation = (
+            document.get("recommendation")
+            or document.get("guidance")
+            or {}
         )
+        recommendation_id = recommendation.get(
+            "recommendation_id"
+        )
+        if recommendation_id:
+            self.client.index(
+                index=ELASTIC_RECOMMENDATION_INDEX,
+                id=recommendation_id,
+                document=document,
+            )
+        else:
+            self._index(
+                ELASTIC_RECOMMENDATION_INDEX, document
+            )
 
     def save_remediation(
         self,
@@ -125,6 +141,121 @@ class ElasticLogRepository(LogRepository):
         except Exception:
             return None
         return response.get("_source")
+
+    def get_operational_incident(
+        self, incident_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_INCIDENT_INDEX,
+                id=incident_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def create_operational_incident(
+        self, document: dict[str, Any]
+    ) -> None:
+        self.client.index(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=document["incident_id"],
+            document=document,
+            op_type="create",
+            refresh="wait_for",
+        )
+
+    def update_operational_incident(
+        self,
+        incident_id: str,
+        changes: dict[str, Any],
+        expected_version: int,
+    ) -> dict[str, Any]:
+        response = self.client.update(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=incident_id,
+            script={
+                "lang": "painless",
+                "source": (
+                    "if (ctx._source.version != params.expected) { "
+                    "ctx.op = 'none'; return; } "
+                    "for (entry in params.changes.entrySet()) { "
+                    "ctx._source[entry.getKey()] = entry.getValue(); }"
+                ),
+                "params": {
+                    "expected": expected_version,
+                    "changes": changes,
+                },
+            },
+            refresh="wait_for",
+        )
+        if response.get("result") == "noop":
+            raise RuntimeError("incident version conflict")
+        updated = self.client.get(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=incident_id,
+        )
+        return updated["_source"]
+
+    def list_operational_incidents(
+        self, minutes: int = 60
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_INCIDENT_INDEX,
+            query={
+                "range": {
+                    "last_seen": {
+                        "gte": f"now-{minutes}m",
+                    }
+                }
+            },
+            sort=[{"last_seen": "desc"}],
+            size=200,
+            ignore_unavailable=True,
+        )
+        return [
+            hit["_source"]
+            for hit in response.get("hits", {}).get("hits", [])
+        ]
+
+    def get_recommendation(
+        self, recommendation_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_RECOMMENDATION_INDEX,
+                id=recommendation_id,
+            )
+        except Exception:
+            return None
+        source = response.get("_source", {})
+        return (
+            source.get("recommendation")
+            or source.get("guidance")
+        )
+
+    def get_remediation_execution(
+        self, execution_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_REMEDIATION_INDEX,
+                id=execution_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def save_remediation_execution(
+        self, document: dict[str, Any]
+    ) -> None:
+        self.client.index(
+            index=ELASTIC_REMEDIATION_INDEX,
+            id=document["execution_id"],
+            document=document,
+            op_type="create",
+            refresh="wait_for",
+        )
 
     def save_recovery_verification(
         self, document: dict[str, Any]
