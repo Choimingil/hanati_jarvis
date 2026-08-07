@@ -61,6 +61,7 @@ collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
 | `resource_hypothesis_engine.py` | 추천 실패 시 CPU·메모리·디스크·연결·네트워크 가설 생성 |
 | `fallback_guidance_generator.py` | 가설과 검증 사례만 근거로 운영자용 추가 진단 가이드 생성 |
 | `operator_feedback_service.py` | 운영자 판단 저장, 확인+복구된 결과만 장애 사례로 승격 |
+| `operational_incident_service.py` | ERROR fingerprint 기반 운영 Incident 생성·집계·버전·상태 전환, Recommendation Action 연결 |
 
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.
