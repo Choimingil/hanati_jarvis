@@ -55,7 +55,10 @@ http://localhost:8080/api/v1/logs POST
 `application-system-metrics` 인덱스에 저장한다. 프로세스 명령행과 환경변수는
 민감정보 노출을 막기 위해 수집하지 않는다.
 
-백엔드를 먼저 실행한 뒤 다음 명령으로 한 번 수집하거나 계속 수집한다.
+`scripts/run_app.sh`를 실행하면 백엔드와 Agent가 함께 기동되며 기본 30초마다
+자동 수집한다. 백엔드 종료 시 Agent도 함께 종료된다.
+
+Agent만 별도로 실행하려면 다음 명령을 사용한다.
 
 ```bash
 python -m collector.agent --once
@@ -69,6 +72,7 @@ python -m collector.agent
 - `METRICS_COLLECT_INTERVAL_SECONDS`
 - `METRICS_PROCESS_LIMIT`
 - `ELASTIC_METRICS_INDEX`
+- `METRICS_AGENT_ENABLED` (`false`이면 `run_app.sh`에서 자동 기동하지 않음)
 
 Linux에서 전체 프로세스의 네트워크 연결을 조회하려면 Agent 실행 계정에
 추가 권한이 필요할 수 있다. 권한이 없으면 스냅샷의
@@ -254,50 +258,3 @@ Mapping:
 (URL, 비밀번호)가 `elastic/client.py`에 하드코딩되어 있었다. 이번에 아래와
 같이 수정해서 `case_searcher`와 동일한 방식으로 `log_repository`도 mock /
 Elasticsearch를 스위치할 수 있도록 통합했다.
-
-### 변경된 파일
-
-- `elastic/*.py` : 내부 import를 `from client import ...` →
-  `from elastic.client import ...` 형태로 수정해 패키지로 정상 import되도록
-  변경 (`elastic/client.py`, `mapping.py`, `insert_log.py`, `search_log.py`,
-  `search_test.py`, `main.py`, `bulk_insert.py`)
-- `elastic/client.py` : 하드코딩되어 있던 URL/비밀번호를 제거하고
-  `config.py`의 `ELASTICSEARCH_URL` / `ELASTICSEARCH_USER` /
-  `ELASTICSEARCH_PASSWORD` / `ELASTICSEARCH_VERIFY_CERTS` 환경변수를 사용하도록 변경
-- `config.py` : `LOG_REPOSITORY_BACKEND`, `ELASTICSEARCH_URL`,
-  `ELASTICSEARCH_USER`, `ELASTICSEARCH_PASSWORD`,
-  `ELASTICSEARCH_VERIFY_CERTS`, `ELASTIC_LOG_INDEX`,
-  `ELASTIC_DIAGNOSIS_INDEX`, `ELASTIC_RECOMMENDATION_INDEX` 설정 추가
-- `adapters/elastic_adapters.py` (신규) : `LogRepository` 포트를 구현하는
-  `ElasticLogRepository` (`save_log` / `save_diagnosis` /
-  `save_recommendation`을 각각 별도 인덱스에 저장)
-- `dependencies.py` : `LOG_REPOSITORY_BACKEND` 값에 따라 `MockLogRepository` /
-  `ElasticLogRepository` 중 하나를 주입
-- `app.py` : `/health`의 `storage` 값이 실제 사용 중인 백엔드를 반영
-- 루트의 `elastic_repository.py` 삭제 : `config.ELASTICSEARCH_URL`이 정의되어
-  있지 않아 애초에 import가 실패하던 죽은 코드였고, 동일한 역할을
-  `adapters/elastic_adapters.py`가 대체함
-
-### 사용법
-
-```bash
-# 1. 의존성 설치 (elasticsearch 패키지는 requirements.txt에 이미 포함)
-pip install -r requirements.txt
-
-# 2. 접속 정보를 환경변수로 지정 (비밀번호는 기본값 없음, 반드시 지정)
-export ELASTICSEARCH_URL=https://localhost:9200
-export ELASTICSEARCH_USER=elastic
-export ELASTICSEARCH_PASSWORD=your-password
-
-# 3. elastic 백엔드로 서버 실행
-LOG_REPOSITORY_BACKEND=elastic python app.py
-```
-
-`LOG_REPOSITORY_BACKEND`를 지정하지 않으면 기존과 동일하게 mock으로 동작한다.
-
-> 참고: 이 환경에는 실행 중인 Elasticsearch 서버가 없어서(포트 9200
-> connection refused) 실제 저장/조회까지는 검증하지 못했다. import 경로와
-> mock ↔ elastic 스위치 배선, 그리고 연결 실패 시 에러가 앱을 죽이지 않고
-> `processing_failed` 응답으로 깔끔하게 전파되는 것까지는 확인했다.
-> 로컬에 Elasticsearch를 띄운 뒤(`elastic/main.py`로 연결 확인,
-> `elastic/mapping.py`로 인덱스 생성) 실제 저장 결과를 검증해보길 권장한다.
