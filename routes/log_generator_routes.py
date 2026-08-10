@@ -209,6 +209,13 @@ def _container_tail(
         line
         for line in output.splitlines()
         if line.strip()
+        # docker CLI/데몬 자체의 전송 계층 오류(예: 컨테이너 json 로그
+        # 파일 손상)는 컨테이너가 실제로 찍은 로그가 아니다 - 그대로
+        # 보여주면 컨테이너 내부 에러처럼 오해하게 된다.
+        and not line.lstrip().startswith((
+            "error from daemon",
+            "Error response from daemon",
+        ))
     ]
 
 

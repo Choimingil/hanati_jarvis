@@ -54,6 +54,12 @@ system = SystemInfo(
             FailureScenarioConfig(scenario=_scenario("redis_failure"), probability=0.03),
             FailureScenarioConfig(scenario=_scenario("disk_full"), probability=0.03),
             FailureScenarioConfig(scenario=_scenario("db_connection_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("message_queue_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("ssl_certificate_expired"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("thread_pool_exhausted"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("rate_limit_exceeded"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("auth_token_validation_failure"), probability=0.03),
+            FailureScenarioConfig(scenario=_scenario("container_oom_killed"), probability=0.03),
         ],
     ),
 )

@@ -142,6 +142,71 @@ ERROR_RULES = {
         "auto_diagnose": True,
         "auto_remediate": False,
     },
+    "MESSAGE_QUEUE_CONNECTION_LOST": {
+        "diagnostic_scripts": [
+            "check_kafka_connection",
+        ],
+        "remediation_candidates": [
+            "restart_kafka_consumer",
+            "failover_message_broker",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "SSL_CERTIFICATE_EXPIRED": {
+        "diagnostic_scripts": [
+            "check_ssl_certificate",
+        ],
+        "remediation_candidates": [
+            "renew_ssl_certificate",
+            "reload_tls_config",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "THREAD_POOL_EXHAUSTED": {
+        "diagnostic_scripts": [
+            "check_thread_pool_usage",
+        ],
+        "remediation_candidates": [
+            "increase_thread_pool_size",
+            "restart_application",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "RATE_LIMIT_EXCEEDED": {
+        # 대응 스크립트 없음 - 감지되면 runbook 추천 대신
+        # resource fallback(운영자 조사) 경로로 빠진다
+        # (RecommendationQualityGate.requires_fallback의
+        # "no_remediation_candidates").
+        "diagnostic_scripts": [],
+        "remediation_candidates": [],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "AUTH_TOKEN_VALIDATION_FAILURE": {
+        "diagnostic_scripts": [
+            "check_auth_service_health",
+        ],
+        "remediation_candidates": [
+            "rotate_signing_key",
+            "restart_auth_service",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "CONTAINER_OOM_KILLED": {
+        "diagnostic_scripts": [
+            "check_container_memory_limits",
+        ],
+        "remediation_candidates": [
+            "increase_memory_limit",
+            "restart_application",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
 }
 
 
@@ -172,6 +237,19 @@ SCRIPT_DESCRIPTIONS = {
     "increase_heap_size": "힙 메모리 증설 후 재기동",
     "restart_redis": "Redis 인스턴스 재시작",
     "clear_redis_cache": "Redis 캐시 비우기",
+    "check_kafka_connection": "Kafka 브로커 연결 상태 점검",
+    "restart_kafka_consumer": "Kafka 컨슈머 재시작",
+    "failover_message_broker": "예비 메시지 브로커로 페일오버 전환",
+    "check_ssl_certificate": "SSL 인증서 유효기간 점검",
+    "renew_ssl_certificate": "SSL 인증서 갱신",
+    "reload_tls_config": "TLS 설정 재적용",
+    "check_thread_pool_usage": "스레드 풀 사용률 점검",
+    "increase_thread_pool_size": "스레드 풀 크기 증설",
+    "check_auth_service_health": "인증 서비스 상태 점검",
+    "rotate_signing_key": "토큰 서명 키 로테이션",
+    "restart_auth_service": "인증 서비스 재시작",
+    "check_container_memory_limits": "컨테이너 메모리 제한(cgroup) 점검",
+    "increase_memory_limit": "컨테이너 메모리 제한 증설",
 }
 
 

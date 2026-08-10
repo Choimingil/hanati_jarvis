@@ -2,3 +2,292 @@
 {"timestamp":"2026-07-13T19:40:00+0900","level":"INFO","message":"HTTP output test"}
 {"timestamp":"2026-07-13T19:40:00+0900","level":"INFO","message":"HTTP output test"}
 {"timestamp":"2026-07-13T21:00:00+0900","level":"ERROR","message":"write failed: No space left on device"}
+{"timestamp": "2026-08-06T22:36:52+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T22:36:52+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T22:36:53+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T22:36:55+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T22:36:58+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T22:37:02+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:15:03+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:15:03+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:15:04+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:15:06+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:15:09+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:15:13+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:20:09+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:20:09+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:20:10+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:20:12+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:20:15+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:20:19+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:23:35+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:23:35+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:23:36+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:23:38+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:23:41+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:23:45+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:26:34+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:26:34+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:26:35+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:26:37+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:26:40+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:26:44+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:28:47+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:28:47+0900", "level": "WARN", "message": "External API response time exceeded threshold.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:28:48+0900", "level": "WARN", "message": "Retrying external API request.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:28:50+0900", "level": "ERROR", "message": "Received HTTP 503 from external API.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:28:53+0900", "level": "ERROR", "message": "Payment service unavailable.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "payment"}
+{"timestamp": "2026-08-06T23:28:57+0900", "level": "ERROR", "message": "Transaction cancelled.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "checkout"}
+{"timestamp": "2026-08-06T23:29:31+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:29:31+0900", "level": "WARN", "message": "External API response time exceeded threshold.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:29:32+0900", "level": "WARN", "message": "Retrying external API request.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:29:34+0900", "level": "ERROR", "message": "Received HTTP 503 from external API.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http-client"}
+{"timestamp": "2026-08-06T23:29:37+0900", "level": "ERROR", "message": "Payment service unavailable.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "payment"}
+{"timestamp": "2026-08-06T23:29:41+0900", "level": "ERROR", "message": "Transaction cancelled.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "checkout"}
+{"timestamp": "2026-08-06T23:33:10+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:33:10+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:33:11+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:33:13+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:33:16+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:33:20+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:35:50+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:35:50+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:35:51+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:35:53+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:35:56+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:36:00+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:37:37+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:37:37+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:37:38+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:37:40+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:37:43+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:37:47+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:46:28+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:46:28+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:46:29+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:46:31+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:46:34+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:46:38+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:50:56+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:50:56+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:50:57+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:50:59+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:51:02+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:51:06+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:53:45+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:53:45+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:53:46+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:53:48+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:53:51+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:53:55+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-06T23:57:38+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-06T23:57:38+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-06T23:57:39+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-06T23:57:41+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-06T23:57:44+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-06T23:57:48+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:01:39+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:01:39+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:01:40+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:01:42+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:01:45+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:01:49+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:04:27+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:04:27+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:04:28+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:04:30+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:04:33+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:04:37+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:09:42+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:09:42+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:09:43+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:09:45+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:09:48+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:09:52+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:18:18+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:18:18+0900", "level": "INFO", "message": "Memory usage steadily increasing.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": "runtime"}
+{"timestamp": "2026-08-07T00:18:19+0900", "level": "WARN", "message": "Heap usage exceeded 85%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "runtime"}
+{"timestamp": "2026-08-07T00:18:21+0900", "level": "WARN", "message": "Frequent garbage collection detected.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "jvm"}
+{"timestamp": "2026-08-07T00:18:24+0900", "level": "ERROR", "message": "OutOfMemoryError encountered.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "runtime"}
+{"timestamp": "2026-08-07T00:18:28+0900", "level": "ERROR", "message": "Application process terminated.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "system"}
+{"timestamp": "2026-08-07T00:21:57+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:21:57+0900", "level": "WARN", "message": "External API response time exceeded threshold.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-07T00:21:58+0900", "level": "WARN", "message": "Retrying external API request.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-07T00:22:00+0900", "level": "ERROR", "message": "Received HTTP 503 from external API.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http-client"}
+{"timestamp": "2026-08-07T00:22:03+0900", "level": "ERROR", "message": "Payment service unavailable.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "payment"}
+{"timestamp": "2026-08-07T00:22:07+0900", "level": "ERROR", "message": "Transaction cancelled.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "checkout"}
+{"timestamp": "2026-08-07T00:23:12+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:23:12+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:23:13+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:23:15+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:23:18+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:23:22+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:23:37+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:23:37+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:23:38+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:23:40+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:23:43+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:23:47+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:48:07+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:48:07+0900", "level": "WARN", "message": "Database connection timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-07T00:48:08+0900", "level": "WARN", "message": "Retrying database connection.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-07T00:48:10+0900", "level": "ERROR", "message": "Database connection failed.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "database"}
+{"timestamp": "2026-08-07T00:48:13+0900", "level": "ERROR", "message": "Unable to execute SQL query.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "repository"}
+{"timestamp": "2026-08-07T00:48:17+0900", "level": "ERROR", "message": "Request processing aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api"}
+{"timestamp": "2026-08-07T00:50:18+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:50:18+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:50:19+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:50:21+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:50:24+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:50:28+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-07T00:51:31+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-07T00:51:31+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-07T00:51:32+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-07T00:51:34+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-07T00:51:37+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-07T00:51:41+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T20:40:35+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:40:35+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T20:40:36+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T20:40:38+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T20:40:41+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T20:40:45+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T20:48:51+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:48:51+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T20:48:52+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T20:48:54+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T20:48:57+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T20:49:01+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T20:49:29+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:49:29+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T20:49:30+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T20:49:32+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T20:49:35+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T20:49:39+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T20:50:48+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:50:48+0900", "level": "WARN", "message": "Database connection timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-10T20:50:49+0900", "level": "WARN", "message": "Retrying database connection.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-10T20:50:51+0900", "level": "ERROR", "message": "Database connection failed.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "database"}
+{"timestamp": "2026-08-10T20:50:54+0900", "level": "ERROR", "message": "Unable to execute SQL query.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "repository"}
+{"timestamp": "2026-08-10T20:50:59+0900", "level": "ERROR", "message": "Request processing aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api"}
+{"timestamp": "2026-08-10T20:56:20+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:56:20+0900", "level": "WARN", "message": "Database connection timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-10T20:56:21+0900", "level": "WARN", "message": "Retrying database connection.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "database"}
+{"timestamp": "2026-08-10T20:56:23+0900", "level": "ERROR", "message": "Database connection failed.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "database"}
+{"timestamp": "2026-08-10T20:56:26+0900", "level": "ERROR", "message": "Unable to execute SQL query.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "repository"}
+{"timestamp": "2026-08-10T20:56:30+0900", "level": "ERROR", "message": "Request processing aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api"}
+{"timestamp": "2026-08-10T20:59:15+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T20:59:15+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T20:59:16+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T20:59:18+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T20:59:21+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T20:59:25+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:00:42+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:00:42+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:00:43+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:00:45+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:00:48+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:00:52+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:06:55+0900", "level": "INFO", "message": "verify filter info", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:06:55+0900", "level": "WARN", "message": "verify filter warn", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "x"}
+{"timestamp": "2026-08-10T21:06:55+0900", "level": "ERROR", "message": "verify filter error", "host": "web01", "service": "order-api", "status": "FAILED", "source": "x"}
+{"timestamp": "2026-08-10T21:08:52+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:08:52+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:08:53+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:08:55+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:08:58+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:09:02+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:11:21+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:11:21+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:11:22+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:11:24+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:11:27+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:11:31+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:13:16+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:13:16+0900", "level": "WARN", "message": "DNS lookup timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:13:17+0900", "level": "WARN", "message": "Retrying DNS resolution.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:13:19+0900", "level": "ERROR", "message": "Failed to resolve service endpoint.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "dns"}
+{"timestamp": "2026-08-10T21:13:22+0900", "level": "ERROR", "message": "HTTP request aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http"}
+{"timestamp": "2026-08-10T21:13:26+0900", "level": "ERROR", "message": "Circuit breaker opened.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "circuit-breaker"}
+{"timestamp": "2026-08-10T21:14:55+0900", "level": "INFO", "message": "verify payload-off info", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:14:55+0900", "level": "WARN", "message": "verify payload-off warn", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "x"}
+{"timestamp": "2026-08-10T21:18:41+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:18:41+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:18:42+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:18:44+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:18:47+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:18:51+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:21:31+0900", "level": "INFO", "message": "verify stdout output", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:21:31+0900", "level": "ERROR", "message": "verify stdout output error", "host": "web01", "service": "order-api", "status": "FAILED", "source": "x"}
+{"timestamp": "2026-08-10T21:23:36+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:23:36+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:23:37+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:23:39+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:23:42+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:23:46+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:25:08+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:25:08+0900", "level": "WARN", "message": "DNS lookup timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:25:09+0900", "level": "WARN", "message": "Retrying DNS resolution.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:25:11+0900", "level": "ERROR", "message": "Failed to resolve service endpoint.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "dns"}
+{"timestamp": "2026-08-10T21:25:14+0900", "level": "ERROR", "message": "HTTP request aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http"}
+{"timestamp": "2026-08-10T21:25:18+0900", "level": "ERROR", "message": "Circuit breaker opened.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "circuit-breaker"}
+{"timestamp": "2026-08-10T21:26:16+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:26:16+0900", "level": "WARN", "message": "DNS lookup timeout.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:26:17+0900", "level": "WARN", "message": "Retrying DNS resolution.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "dns"}
+{"timestamp": "2026-08-10T21:26:19+0900", "level": "ERROR", "message": "Failed to resolve service endpoint.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "dns"}
+{"timestamp": "2026-08-10T21:26:22+0900", "level": "ERROR", "message": "HTTP request aborted.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http"}
+{"timestamp": "2026-08-10T21:26:26+0900", "level": "ERROR", "message": "Circuit breaker opened.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "circuit-breaker"}
+{"timestamp": "2026-08-10T21:28:53+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:28:53+0900", "level": "WARN", "message": "Disk usage exceeded 90%.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "storage"}
+{"timestamp": "2026-08-10T21:28:54+0900", "level": "WARN", "message": "Failed to rotate log files.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "logger"}
+{"timestamp": "2026-08-10T21:28:56+0900", "level": "ERROR", "message": "No space left on device.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "storage"}
+{"timestamp": "2026-08-10T21:28:59+0900", "level": "ERROR", "message": "Unable to write application data.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "application"}
+{"timestamp": "2026-08-10T21:29:03+0900", "level": "ERROR", "message": "Service entering read-only mode.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "service"}
+{"timestamp": "2026-08-10T21:29:44+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:29:44+0900", "level": "WARN", "message": "External API response time exceeded threshold.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-10T21:29:45+0900", "level": "WARN", "message": "Retrying external API request.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "http-client"}
+{"timestamp": "2026-08-10T21:29:47+0900", "level": "ERROR", "message": "Received HTTP 503 from external API.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "http-client"}
+{"timestamp": "2026-08-10T21:29:50+0900", "level": "ERROR", "message": "Payment service unavailable.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "payment"}
+{"timestamp": "2026-08-10T21:29:54+0900", "level": "ERROR", "message": "Transaction cancelled.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "checkout"}
+{"timestamp": "2026-08-10T21:30:21+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:30:21+0900", "level": "WARN", "message": "Redis latency exceeded threshold.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "redis"}
+{"timestamp": "2026-08-10T21:30:22+0900", "level": "WARN", "message": "Cache miss rate increasing.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "cache"}
+{"timestamp": "2026-08-10T21:30:24+0900", "level": "ERROR", "message": "Redis connection lost.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "redis"}
+{"timestamp": "2026-08-10T21:30:27+0900", "level": "ERROR", "message": "Falling back to database.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "cache"}
+{"timestamp": "2026-08-10T21:30:31+0900", "level": "ERROR", "message": "Database overloaded by cache fallback.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "database"}
+{"timestamp": "2026-08-10T21:39:51+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:39:51+0900", "level": "WARN", "message": "Container memory usage approaching cgroup limit.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "container"}
+{"timestamp": "2026-08-10T21:39:52+0900", "level": "WARN", "message": "Kubelet reported memory pressure on node.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "kubelet"}
+{"timestamp": "2026-08-10T21:39:54+0900", "level": "ERROR", "message": "Container killed by OOM killer.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "container"}
+{"timestamp": "2026-08-10T21:39:57+0900", "level": "ERROR", "message": "Pod restarted due to OOMKilled status.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "kubernetes"}
+{"timestamp": "2026-08-10T21:40:01+0900", "level": "ERROR", "message": "Service unavailable during pod restart.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "order-api"}
+{"timestamp": "2026-08-10T21:45:40+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:45:40+0900", "level": "WARN", "message": "Inbound request rate approaching limit.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:45:41+0900", "level": "WARN", "message": "Burst traffic detected from single client.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:45:43+0900", "level": "ERROR", "message": "Rate limit exceeded for client requests.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:45:46+0900", "level": "ERROR", "message": "Requests throttled with HTTP 429.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:45:52+0900", "level": "ERROR", "message": "Downstream service overloaded by retry storm.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "order-api"}
+{"timestamp": "2026-08-10T21:53:48+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:53:48+0900", "level": "WARN", "message": "Inbound request rate approaching limit.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:53:49+0900", "level": "WARN", "message": "Burst traffic detected from single client.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:53:51+0900", "level": "ERROR", "message": "Rate limit exceeded for client requests.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:53:54+0900", "level": "ERROR", "message": "Requests throttled with HTTP 429.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:53:58+0900", "level": "ERROR", "message": "Downstream service overloaded by retry storm.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "order-api"}
+{"timestamp": "2026-08-10T21:54:46+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:54:46+0900", "level": "WARN", "message": "Inbound request rate approaching limit.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:54:47+0900", "level": "WARN", "message": "Burst traffic detected from single client.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:54:49+0900", "level": "ERROR", "message": "Rate limit exceeded for client requests.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:54:52+0900", "level": "ERROR", "message": "Requests throttled with HTTP 429.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:54:56+0900", "level": "ERROR", "message": "Downstream service overloaded by retry storm.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "order-api"}
+{"timestamp": "2026-08-10T21:56:14+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T21:56:14+0900", "level": "WARN", "message": "Inbound request rate approaching limit.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:56:15+0900", "level": "WARN", "message": "Burst traffic detected from single client.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:56:17+0900", "level": "ERROR", "message": "Rate limit exceeded for client requests.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:56:20+0900", "level": "ERROR", "message": "Requests throttled with HTTP 429.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api-gateway"}
+{"timestamp": "2026-08-10T21:56:24+0900", "level": "ERROR", "message": "Downstream service overloaded by retry storm.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "order-api"}
+{"timestamp": "2026-08-10T22:07:25+0900", "level": "INFO", "message": "System operating normally.", "host": "web01", "service": "order-api", "status": "HEALTHY", "source": null}
+{"timestamp": "2026-08-10T22:07:25+0900", "level": "WARN", "message": "Auth service response time degraded.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "auth-service"}
+{"timestamp": "2026-08-10T22:07:26+0900", "level": "WARN", "message": "Token signing key rotation in progress.", "host": "web01", "service": "order-api", "status": "DEGRADED", "source": "auth-service"}
+{"timestamp": "2026-08-10T22:07:28+0900", "level": "ERROR", "message": "Failed to validate access token.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "auth-service"}
+{"timestamp": "2026-08-10T22:07:31+0900", "level": "ERROR", "message": "User session authentication rejected.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "auth-service"}
+{"timestamp": "2026-08-10T22:07:35+0900", "level": "ERROR", "message": "Protected endpoints returning 401.", "host": "web01", "service": "order-api", "status": "FAILED", "source": "api"}

@@ -194,24 +194,11 @@ _PAGE = """<!doctype html>
   .incident-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px; }
   .incident-stat span { display:block; color:var(--muted); font-size:12px; }
   .incident-stat strong { display:block; margin-top:3px; }
-  .incident-layout { display:grid; grid-template-columns:minmax(280px,.9fr) minmax(360px,1.5fr); gap:16px; align-items:start; margin-bottom:18px; }
-  .incident-list { display:flex; flex-direction:column; gap:8px; }
-  button.incident-item { width:100%; text-align:left; color:var(--fg); background:var(--card); border:1px solid var(--border); padding:13px; border-radius:10px; font-weight:400; white-space:normal; }
-  button.incident-item.selected { border-color:var(--accent); background:var(--bar); }
-  .incident-item-head,.incident-detail-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
-  .incident-service { font-weight:700; }
-  .incident-meta { color:var(--muted); font-size:12px; margin-top:4px; }
-  .incident-count { white-space:nowrap; font-weight:700; }
-  .incident-state { display:inline-block; background:var(--bar); color:var(--accent); border-radius:999px; padding:3px 8px; margin-top:8px; font-size:11px; }
-  .severity { font-weight:700; color:var(--err); }
-  .incident-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:14px 0; padding:14px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
-  .incident-detail-grid span { display:block; color:var(--muted); font-size:12px; }
-  .empty-state { color:var(--muted); padding:18px 0; }
   .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
   .scenario-card { margin-top:18px; }
-  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } .incident-layout { grid-template-columns:1fr; } }
+  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
     .feedback-grid .full { grid-column: auto; }
@@ -230,10 +217,6 @@ _PAGE = """<!doctype html>
     <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
     <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
   </div>
-  <div class="incident-layout">
-    <section><div class="card-head" style="margin-bottom:10px"><strong>장애 목록</strong><span id="incident-refresh-state" class="muted">실시간 갱신</span></div><div id="incident-list" class="incident-list"><div class="empty-state">최근 장애를 불러오는 중…</div></div></section>
-    <section id="incident-detail" class="card"><div class="empty-state">왼쪽에서 장애를 선택하면 상세 분석이 표시됩니다.</div></section>
-  </div>
   <div class="card scenario-card">
     <div class="row">
       <div>
@@ -248,8 +231,7 @@ _PAGE = """<!doctype html>
     <div class="log-tabs" style="margin-top:12px">
       <button class="log-tab selected" data-panel="log">log_generator</button>
       <button class="log-tab" data-panel="fluentbit-panel">Fluent Bit</button>
-      <button class="log-tab" data-panel="internal-panel" data-subsource="elasticsearch">Elasticsearch</button>
-      <button class="log-tab" data-panel="internal-panel" data-subsource="qdrant">Qdrant</button>
+      <button class="log-tab" data-panel="internal-panel">Elasticsearch/Qdrant</button>
     </div>
   </div>
   <div id="log" class="card hidden logs-section">
@@ -361,7 +343,6 @@ let currentRecommendation = null;
 let currentGuidance = null;
 let selectedVerdict = null;
 let incidentItems = [];
-let selectedIncidentId = null;
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -379,48 +360,7 @@ function formatTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString("ko-KR");
 }
-function incidentCause(rec) {
-  return (rec && (rec.cause || rec.summary)) || "분석 결과를 확인하세요.";
-}
-function renderIncidentList() {
-  const list = $("incident-list");
-  list.innerHTML = "";
-  if (!incidentItems.length) {
-    list.innerHTML = '<div class="empty-state">최근 60분간 분석된 장애가 없습니다.</div>';
-    return;
-  }
-  incidentItems.forEach((incident) => {
-    const button = document.createElement("button");
-    button.className = "incident-item" + (incident.incident_id === selectedIncidentId ? " selected" : "");
-    button.innerHTML = '<div class="incident-item-head"><div><div class="incident-service">'
-      + esc(incident.service) + '</div><div class="incident-meta">' + esc(incident.error_code)
-      + '</div></div><span class="incident-count">' + incident.count + '회</span></div>'
-      + '<div class="incident-meta">' + incident.host_count + '개 호스트 · 최근 '
-      + formatTime(incident.last_seen) + '</div><span class="incident-state">조치 확인 필요</span>';
-    button.addEventListener("click", () => selectIncident(incident.incident_id));
-    list.appendChild(button);
-  });
-}
-function selectIncident(incidentId) {
-  const incident = incidentItems.find((item) => item.incident_id === incidentId);
-  if (!incident) return;
-  selectedIncidentId = incidentId;
-  currentSince = incident.first_seen;
-  renderIncidentList();
-  $("incident-detail").innerHTML = '<div class="incident-detail-head"><div><strong>'
-    + esc(incident.error_code) + ' · ' + esc(incident.incident_id)
-    + '</strong><div class="incident-meta">' + esc(incident.service) + ' · '
-    + esc(incident.environment) + '</div></div><span class="severity">'
-    + esc(incident.severity) + '</span></div><div class="incident-detail-grid"><div><span>발생 시간</span><strong>'
-    + formatTime(incident.first_seen) + ' ~ ' + formatTime(incident.last_seen)
-    + '</strong></div><div><span>영향 범위</span><strong>' + incident.host_count
-    + ' hosts</strong></div><div><span>관련 분석</span><strong>' + incident.count
-    + '건</strong></div></div><strong>AI 추정 원인</strong><div class="cause">'
-    + esc(incidentCause(incident.recommendation)) + '</div>';
-  renderRecommendation(incident.error_code, incident.recommendation || {});
-}
 async function loadIncidents() {
-  $("incident-refresh-state").textContent = "갱신 중…";
   try {
     const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
     incidentItems = data.incidents || [];
@@ -428,26 +368,20 @@ async function loadIncidents() {
     $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
     $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
     $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
-    renderIncidentList();
-    $("incident-refresh-state").textContent = "방금 갱신";
   } catch (error) {
-    $("incident-refresh-state").textContent = "갱신 실패";
+    /* stats stay at last known values */
   }
 }
-function showLogSource(panelId, subsource) {
+function showLogSource(panelId) {
   document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
   const panel = $(panelId);
   if (panel) panel.classList.remove("hidden");
-  if (panelId === "internal-panel") {
-    $("qdrant-output").parentElement.style.display = subsource === "elasticsearch" ? "none" : "";
-    $("es-output").parentElement.style.display = subsource === "qdrant" ? "none" : "";
-  }
 }
 function setLogsVisible(visible) {
   $("log-tabs-panel").classList.toggle("hidden", !visible);
   if (visible) {
     const active = document.querySelector(".log-tab.selected");
-    showLogSource(active.dataset.panel, active.dataset.subsource);
+    showLogSource(active.dataset.panel);
     pollActivity();
   } else {
     document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
@@ -460,7 +394,7 @@ $("log-close").addEventListener("click", () => setLogsVisible(false));
 document.querySelectorAll(".log-tab").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".log-tab").forEach((candidate) => candidate.classList.toggle("selected", candidate === button));
-    showLogSource(button.dataset.panel, button.dataset.subsource);
+    showLogSource(button.dataset.panel);
   });
 });
 loadIncidents();
@@ -709,7 +643,7 @@ function renderResourceGuidance(guidance) {
   $("guidance-related-logs").textContent = related.length
     ? related.map((log) =>
         `[${log.level || "ERROR"}] ${log.message || ""}`
-      ).join("\n")
+      ).join("\\n")
     : "같은 호스트에서 최근 ERROR 로그를 찾지 못했습니다.";
 
   document.querySelectorAll(".feedback-choice").forEach((button) => {
