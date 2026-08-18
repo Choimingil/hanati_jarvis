@@ -30,6 +30,30 @@ ERROR_PATTERNS = {
         r"Redis connection lost",
         re.IGNORECASE,
     ),
+    "MESSAGE_QUEUE_CONNECTION_LOST": re.compile(
+        r"Kafka broker connection lost",
+        re.IGNORECASE,
+    ),
+    "SSL_CERTIFICATE_EXPIRED": re.compile(
+        r"SSL certificate has expired",
+        re.IGNORECASE,
+    ),
+    "THREAD_POOL_EXHAUSTED": re.compile(
+        r"Thread pool exhausted, no available workers",
+        re.IGNORECASE,
+    ),
+    "RATE_LIMIT_EXCEEDED": re.compile(
+        r"Rate limit exceeded for client requests",
+        re.IGNORECASE,
+    ),
+    "AUTH_TOKEN_VALIDATION_FAILURE": re.compile(
+        r"Failed to validate access token",
+        re.IGNORECASE,
+    ),
+    "CONTAINER_OOM_KILLED": re.compile(
+        r"Container killed by OOM killer",
+        re.IGNORECASE,
+    ),
 }
 
 

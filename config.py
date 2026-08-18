@@ -4,6 +4,50 @@ import os
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8080"))
 
+METRICS_API_URL = os.getenv(
+    "METRICS_API_URL", "http://127.0.0.1:8080/api/v1/metrics"
+)
+METRICS_COLLECT_INTERVAL_SECONDS = int(
+    os.getenv("METRICS_COLLECT_INTERVAL_SECONDS", "30")
+)
+METRICS_PROCESS_LIMIT = int(
+    os.getenv("METRICS_PROCESS_LIMIT", "20")
+)
+METRICS_RETENTION_ENABLED = (
+    os.getenv("METRICS_RETENTION_ENABLED", "true").lower()
+    == "true"
+)
+METRICS_RETENTION_DAYS = int(
+    os.getenv("METRICS_RETENTION_DAYS", "14")
+)
+METRICS_RETENTION_INTERVAL_SECONDS = int(
+    os.getenv("METRICS_RETENTION_INTERVAL_SECONDS", "86400")
+)
+INCIDENT_COOLDOWN_MINUTES = int(
+    os.getenv("INCIDENT_COOLDOWN_MINUTES", "5")
+)
+ANOMALY_MEMORY_PERCENT_THRESHOLD = float(
+    os.getenv("ANOMALY_MEMORY_PERCENT_THRESHOLD", "90")
+)
+ANOMALY_MEMORY_GROWTH_THRESHOLD = float(
+    os.getenv("ANOMALY_MEMORY_GROWTH_THRESHOLD", "10")
+)
+ANOMALY_DISK_PERCENT_THRESHOLD = float(
+    os.getenv("ANOMALY_DISK_PERCENT_THRESHOLD", "90")
+)
+ANOMALY_CLOSE_WAIT_THRESHOLD = int(
+    os.getenv("ANOMALY_CLOSE_WAIT_THRESHOLD", "100")
+)
+ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD = int(
+    os.getenv("ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD", "20")
+)
+RESOURCE_CPU_PERCENT_THRESHOLD = float(
+    os.getenv("RESOURCE_CPU_PERCENT_THRESHOLD", "90")
+)
+RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD = float(
+    os.getenv("RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD", "60")
+)
+
 SCRIPT_TIMEOUT_SECONDS = int(
     os.getenv("SCRIPT_TIMEOUT_SECONDS", "30")
 )
@@ -98,6 +142,71 @@ ERROR_RULES = {
         "auto_diagnose": True,
         "auto_remediate": False,
     },
+    "MESSAGE_QUEUE_CONNECTION_LOST": {
+        "diagnostic_scripts": [
+            "check_kafka_connection",
+        ],
+        "remediation_candidates": [
+            "restart_kafka_consumer",
+            "failover_message_broker",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "SSL_CERTIFICATE_EXPIRED": {
+        "diagnostic_scripts": [
+            "check_ssl_certificate",
+        ],
+        "remediation_candidates": [
+            "renew_ssl_certificate",
+            "reload_tls_config",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "THREAD_POOL_EXHAUSTED": {
+        "diagnostic_scripts": [
+            "check_thread_pool_usage",
+        ],
+        "remediation_candidates": [
+            "increase_thread_pool_size",
+            "restart_application",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "RATE_LIMIT_EXCEEDED": {
+        # 대응 스크립트 없음 - 감지되면 runbook 추천 대신
+        # resource fallback(운영자 조사) 경로로 빠진다
+        # (RecommendationQualityGate.requires_fallback의
+        # "no_remediation_candidates").
+        "diagnostic_scripts": [],
+        "remediation_candidates": [],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "AUTH_TOKEN_VALIDATION_FAILURE": {
+        "diagnostic_scripts": [
+            "check_auth_service_health",
+        ],
+        "remediation_candidates": [
+            "rotate_signing_key",
+            "restart_auth_service",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "CONTAINER_OOM_KILLED": {
+        "diagnostic_scripts": [
+            "check_container_memory_limits",
+        ],
+        "remediation_candidates": [
+            "increase_memory_limit",
+            "restart_application",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
 }
 
 
@@ -128,6 +237,19 @@ SCRIPT_DESCRIPTIONS = {
     "increase_heap_size": "힙 메모리 증설 후 재기동",
     "restart_redis": "Redis 인스턴스 재시작",
     "clear_redis_cache": "Redis 캐시 비우기",
+    "check_kafka_connection": "Kafka 브로커 연결 상태 점검",
+    "restart_kafka_consumer": "Kafka 컨슈머 재시작",
+    "failover_message_broker": "예비 메시지 브로커로 페일오버 전환",
+    "check_ssl_certificate": "SSL 인증서 유효기간 점검",
+    "renew_ssl_certificate": "SSL 인증서 갱신",
+    "reload_tls_config": "TLS 설정 재적용",
+    "check_thread_pool_usage": "스레드 풀 사용률 점검",
+    "increase_thread_pool_size": "스레드 풀 크기 증설",
+    "check_auth_service_health": "인증 서비스 상태 점검",
+    "rotate_signing_key": "토큰 서명 키 로테이션",
+    "restart_auth_service": "인증 서비스 재시작",
+    "check_container_memory_limits": "컨테이너 메모리 제한(cgroup) 점검",
+    "increase_memory_limit": "컨테이너 메모리 제한 증설",
 }
 
 
@@ -219,9 +341,29 @@ ELASTIC_REMEDIATION_INDEX = os.getenv(
     "ELASTIC_REMEDIATION_INDEX",
     "application-remediations",
 )
+ELASTIC_METRICS_INDEX = os.getenv(
+    "ELASTIC_METRICS_INDEX", "application-system-metrics"
+)
+ELASTIC_RECOVERY_INDEX = os.getenv(
+    "ELASTIC_RECOVERY_INDEX", "application-recovery-verifications"
+)
+ELASTIC_RESOURCE_GUIDANCE_INDEX = os.getenv(
+    "ELASTIC_RESOURCE_GUIDANCE_INDEX", "application-resource-guidance"
+)
+ELASTIC_OPERATOR_FEEDBACK_INDEX = os.getenv(
+    "ELASTIC_OPERATOR_FEEDBACK_INDEX", "application-operator-feedback"
+)
 
 # Qdrant의 incident_cases 컬렉션과 동일한 과거 대응 사례를
 # 담아두는 Elasticsearch 인덱스 (incident_cases.py로 시딩).
 ELASTIC_INCIDENT_CASES_INDEX = os.getenv(
     "ELASTIC_INCIDENT_CASES_INDEX", "incident-cases"
+)
+
+# 운영 중인 장애 상태. 검증된 과거 사례(incident-cases)와 분리한다.
+ELASTIC_INCIDENT_INDEX = os.getenv(
+    "ELASTIC_INCIDENT_INDEX", "application-incidents"
+)
+RECOMMENDATION_TTL_MINUTES = int(
+    os.getenv("RECOMMENDATION_TTL_MINUTES", "30")
 )

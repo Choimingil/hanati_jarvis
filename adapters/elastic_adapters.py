@@ -3,8 +3,13 @@ from typing import Any
 from config import (
     ELASTIC_DIAGNOSIS_INDEX,
     ELASTIC_INCIDENT_CASES_INDEX,
+    ELASTIC_INCIDENT_INDEX,
     ELASTIC_LOG_INDEX,
+    ELASTIC_METRICS_INDEX,
+    ELASTIC_OPERATOR_FEEDBACK_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
+    ELASTIC_RECOVERY_INDEX,
+    ELASTIC_RESOURCE_GUIDANCE_INDEX,
     ELASTIC_REMEDIATION_INDEX,
 )
 from elastic.client import get_client
@@ -17,41 +22,315 @@ class ElasticLogRepository(LogRepository):
     def __init__(self) -> None:
         self.client = get_client()
 
+    def _index(
+        self,
+        index: str,
+        document: dict[str, Any],
+    ) -> None:
+        self.client.index(
+            index=index,
+            document=document,
+        )
+
     def save_log(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_LOG_INDEX,
-            document=document,
-        )
+        self._index(ELASTIC_LOG_INDEX, document)
 
     def save_diagnosis(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_DIAGNOSIS_INDEX,
-            document=document,
-        )
+        self._index(ELASTIC_DIAGNOSIS_INDEX, document)
 
     def save_recommendation(
         self,
         document: dict[str, Any],
     ) -> None:
-        self.client.index(
-            index=ELASTIC_RECOMMENDATION_INDEX,
-            document=document,
+        recommendation = (
+            document.get("recommendation")
+            or document.get("guidance")
+            or {}
         )
+        recommendation_id = recommendation.get(
+            "recommendation_id"
+        )
+        if recommendation_id:
+            self.client.index(
+                index=ELASTIC_RECOMMENDATION_INDEX,
+                id=recommendation_id,
+                document=document,
+            )
+        else:
+            self._index(
+                ELASTIC_RECOMMENDATION_INDEX, document
+            )
 
     def save_remediation(
         self,
         document: dict[str, Any],
     ) -> None:
+        self._index(ELASTIC_REMEDIATION_INDEX, document)
+
+    def save_metric(
+        self,
+        document: dict[str, Any],
+    ) -> None:
+        self._index(ELASTIC_METRICS_INDEX, document)
+
+    def recent_metrics(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_METRICS_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host.hostname.keyword": host}},
+                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            sort=[{"timestamp": "asc"}],
+            size=1000,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    def recent_error_logs(
+        self, host: str, minutes: int
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_LOG_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host": host}},
+                {"term": {"level": "ERROR"}},
+                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            sort=[{"timestamp": "desc"}],
+            size=20,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+
+    def save_incident(self, document: dict[str, Any]) -> None:
+        self.client.index(
+            index=ELASTIC_INCIDENT_CASES_INDEX,
+            id=document["incident_id"],
+            document=document,
+            refresh="wait_for",
+        )
+
+    def has_recent_incident(
+        self, host: str, detection_code: str, minutes: int
+    ) -> bool:
+        response = self.client.count(
+            index=ELASTIC_INCIDENT_CASES_INDEX,
+            query={"bool": {"filter": [
+                {"term": {"host.keyword": host}},
+                {"term": {"detection_code.keyword": detection_code}},
+                {"range": {"created_at": {"gte": f"now-{minutes}m"}}},
+            ]}},
+            ignore_unavailable=True,
+        )
+        return response.get("count", 0) > 0
+
+    def get_incident(self, incident_id: str) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_INCIDENT_CASES_INDEX,
+                id=incident_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def get_operational_incident(
+        self, incident_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_INCIDENT_INDEX,
+                id=incident_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def create_operational_incident(
+        self, document: dict[str, Any]
+    ) -> None:
+        self.client.index(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=document["incident_id"],
+            document=document,
+            op_type="create",
+            refresh="wait_for",
+        )
+
+    def update_operational_incident(
+        self,
+        incident_id: str,
+        changes: dict[str, Any],
+        expected_version: int,
+    ) -> dict[str, Any]:
+        response = self.client.update(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=incident_id,
+            script={
+                "lang": "painless",
+                "source": (
+                    "if (ctx._source.version != params.expected) { "
+                    "ctx.op = 'none'; return; } "
+                    "for (entry in params.changes.entrySet()) { "
+                    "ctx._source[entry.getKey()] = entry.getValue(); }"
+                ),
+                "params": {
+                    "expected": expected_version,
+                    "changes": changes,
+                },
+            },
+            refresh="wait_for",
+        )
+        if response.get("result") == "noop":
+            raise RuntimeError("incident version conflict")
+        updated = self.client.get(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=incident_id,
+        )
+        return updated["_source"]
+
+    def list_operational_incidents(
+        self, minutes: int = 60
+    ) -> list[dict[str, Any]]:
+        response = self.client.search(
+            index=ELASTIC_INCIDENT_INDEX,
+            query={
+                "range": {
+                    "last_seen": {
+                        "gte": f"now-{minutes}m",
+                    }
+                }
+            },
+            sort=[{"last_seen": "desc"}],
+            size=200,
+            ignore_unavailable=True,
+        )
+        return [
+            hit["_source"]
+            for hit in response.get("hits", {}).get("hits", [])
+        ]
+
+    def get_recommendation(
+        self, recommendation_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_RECOMMENDATION_INDEX,
+                id=recommendation_id,
+            )
+        except Exception:
+            return None
+        source = response.get("_source", {})
+        return (
+            source.get("recommendation")
+            or source.get("guidance")
+        )
+
+    def get_remediation_execution(
+        self, execution_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_REMEDIATION_INDEX,
+                id=execution_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def save_remediation_execution(
+        self, document: dict[str, Any]
+    ) -> None:
         self.client.index(
             index=ELASTIC_REMEDIATION_INDEX,
+            id=document["execution_id"],
             document=document,
+            op_type="create",
+            refresh="wait_for",
         )
+
+    def save_recovery_verification(
+        self, document: dict[str, Any]
+    ) -> None:
+        self._index(ELASTIC_RECOVERY_INDEX, document)
+
+    def save_resource_guidance(
+        self, document: dict[str, Any]
+    ) -> None:
+        self.client.index(
+            index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
+            id=document["guidance_id"],
+            document=document,
+            refresh="wait_for",
+        )
+
+    def get_resource_guidance(
+        self, guidance_id: str
+    ) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
+                id=guidance_id,
+            )
+        except Exception:
+            return None
+        return response.get("_source")
+
+    def save_operator_feedback(
+        self, document: dict[str, Any]
+    ) -> None:
+        self._index(ELASTIC_OPERATOR_FEEDBACK_INDEX, document)
+
+    def remediation_history(
+        self,
+        script_id: str,
+    ) -> dict[str, int]:
+        try:
+            response = self.client.search(
+                index=ELASTIC_REMEDIATION_INDEX,
+                query={
+                    "term": {"script_id.keyword": script_id}
+                },
+                size=0,
+                aggs={
+                    "by_status": {
+                        "terms": {
+                            "field": "result.status.keyword"
+                        }
+                    }
+                },
+                ignore_unavailable=True,
+            )
+        except Exception:
+            return {"success": 0, "failure": 0}
+
+        buckets = (
+            response.get("aggregations", {})
+            .get("by_status", {})
+            .get("buckets", [])
+        )
+
+        # "rejected"/"blocked"는 실제로 실행된 적이 없으니 성공/실패
+        # 어느 쪽에도 안 넣는다 - 넣으면 실행 이력이 아니라 거짓 통계가 된다.
+        success = 0
+        failure = 0
+        for bucket in buckets:
+            count = bucket.get("doc_count", 0)
+            key = bucket.get("key")
+            if key == "success":
+                success += count
+            elif key in ("failed", "timeout"):
+                failure += count
+
+        return {"success": success, "failure": failure}
 
 
 class ElasticCaseSearcher(CaseSearcher):
@@ -90,10 +369,12 @@ class ElasticCaseSearcher(CaseSearcher):
             size=limit,
         )
 
+        hits = response["hits"]["hits"]
+
         return [
             {
                 **hit["_source"],
                 "score": hit["_score"],
             }
-            for hit in response["hits"]["hits"]
+            for hit in hits
         ]

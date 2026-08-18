@@ -9,9 +9,12 @@
 2. fluent-bit가 그 파일을 tail해서 `POST /api/v1/logs`로 백엔드에 전달 ->
    탐지 → 진단 → (LLM) 추천이 비동기로 이뤄진다. 화면은 그 결과가
    Elasticsearch에 쌓일 때까지 짧게 폴링한다.
-3. LLM이 준 "오류 원인"과 "추천도 높은 순 조치 스크립트 리스트"를 보여준다
-4. 그중 하나를 "실행"하면 `POST /api/v1/remediations/approve` 로 해당
-   스크립트를 실제로 호출하고 결과(stdout)를 보여준다
+3. LLM이 준 "오류 원인"과 신뢰도 높은 순 조치 제안을 Runbook 카드로 보여준다
+   (장애/추정 원인/신뢰도/조치/예상 영향/과거 실행 이력/실패 시 대응)
+4. 각 Runbook에서 "승인"하면 `POST /api/v1/remediations/approve` 로 해당
+   스크립트를 실제로 호출하고 결과(stdout)를 보여준다. "거부"는 스크립트를
+   실행하지 않고 감사 기록만 남긴다. "진단 요청"은 그 오류 코드의 진단
+   스크립트를 다시 돌려서 최신 상태를 보여준다
 """
 
 from flask import Blueprint, Response
@@ -46,7 +49,7 @@ _PAGE = """<!doctype html>
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
   }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 64px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
   .card {
@@ -61,6 +64,12 @@ _PAGE = """<!doctype html>
     width: 100%; padding: 10px 12px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--bg); color: var(--fg);
   }
+  input, textarea {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+    font: inherit;
+  }
+  textarea { min-height: 76px; resize: vertical; }
   .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
   .row > div { flex: 1 1 260px; }
   button {
@@ -83,21 +92,41 @@ _PAGE = """<!doctype html>
     background: var(--bar); color: var(--accent); border-radius: 999px;
     padding: 3px 10px; margin-bottom: 10px;
   }
-  .action {
+  .runbook {
     border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; margin-top: 12px; display: flex; gap: 14px;
-    align-items: center; flex-wrap: wrap;
+    padding: 16px; margin-top: 12px;
   }
-  .action .meta { flex: 1 1 320px; min-width: 0; }
-  .action .name { font-weight: 700; font-family: ui-monospace, monospace; }
-  .action .reason { color: var(--muted); font-size: 13px; margin-top: 2px; }
-  .rank { font-size: 12px; color: var(--muted); }
-  .scorebar {
-    height: 8px; background: var(--bar); border-radius: 999px;
-    overflow: hidden; margin-top: 8px;
+  .runbook-tag {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    color: var(--accent); letter-spacing: .02em; margin-bottom: 8px;
   }
-  .scorebar > span { display: block; height: 100%; background: var(--accent); }
-  .score-num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .runbook dl {
+    display: grid; grid-template-columns: 88px 1fr; gap: 6px 12px;
+    margin: 0; font-size: 14px;
+  }
+  .runbook dt { color: var(--muted); font-size: 13px; }
+  .runbook dd { margin: 0; }
+  .runbook .confidence-bar {
+    height: 6px; background: var(--bar); border-radius: 999px;
+    overflow: hidden; margin-top: 4px; max-width: 220px;
+  }
+  .runbook .confidence-bar > span {
+    display: block; height: 100%; background: var(--accent);
+  }
+  .runbook .rollback { color: var(--err); }
+  .runbook .buttons {
+    display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+  }
+  .runbook button.reject {
+    background: transparent; color: var(--err); border: 1px solid var(--err);
+  }
+  .runbook button.diagnose {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+  }
+  .runbook.decided { opacity: .6; }
+  .runbook .decision {
+    font-size: 13px; font-weight: 700; margin-top: 10px;
+  }
   pre {
     background: var(--code-bg); color: var(--code-fg); padding: 14px;
     border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 10px 0 0;
@@ -107,18 +136,88 @@ _PAGE = """<!doctype html>
   .logline.WARN { color: #f5c451; }
   .logline.ERROR { color: #ff8080; }
   @keyframes fadein { to { opacity: 1; } }
+  .sub-label { font-size: 12px; color: var(--muted); margin: 10px 0 0; font-weight: 600; }
+  .sub-label:first-child { margin-top: 0; }
+  pre.src-qdrant { color: #8ab4f8; }
+  pre.src-elasticsearch { color: #7fe0c4; }
   .status-ok { color: var(--ok); font-weight: 700; }
   .status-err { color: var(--err); font-weight: 700; }
   .status-pending { color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); font-size: 13px; }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .panel-toggle {
+    background: transparent; border: 0; color: var(--muted); cursor: pointer;
+    padding: 4px 6px; font-size: 13px; border-radius: 6px; flex: 0 0 auto;
+  }
+  .panel-toggle:hover { background: var(--bar); }
+  .panel-toggle .chev { display: inline-block; transition: transform .15s ease; }
+  .card.collapsed .panel-body { display: none; }
+  .card.collapsed .panel-toggle .chev { transform: rotate(-90deg); }
+  .guidance-summary {
+    border-left: 3px solid #e59b22; padding: 5px 0 5px 14px;
+    margin: 8px 0 16px;
+  }
+  .hypothesis {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-top: 12px;
+  }
+  .hypothesis.primary { border-color: #e59b22; }
+  .hypothesis-head {
+    display: flex; justify-content: space-between; gap: 12px;
+    align-items: center; margin-bottom: 10px;
+  }
+  .hypothesis-title { font-weight: 700; }
+  .confidence { color: #e59b22; font-weight: 700; white-space: nowrap; }
+  .confidence-track {
+    height: 6px; border-radius: 999px; background: var(--bar);
+    overflow: hidden; margin: 8px 0 12px;
+  }
+  .confidence-fill { height: 100%; background: #e59b22; }
+  .guidance-list { margin: 6px 0 0; padding-left: 21px; font-size: 14px; }
+  .guidance-list li { margin: 4px 0; }
+  .guidance-section { margin-top: 14px; }
+  .feedback-choices { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+  button.feedback-choice {
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent); padding: 8px 12px;
+  }
+  button.feedback-choice.selected { background: var(--accent); color: white; }
+  .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feedback-grid .full { grid-column: 1 / -1; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .check-row input { width: auto; }
+  .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .incident-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+  .incident-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px; }
+  .incident-stat span { display:block; color:var(--muted); font-size:12px; }
+  .incident-stat strong { display:block; margin-top:3px; }
+  .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
+  button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
+  .scenario-card { margin-top:18px; }
+  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width: 620px) {
+    .feedback-grid { grid-template-columns: 1fr; }
+    .feedback-grid .full { grid-column: auto; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Hanati Jarvis — 장애 대응 콘솔</h1>
-  <p class="sub">log_generator 시나리오 실행 → fluentbit 전달 → 오류 탐지 → 진단 → LLM 추천 → 조치 스크립트 실행</p>
-
-  <div class="card">
+  <div class="console-head">
+    <div><h1>Hanati Jarvis — 장애 대응 콘솔</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
+    <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle">로그 조회</button></div>
+  </div>
+  <div class="incident-stats">
+    <div class="incident-stat"><span>진행 중</span><strong id="stat-open">0건</strong></div>
+    <div class="incident-stat"><span>긴급</span><strong id="stat-critical">0건</strong></div>
+    <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
+    <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
+  </div>
+  <div class="card scenario-card">
     <div class="row">
       <div>
         <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
@@ -127,21 +226,106 @@ _PAGE = """<!doctype html>
       <button id="analyze" disabled>분석</button>
     </div>
   </div>
+  <div id="log-tabs-panel" class="card hidden">
+    <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
+    <div class="log-tabs" style="margin-top:12px">
+      <button class="log-tab selected" data-panel="log">log_generator</button>
+      <button class="log-tab" data-panel="fluentbit-panel">Fluent Bit</button>
+      <button class="log-tab" data-panel="internal-panel">Elasticsearch/Qdrant</button>
+    </div>
+  </div>
+  <div id="log" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>log_generator 실행 로그</strong>
+        <span class="muted">(fluentbit/application.log 기록분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <pre id="log-output"></pre>
+      <div id="wait-status" class="muted" style="margin-top:8px"></div>
+    </div>
+  </div>
 
-  <div id="log" class="card hidden">
-    <div><strong>log_generator 실행 로그</strong>
-      <span class="muted">(fluentbit/application.log 기록분)</span></div>
-    <pre id="log-output"></pre>
-    <div id="wait-status" class="muted" style="margin-top:8px"></div>
+  <div id="fluentbit-panel" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>fluent-bit 컨테이너 로그</strong>
+        <span class="muted">(docker logs hanati-fluentbit, 이번 실행 이후분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <pre id="fluentbit-output"></pre>
+    </div>
+  </div>
+
+  <div id="internal-panel" class="card hidden logs-section">
+    <div class="card-head">
+      <div><strong>Qdrant / Elasticsearch 컨테이너 로그</strong>
+        <span class="muted">(docker logs, 이번 실행 이후분)</span></div>
+      <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
+    </div>
+    <div class="panel-body">
+      <div class="sub-label">Qdrant (hanati-qdrant)</div>
+      <pre id="qdrant-output" class="src-qdrant"></pre>
+      <div class="sub-label">Elasticsearch (hanati-es)</div>
+      <pre id="es-output" class="src-elasticsearch"></pre>
+    </div>
   </div>
 
   <div id="result" class="card hidden">
     <span id="errcode" class="pill"></span>
     <div><strong>현재 오류 원인</strong></div>
     <div id="cause" class="cause"></div>
-    <div style="margin-top:18px"><strong>추천 조치 스크립트</strong>
-      <span class="muted">(추천도 높은 순)</span></div>
+    <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
+      <span class="muted">(신뢰도 높은 순)</span></div>
     <div id="actions"></div>
+  </div>
+
+  <div id="guidance-result" class="card hidden">
+    <span id="guidance-code" class="pill">RESOURCE GUIDANCE</span>
+    <div><strong>리소스 기반 문제 제안</strong></div>
+    <div id="guidance-summary" class="guidance-summary"></div>
+
+    <div class="guidance-section"><strong>발생 로그</strong></div>
+    <pre id="guidance-log"></pre>
+
+    <div class="guidance-section"><strong>발견된 문제 가능성</strong>
+      <span class="muted">(신뢰도 높은 순)</span></div>
+    <div id="hypotheses"></div>
+
+    <div class="guidance-section"><strong>같은 호스트의 최근 ERROR 로그</strong></div>
+    <pre id="guidance-related-logs"></pre>
+
+    <div class="guidance-section"><strong>운영자 판단</strong>
+      <div class="muted">확인과 복구가 완료된 결과만 과거 장애 사례로 학습됩니다.</div>
+    </div>
+    <div id="feedback-choices" class="feedback-choices">
+      <button class="feedback-choice" data-verdict="confirmed">원인 정확</button>
+      <button class="feedback-choice" data-verdict="partial">일부 관련</button>
+      <button class="feedback-choice" data-verdict="rejected">관련 없음</button>
+      <button class="feedback-choice" data-verdict="needs_investigation">추가 조사</button>
+    </div>
+    <div class="feedback-grid">
+      <div>
+        <label for="feedback-root-cause">실제 원인</label>
+        <textarea id="feedback-root-cause" placeholder="확인된 실제 원인"></textarea>
+      </div>
+      <div>
+        <label for="feedback-action">수행한 조치</label>
+        <textarea id="feedback-action" placeholder="실제로 수행한 조치"></textarea>
+      </div>
+      <div>
+        <label for="feedback-operator">운영자</label>
+        <input id="feedback-operator" value="web-ui">
+      </div>
+      <div class="check-row">
+        <input id="feedback-recovered" type="checkbox">
+        <label for="feedback-recovered" style="margin:0">조치 후 복구됨</label>
+      </div>
+      <div class="full">
+        <button id="feedback-submit" disabled>분석 결과 저장</button>
+        <span id="feedback-status" class="muted" style="margin-left:8px"></span>
+      </div>
+    </div>
   </div>
 
   <div id="exec" class="card hidden">
@@ -155,6 +339,66 @@ _PAGE = """<!doctype html>
 const $ = (id) => document.getElementById(id);
 const sel = $("scenario");
 let currentErrorCode = null;
+let currentRecommendation = null;
+let currentGuidance = null;
+let selectedVerdict = null;
+let incidentItems = [];
+
+document.querySelectorAll(".panel-toggle").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    btn.closest(".card").classList.toggle("collapsed");
+  });
+});
+
+function esc(value) {
+  const div = document.createElement("div");
+  div.textContent = value == null ? "" : String(value);
+  return div.innerHTML;
+}
+function formatTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString("ko-KR");
+}
+async function loadIncidents() {
+  try {
+    const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
+    incidentItems = data.incidents || [];
+    $("stat-open").textContent = incidentItems.length + "건";
+    $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
+    $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
+    $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
+  } catch (error) {
+    /* stats stay at last known values */
+  }
+}
+function showLogSource(panelId) {
+  document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
+  const panel = $(panelId);
+  if (panel) panel.classList.remove("hidden");
+}
+function setLogsVisible(visible) {
+  $("log-tabs-panel").classList.toggle("hidden", !visible);
+  if (visible) {
+    const active = document.querySelector(".log-tab.selected");
+    showLogSource(active.dataset.panel);
+    pollActivity();
+  } else {
+    document.querySelectorAll(".logs-section").forEach((panel) => panel.classList.add("hidden"));
+  }
+  $("log-toggle").textContent = visible ? "로그 닫기" : "로그 조회";
+}
+$("refresh-incidents").addEventListener("click", loadIncidents);
+$("log-toggle").addEventListener("click", () => setLogsVisible($("log-tabs-panel").classList.contains("hidden")));
+$("log-close").addEventListener("click", () => setLogsVisible(false));
+document.querySelectorAll(".log-tab").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".log-tab").forEach((candidate) => candidate.classList.toggle("selected", candidate === button));
+    showLogSource(button.dataset.panel);
+  });
+});
+loadIncidents();
+setInterval(loadIncidents, 15000);
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -183,14 +427,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+let currentSince = null;
+
 $("analyze").addEventListener("click", async () => {
   $("analyze").disabled = true;
   $("analyze").textContent = "시나리오 실행 중…";
-  $("log").classList.remove("hidden");
+  setLogsVisible(true);
   $("result").classList.add("hidden");
+  $("guidance-result").classList.add("hidden");
   $("exec").classList.add("hidden");
   $("log-output").innerHTML = "";
+  $("fluentbit-output").textContent = "";
+  $("qdrant-output").textContent = "";
+  $("es-output").textContent = "";
   $("wait-status").textContent = "";
+  currentSince = null;
+  currentGuidance = null;
+  selectedVerdict = null;
 
   try {
     const { data } = await postJSON("/api/v1/log-generator/run", {
@@ -201,6 +454,10 @@ $("analyze").addEventListener("click", async () => {
       $("wait-status").textContent = "실행 실패: " + JSON.stringify(data);
       return;
     }
+
+    // 이번 실행 이후분만 폴링하도록 트리거 시각으로 스코프를 좁힌다
+    // (안 그러면 이전 실행의 Qdrant/Elasticsearch/fluentbit 로그가 다시 보임)
+    currentSince = data.triggered_at;
 
     data.events.forEach((e, i) => {
       const line = document.createElement("div");
@@ -219,18 +476,41 @@ $("analyze").addEventListener("click", async () => {
   }
 });
 
+async function pollActivity() {
+  try {
+    const params = new URLSearchParams();
+    if (currentSince) params.set("since", currentSince);
+    const data = await getJSON(
+      `/api/v1/log-generator/activity?${params}`
+    );
+    $("fluentbit-output").textContent =
+      (data.fluentbit_log || []).join("\\n");
+    $("fluentbit-output").scrollTop = $("fluentbit-output").scrollHeight;
+    $("qdrant-output").textContent =
+      (data.qdrant_log || []).join("\\n");
+    $("qdrant-output").scrollTop = $("qdrant-output").scrollHeight;
+    $("es-output").textContent =
+      (data.elasticsearch_log || []).join("\\n");
+    $("es-output").scrollTop = $("es-output").scrollHeight;
+  } catch (e) {
+    // 폴링 실패는 조용히 무시하고 다음 주기에 재시도
+  }
+}
+
 async function waitForRecommendation(errorCode, since) {
   $("wait-status").textContent =
     "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
 
   for (let i = 0; i < 20; i++) {
     await sleep(1500);
+    await pollActivity();
     const data = await getJSON(
       `/api/v1/log-generator/latest-recommendation?error_code=${encodeURIComponent(errorCode)}&since=${encodeURIComponent(since)}`
     );
     if (data.status === "ready") {
       $("wait-status").textContent = "";
       renderRecommendation(errorCode, data.recommendation);
+      await loadIncidents();
       return;
     }
   }
@@ -240,42 +520,205 @@ async function waitForRecommendation(errorCode, since) {
 }
 
 function renderRecommendation(errorCode, rec) {
+  if (rec && rec.status === "resource_guidance") {
+    renderResourceGuidance(rec);
+    return;
+  }
   currentErrorCode = errorCode;
+  currentRecommendation = rec;
   const result = $("result");
   result.classList.remove("hidden");
 
   $("errcode").textContent = errorCode;
   $("cause").textContent = rec.cause || rec.summary || "";
 
-  const actions = rec.ranked_actions || [];
+  const runbooks = rec.runbooks || [];
   const box = $("actions");
   box.innerHTML = "";
 
-  actions.forEach((a, idx) => {
-    const pct = Math.round(Math.max(0, Math.min(1, a.score)) * 100);
+  runbooks.forEach((rb) => {
+    const pct = Math.max(0, Math.min(100, rb.confidence));
     const el = document.createElement("div");
-    el.className = "action";
+    el.className = "runbook";
     el.innerHTML = `
-      <div class="meta">
-        <div class="rank">#${idx + 1} · 추천도 <span class="score-num">${a.score}</span></div>
-        <div class="name">${a.script_id}</div>
-        <div class="reason">${a.reason || ""}</div>
-        <div class="scorebar"><span style="width:${pct}%"></span></div>
+      <div class="runbook-tag">조치 제안</div>
+      <dl>
+        <dt>장애</dt><dd>${rb.incident}</dd>
+        <dt>추정 원인</dt><dd>${rb.estimated_cause}</dd>
+        <dt>신뢰도</dt><dd>${pct}%
+          <div class="confidence-bar"><span style="width:${pct}%"></span></div>
+        </dd>
+        <dt>조치</dt><dd>${rb.action}</dd>
+        <dt>예상 영향</dt><dd>${rb.expected_impact}</dd>
+        <dt>과거 실행</dt><dd>성공 ${rb.history.success}회 / 실패 ${rb.history.failure}회</dd>
+        <dt>실패 시</dt><dd class="rollback">${rb.rollback}</dd>
+      </dl>
+      <div class="decision"></div>
+      <div class="buttons">
+        <button class="approve">승인</button>
+        <button class="reject">거부</button>
+        <button class="diagnose">진단 요청</button>
       </div>`;
-    const btn = document.createElement("button");
-    btn.className = idx === 0 ? "" : "secondary";
-    btn.textContent = "실행";
-    btn.addEventListener("click", () => runScript(a.script_id, btn));
-    el.appendChild(btn);
+
+    const action = (rec.actions || []).find(
+      (candidate) => candidate.script_id === rb.script_id
+    );
+    el.querySelector(".approve").addEventListener(
+      "click", () => decideRunbook(rb.script_id, action, el, "approve")
+    );
+    el.querySelector(".reject").addEventListener(
+      "click", () => decideRunbook(rb.script_id, action, el, "reject")
+    );
+    el.querySelector(".diagnose").addEventListener(
+      "click", () => requestDiagnosis(errorCode, el)
+    );
+
     box.appendChild(el);
   });
 }
 
-async function runScript(scriptId, btn) {
-  if (!currentErrorCode) return;
-  btn.disabled = true;
-  const original = btn.textContent;
-  btn.textContent = "실행 중…";
+function addList(container, title, items) {
+  const section = document.createElement("div");
+  section.className = "guidance-section";
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  section.appendChild(heading);
+  const list = document.createElement("ul");
+  list.className = "guidance-list";
+  (items || []).forEach((item) => {
+    const li = document.createElement("li");
+    li.textContent = item;
+    list.appendChild(li);
+  });
+  section.appendChild(list);
+  container.appendChild(section);
+}
+
+function renderResourceGuidance(guidance) {
+  currentGuidance = guidance;
+  selectedVerdict = null;
+  currentErrorCode = guidance.original_error_code || null;
+  $("result").classList.add("hidden");
+  $("guidance-result").classList.remove("hidden");
+  $("guidance-code").textContent =
+    guidance.primary_problem_code || "RESOURCE GUIDANCE";
+  $("guidance-summary").textContent = guidance.summary || "";
+  $("guidance-log").textContent =
+    `[${guidance.original_log?.level || "ERROR"}] `
+    + (guidance.original_log?.message || "");
+
+  const box = $("hypotheses");
+  box.innerHTML = "";
+  (guidance.hypotheses || []).forEach((hypothesis, index) => {
+    const pct = Math.round(
+      Math.max(0, Math.min(1, Number(hypothesis.confidence || 0))) * 100
+    );
+    const card = document.createElement("div");
+    card.className = "hypothesis" + (index === 0 ? " primary" : "");
+
+    const head = document.createElement("div");
+    head.className = "hypothesis-head";
+    const title = document.createElement("div");
+    title.className = "hypothesis-title";
+    title.textContent = `${index + 1}. ${hypothesis.title || hypothesis.problem_code}`;
+    const confidence = document.createElement("div");
+    confidence.className = "confidence";
+    confidence.textContent = `${pct}%`;
+    head.append(title, confidence);
+    card.appendChild(head);
+
+    const track = document.createElement("div");
+    track.className = "confidence-track";
+    const fill = document.createElement("div");
+    fill.className = "confidence-fill";
+    fill.style.width = `${pct}%`;
+    track.appendChild(fill);
+    card.appendChild(track);
+    addList(card, "분석 근거", hypothesis.evidence);
+    addList(card, "추가 확인 권장", hypothesis.suggested_diagnostics);
+    box.appendChild(card);
+  });
+
+  const related = guidance.related_logs || [];
+  $("guidance-related-logs").textContent = related.length
+    ? related.map((log) =>
+        `[${log.level || "ERROR"}] ${log.message || ""}`
+      ).join("\\n")
+    : "같은 호스트에서 최근 ERROR 로그를 찾지 못했습니다.";
+
+  document.querySelectorAll(".feedback-choice").forEach((button) => {
+    button.classList.remove("selected");
+  });
+  $("feedback-root-cause").value = "";
+  $("feedback-action").value = "";
+  $("feedback-recovered").checked = false;
+  $("feedback-status").textContent = "";
+  $("feedback-submit").disabled = true;
+}
+
+document.querySelectorAll(".feedback-choice").forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedVerdict = button.dataset.verdict;
+    document.querySelectorAll(".feedback-choice").forEach((candidate) => {
+      candidate.classList.toggle("selected", candidate === button);
+    });
+    $("feedback-submit").disabled = false;
+  });
+});
+
+$("feedback-submit").addEventListener("click", async () => {
+  if (!currentGuidance || !selectedVerdict) return;
+  const rootCause = $("feedback-root-cause").value.trim();
+  const action = $("feedback-action").value.trim();
+  const recovered = $("feedback-recovered").checked;
+  if (selectedVerdict === "confirmed" && (!rootCause || !action || !recovered)) {
+    $("feedback-status").className = "status-err";
+    $("feedback-status").textContent =
+      "원인 정확은 실제 원인·조치·복구 확인이 모두 필요합니다.";
+    return;
+  }
+
+  $("feedback-submit").disabled = true;
+  $("feedback-status").className = "status-pending";
+  $("feedback-status").textContent = "저장 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/guidance/feedback", {
+      guidance_id: currentGuidance.guidance_id,
+      operator: $("feedback-operator").value.trim() || "web-ui",
+      verdict: selectedVerdict,
+      confirmed_root_cause: rootCause || null,
+      successful_action: action || null,
+      recovered,
+      confirmed_error_code: currentGuidance.original_error_code || null,
+    });
+    $("feedback-status").className = ok ? "status-ok" : "status-err";
+    $("feedback-status").textContent = data.promoted_to_incident_case
+      ? "검증된 장애 사례로 저장되고 Qdrant에 등록되었습니다."
+      : (ok ? "운영자 피드백이 저장되었습니다." : JSON.stringify(data));
+    if (!ok) $("feedback-submit").disabled = false;
+  } catch (error) {
+    $("feedback-status").className = "status-err";
+    $("feedback-status").textContent = "저장 실패: " + error;
+    $("feedback-submit").disabled = false;
+  }
+});
+
+function setRunbookButtonsDisabled(el, disabled) {
+  el.querySelectorAll(".buttons button").forEach((b) => {
+    b.disabled = disabled;
+  });
+}
+
+async function decideRunbook(scriptId, action, el, decision) {
+  if (!currentErrorCode || !currentRecommendation || !action) {
+    el.querySelector(".decision").textContent = "최신 Incident 추천을 다시 불러오세요.";
+    return;
+  }
+  setRunbookButtonsDisabled(el, true);
+
+  const endpoint = decision === "approve"
+    ? "/api/v1/remediations/approve"
+    : "/api/v1/remediations/reject";
 
   const exec = $("exec");
   exec.classList.remove("hidden");
@@ -284,10 +727,14 @@ async function runScript(scriptId, btn) {
   $("exec-output").textContent = "";
 
   try {
-    const { status, data } = await postJSON("/api/v1/remediations/approve", {
-      script_id: scriptId, error_code: currentErrorCode, approved_by: "web-ui",
+    const { status, data } = await postJSON(endpoint, {
+      incident_id: currentRecommendation.incident_id,
+      recommendation_id: currentRecommendation.recommendation_id,
+      action_id: action.action_id,
+      incident_version: currentRecommendation.incident_version,
+      approved_by: "web-ui",
     });
-    const ok = data.status === "success";
+    const ok = data.status === "success" || data.status === "rejected";
     const s = $("exec-status");
     s.className = ok ? "status-ok" : "status-err";
     s.textContent = `${data.status}` + (data.returncode !== undefined
@@ -295,12 +742,42 @@ async function runScript(scriptId, btn) {
     $("exec-output").textContent =
       (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :
         (data.reason ? "\\n" + data.reason : ""));
+
+    el.classList.add("decided");
+    el.querySelector(".decision").textContent =
+      decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
+    await loadIncidents();
   } catch (e) {
     $("exec-status").className = "status-err";
-    $("exec-status").textContent = "실행 실패: " + e;
+    $("exec-status").textContent = "요청 실패: " + e;
+    setRunbookButtonsDisabled(el, false);
+  }
+}
+
+async function requestDiagnosis(errorCode, el) {
+  setRunbookButtonsDisabled(el, true);
+
+  const exec = $("exec");
+  exec.classList.remove("hidden");
+  $("exec-title").textContent = "진단 요청 — " + errorCode;
+  $("exec-status").textContent = "";
+  $("exec-output").textContent = "";
+
+  try {
+    const { data } = await postJSON("/api/v1/remediations/diagnose", {
+      error_code: errorCode,
+    });
+    const s = $("exec-status");
+    s.className = data.status === "ok" ? "status-ok" : "status-err";
+    s.textContent = data.status;
+    $("exec-output").textContent = JSON.stringify(
+      data.diagnosis_results || data, null, 2
+    );
+  } catch (e) {
+    $("exec-status").className = "status-err";
+    $("exec-status").textContent = "진단 요청 실패: " + e;
   } finally {
-    btn.disabled = false;
-    btn.textContent = original;
+    setRunbookButtonsDisabled(el, false);
   }
 }
 </script>

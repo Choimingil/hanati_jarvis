@@ -33,6 +33,36 @@ routes/remediation_routes.py (remediation_blueprint)
     - repository.save_remediation()으로 실행 결과 저장
 ```
 
+호스트 관측 정보는 별도 경로로 처리한다.
+
+```
+collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
+    → routes/metrics_routes.py → ElasticLogRepository.save_metric()
+    → MetricFeatureExtractor (1m/5m/15m)
+    → AnomalyDetector → IncidentCorrelator
+    → ContextBuilder → 과거 사례 검색 → LLM Runbook 추천
+    → IncidentCaseBuilder → Elasticsearch + Qdrant
+```
+
+`aiops/`는 메트릭 기반 분석을 담당한다.
+
+| 파일 | 역할 |
+|---|---|
+| `feature_extractor.py` | 최근 메트릭을 1분/5분/15분 CPU·메모리·디스크·연결 변화 특징으로 변환 |
+| `anomaly_detector.py` | 설명 가능한 임계값/변화율 규칙으로 기존 오류 코드에 연결 |
+| `incident_correlator.py` | 같은 호스트의 최근 ERROR 로그를 탐지 근거에 결합 |
+| `incident_case_builder.py` | 메트릭·로그·추천을 재사용 가능한 장애 사례로 생성 |
+| `incident_indexer.py` | 사례 요약을 임베딩해 Qdrant에 저장 |
+| `context_builder.py` | 수치 근거와 관련 로그를 LLM 입력으로 구성 |
+| `recovery_verifier.py` | Runbook 실행 전후 특징값을 비교해 실제 복구 여부 판정 |
+| `analysis_service.py` | 위 단계를 순서대로 실행하고 5분 중복 탐지 쿨다운 적용 |
+| `recommendation_quality_gate.py` | 기존 Runbook 추천이 비어 있거나 저신뢰인지 판정 |
+| `resource_context_loader.py` | ERROR 로그 호스트의 최근 15분 메트릭과 특징 로드 |
+| `resource_hypothesis_engine.py` | 추천 실패 시 CPU·메모리·디스크·연결·네트워크 가설 생성 |
+| `fallback_guidance_generator.py` | 가설과 검증 사례만 근거로 운영자용 추가 진단 가이드 생성 |
+| `operator_feedback_service.py` | 운영자 판단 저장, 확인+복구된 결과만 장애 사례로 승격 |
+| `operational_incident_service.py` | ERROR fingerprint 기반 운영 Incident 생성·집계·버전·상태 전환, Recommendation Action 연결 |
+
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.
 `dependencies.py`가 환경변수를 보고 어떤 구현체를 주입할지 결정한다
@@ -164,6 +194,7 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 | 파일 | 역할 |
 |---|---|
 | `routes/log_routes.py` | `log_blueprint` — `POST /api/v1/logs`. 단건/배열 JSON을 받아 각각 `dependencies.log_processor.process()`로 전달하고 결과 리스트를 반환 (탐지 → 진단 → 추천까지). |
+| `routes/metrics_routes.py` | `metrics_blueprint` — `POST /api/v1/metrics`. 시스템 스냅샷의 필수 필드를 검증하고 Elasticsearch 메트릭 인덱스에 저장. |
 | `routes/remediation_routes.py` | `remediation_blueprint` — `POST /api/v1/remediations/approve`. 운영자가 추천된 `script_id`/`error_code`/`approved_by`를 보내면, `ERROR_RULES`의 `remediation_candidates`에 있는 스크립트인지 검증한 뒤 `script_runner.run_script()`로 실행하고 `dependencies.repository.save_remediation()`으로 결과를 저장한다. **이전에는 `app.py`에 등록되지 않고 삭제된 `elastic_repository.py`를 참조해 로드조차 안 되던 미사용 코드였는데, 이번에 `dependencies.repository`를 쓰도록 고치고 `app.py`에 등록해서 정상 동작하도록 복구했다.** (부수적으로 `run_script()`가 절대 반환하지 않는 `"executed"` 상태와 비교하던 상태 코드 버그도 `"success"`로 수정.) |
 | `routes/web_routes.py` | `web_blueprint` — `GET /`. 운영자용 단일 페이지(HTML/CSS/JS 인라인, 외부 의존성 없음). 장애 시나리오를 골라 `/api/v1/logs`로 분석하면 오류 원인과 추천도 높은 순 조치 스크립트 리스트를 보여주고, 그중 하나를 선택하면 `/api/v1/remediations/approve`로 실제 실행한 결과(stdout)를 표시한다. |
 

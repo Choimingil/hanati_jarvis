@@ -12,6 +12,8 @@ $esContainer = 'hanati-es'
 $qdrantContainer = 'hanati-qdrant'
 $esPort = '9200'
 $qdrantPort = '6333'
+$esVolume = 'hanati-es-data'
+$qdrantVolume = 'hanati-qdrant-data'
 # Fluent Bit 로그 파일 경로
 $fluentBitLog = Join-Path $env:TEMP 'hanati-fluentbit.log'
 
@@ -170,7 +172,10 @@ function Start-Elasticsearch {
         }
 
         Write-Host '[elasticsearch] creating container (first run only)'
-        docker run -d --name $esContainer -p "${esPort}:9200" -e 'discovery.type=single-node' -e 'xpack.security.enabled=false' $image | Out-Null
+        # 이름 있는 볼륨에 데이터 마운트 - 컨테이너를 지우고 새로 만들어도
+        # 시딩한 사례가 안 날아가게 한다.
+        docker volume create $esVolume | Out-Null
+        docker run -d --name $esContainer -p "${esPort}:9200" -e 'discovery.type=single-node' -e 'xpack.security.enabled=false' -v "${esVolume}:/usr/share/elasticsearch/data" $image | Out-Null
     }
 
     Write-Host -NoNewline '[elasticsearch] waiting for startup'
@@ -178,6 +183,13 @@ function Start-Elasticsearch {
         try {
             Invoke-WebRequest -Uri "http://localhost:$esPort" -UseBasicParsing -TimeoutSec 2 | Out-Null
             Write-Host ' done'
+            # 전체 DEBUG + watcher 틱 로거만 조용히 (라이선스 없어 watcher가
+            # 항상 paused라 매 틱마다 스팸만 남긴다).
+            try {
+                $body = '{"persistent":{"logger.org.elasticsearch":"DEBUG","logger.org.elasticsearch.xpack.watcher.trigger.schedule.engine":"ERROR"}}'
+                Invoke-WebRequest -Uri "http://localhost:$esPort/_cluster/settings" -Method Put `
+                    -ContentType 'application/json' -Body $body -UseBasicParsing -TimeoutSec 5 | Out-Null
+            } catch {}
             return
         } catch {
             Write-Host -NoNewline '.'
@@ -208,7 +220,10 @@ function Start-Qdrant {
         }
 
         Write-Host '[qdrant] creating container (first run only)'
-        docker run -d --name $qdrantContainer -p "${qdrantPort}:6333" $image | Out-Null
+        # 이름 있는 볼륨에 데이터 마운트 - 컨테이너를 지우고 새로 만들어도
+        # 시딩한 사례가 안 날아가게 한다.
+        docker volume create $qdrantVolume | Out-Null
+        docker run -d --name $qdrantContainer -p "${qdrantPort}:6333" -v "${qdrantVolume}:/qdrant/storage" $image | Out-Null
     }
 
     Write-Host -NoNewline '[qdrant] waiting for startup'
@@ -226,6 +241,26 @@ function Start-Qdrant {
 }
 
 # Elasticsearch와 Qdrant 컨테이너를 모두 정지한다.
+function Seed-Knowledge {
+    $venvPython = Join-Path $repoRoot 'venv\Scripts\python.exe'
+    $pythonBin = if (Test-Path $venvPython) { $venvPython } else { 'python' }
+
+    Write-Host '[seed] seeding incident case data (Qdrant + Elasticsearch)..'
+    Push-Location $repoRoot
+    try {
+        & $pythonBin -m qdrant.seed
+        if ($LASTEXITCODE -ne 0) { throw "qdrant.seed exited $LASTEXITCODE" }
+        & $pythonBin -m elastic.seed_cases
+        if ($LASTEXITCODE -ne 0) { throw "elastic.seed_cases exited $LASTEXITCODE" }
+        & $pythonBin scripts\seed_incident_knowledge.py
+        if ($LASTEXITCODE -ne 0) { throw "seed_incident_knowledge.py exited $LASTEXITCODE" }
+    } catch {
+        Write-Warning "[seed] failed - run manually after checking venv/deps: python -m qdrant.seed && python -m elastic.seed_cases && python scripts/seed_incident_knowledge.py"
+    } finally {
+        Pop-Location
+    }
+}
+
 function Stop-Containers {
     Write-Host '[elasticsearch] stopping container..'
     docker stop $esContainer 2>$null | Out-Null
@@ -244,9 +279,11 @@ Set these environment variables to use the local infrastructure:
   `$env:ELASTICSEARCH_VERIFY_CERTS = 'false'
   `$env:CASE_SEARCHER_BACKEND = 'hybrid'   # qdrant or elastic
 
-Initial data seeding:
+Incident case data was auto-seeded above (check the [seed] log line if it failed).
+To re-seed:
   python -m qdrant.seed
   python -m elastic.seed_cases
+  python scripts/seed_incident_knowledge.py
 
 Use TESTING.md for the fluentbit -> backend pipeline check.
 "@
@@ -279,6 +316,7 @@ switch ($Command) {
             Start-Elasticsearch
             Start-Qdrant
             Start-FluentBit
+            Seed-Knowledge
             Print-EnvHint
         } catch {
             Write-Error $_

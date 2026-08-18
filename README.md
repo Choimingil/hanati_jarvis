@@ -1,276 +1,361 @@
-> 코드 구조/클래스별 역할은 [ARCHITECTURE.md](ARCHITECTURE.md), 전체 서비스
-> 흐름(탐지→진단→추천→운영자 승인→스크립트 실행)을 실제로 테스트하는
-> 방법은 [TESTING.md](TESTING.md) 참고.
+# Hanati Jarvis AIOps
 
-## 로컬 인프라 자동 실행 (fluent-bit / Elasticsearch / Qdrant)
+로그와 호스트 리소스를 함께 분석해 장애를 탐지하고, 과거 검증 사례를 근거로
+Runbook 또는 추가 진단 가이드를 제공하는 운영자 승인형 AIOps 서비스다.
 
-**mock 백엔드 없음.** 셋 다 Docker 컨테이너로 띄운다 (fluent-bit도 포함,
-`fluentbit/fluent-bit.conf`/`parser.conf`를 그대로 마운트해서 씀). 셋 중
-하나라도 꺼져 있으면 관련 API 요청이 그대로 실패한다 — Docker Desktop을
-먼저 켜둘 것.
+- 로그 수집: Fluent Bit → Flask API → Elasticsearch
+- 리소스 수집: psutil Agent → Flask API → Elasticsearch
+- 사례 검색: Elasticsearch 키워드 검색 + Qdrant 벡터 검색
+- 원인·조치 안내: LLM, 실패 시 결정론적 fallback
+- 조치 실행: 운영자 승인 후 allowlist Runbook만 실행
+- 학습 사례: 운영자 확인과 복구 검증이 끝난 사례만 승격
 
-```bash
-scripts/dev_infra.sh up       # 이미지 없으면 받아서 3개 전부 기동
-scripts/dev_infra.sh status   # 상태 확인
-scripts/dev_infra.sh down     # 전부 정지
+세부 코드 구조는 [ARCHITECTURE.md](ARCHITECTURE.md), 수동 테스트 절차는
+[TESTING.md](TESTING.md)를 참고한다.
+
+## 1. 서비스 동작 흐름
+
+### 1.1 등록된 오류 로그
+
+```text
+ERROR 로그 수신
+→ 오류 코드 판별
+→ 진단 스크립트 실행
+→ Elasticsearch/Qdrant 과거 사례 검색
+→ LLM 원인·Runbook 추천
+→ 추천 품질 검사
+→ 운영자 승인/거부/추가 진단
+→ 실행 결과 저장
 ```
 
-`config.py`의 `QDRANT_URL`/`ELASTICSEARCH_URL` 기본값이 위 컨테이너를
-가리키므로 별도 export 없이 바로 연동된다. 최초 1회 데이터 시딩:
+지원 오류 코드는 다음과 같다.
+
+- `ORA-28040`
+- `DISK_FULL`
+- `DNS_RESOLUTION_FAILURE`
+- `DB_CONNECTION_FAILURE`
+- `EXTERNAL_API_FAILURE`
+- `MEMORY_LEAK`
+- `REDIS_CONNECTION_FAILURE`
+
+추천 Runbook은 `config.ERROR_RULES`에 등록된 후보만 허용하며, 실제 파일은
+`test-runbooks/`에 있다. LLM이 임의 명령을 생성해 실행할 수는 없다.
+
+### 1.2 추천할 수 없는 오류 로그
+
+다음 조건이면 기존 추천을 중단하고 리소스 기반 fallback을 실행한다.
+
+- 등록되지 않은 오류 코드
+- 조치 후보가 없음
+- 추천 또는 Runbook이 비어 있음
+- 최고 추천 신뢰도가 기준값보다 낮음
+- 추천 생성기가 실패함
+
+fallback 흐름:
+
+```text
+추천 품질 미달
+→ 같은 호스트의 최근 15분 메트릭 조회
+→ 1분/5분/15분 특징 계산
+→ 리소스 문제 가설 생성
+→ 관련 오류 유형의 검증된 과거 사례 검색
+→ LLM이 수치 근거 안에서 요약
+→ 운영자에게 가설·신뢰도·추가 진단 제시
+```
+
+현재 생성 가능한 리소스 가설:
+
+| 가설 | 주요 근거 |
+|---|---|
+| CPU 포화 | CPU 평균·최대, 상위 프로세스 |
+| 메모리 누수/캐시 증가 | 메모리 사용률·증가량, Swap |
+| 디스크 압박 | 디스크 사용률·남은 공간 |
+| 연결 누수 | `CLOSE_WAIT` 수와 증가량 |
+| 네트워크 불안정 | 패킷 오류·드롭 증가량 |
+| 리소스 정상 | 주요 지표가 임계값 이내 |
+| 데이터 부족 | 최근 메트릭 없음 또는 호스트 불일치 |
+
+리소스 가설은 원인 확정이 아니다. 자동 조치는 항상 비활성화되고 운영자의
+확인이 필요하다.
+
+### 1.3 웹 콘솔 표시 방식
+
+웹 콘솔은 분석 결과에 따라 화면을 자동으로 분기한다.
+
+| 분석 결과 | 화면 표시 |
+|---|---|
+| 등록된 오류·정상 추천 | 기존 Runbook 카드와 승인·거부·진단 요청 버튼 |
+| 미등록 오류·저신뢰 추천 | `RESOURCE GUIDANCE` 카드 |
+| 여러 리소스 이상 | 신뢰도순 가설 카드와 진행 막대 |
+| 리소스 정상 | 정상 수치와 애플리케이션 확인 항목 |
+| 메트릭 없음 | Agent·호스트 식별자 점검 안내 |
+
+`RESOURCE GUIDANCE` 화면에는 다음 정보가 표시된다.
+
+- 원본 ERROR 로그
+- 가장 가능성 높은 문제 코드와 요약
+- 모든 리소스 가설과 신뢰도
+- 가설별 수치 근거
+- 추가 진단 권장사항
+- 같은 호스트의 최근 ERROR 로그
+- 운영자 판단 버튼
+
+운영자는 `원인 정확`, `일부 관련`, `관련 없음`, `추가 조사` 중 하나를
+선택한다. `원인 정확`을 저장하려면 실제 원인, 수행한 조치, 복구 여부를
+모두 입력해야 한다. 이 조건을 충족한 결과만 검증된 장애 사례로 승격된다.
+
+### 1.4 메트릭에서 먼저 발견한 이상
+
+psutil Agent가 보낸 메트릭은 저장 직후 자동 분석된다.
+
+```text
+30초 메트릭 수집
+→ 1분/5분/15분 특징 계산
+→ 메모리·디스크·연결·네트워크 이상 탐지
+→ 같은 호스트의 최근 ERROR 로그 연관 분석
+→ 과거 사례 검색
+→ LLM Runbook 추천
+→ Elasticsearch와 Qdrant에 장애 사례 저장
+```
+
+같은 호스트에서 동일 탐지가 반복될 경우 기본 5분 쿨다운을 적용한다.
+
+### 1.5 운영자 피드백과 사례 승격
+
+리소스 fallback 결과는 다음 상태로 평가할 수 있다.
+
+- `confirmed`: 원인과 관련 있음
+- `partial`: 일부 관련 있음
+- `rejected`: 관련 없음
+- `needs_investigation`: 추가 확인 필요
+
+다음 조건을 모두 만족한 경우에만 검증된 장애 사례로 Elasticsearch와
+Qdrant에 저장한다.
+
+```text
+운영자 confirmed
++ 실제 원인 입력
++ 수행한 조치 입력
++ recovered=true
+```
+
+LLM이 제안했다는 이유만으로 학습 사례가 되지 않는다.
+
+### 1.6 운영 Incident와 Runbook 승인 연결
+
+ERROR 로그는 환경·서비스·오류 코드·동적 숫자를 제거한 메시지 패턴으로
+fingerprint를 만든다. 동일 fingerprint는 `application-incidents`의 같은
+Incident로 집계되고 발생 횟수, 영향 호스트, 최초·최근 시각이 갱신된다.
+
+```text
+ERROR 수신
+→ Incident 생성 또는 기존 Incident 갱신
+→ ANALYZING
+→ Recommendation 생성 및 Incident 버전 고정
+→ ACTION_REQUIRED 또는 INVESTIGATING
+→ 운영자가 Incident에 연결된 Action 승인
+→ REMEDIATING
+→ 성공 시 MONITORING / 실패 시 ACTION_REQUIRED
+```
+
+Recommendation에는 `recommendation_id`, `incident_id`,
+`incident_version`, 만료 시각, 승인 가능한 `action_id`가 저장된다.
+승인 API는 최신 Incident 버전과 실제 추천 소속 Action인지 검증하며,
+동일 Incident·Recommendation·Action의 중복 실행은 기존 결과를 반환한다.
+
+## 2. 실행 방법
+
+### 2.1 인프라 실행
+
+Docker Desktop을 먼저 실행한다.
+
+```bash
+scripts/dev_infra.sh up
+scripts/dev_infra.sh status
+```
+
+이 스크립트는 다음 컨테이너를 기동한다.
+
+- Fluent Bit
+- Elasticsearch
+- Qdrant
+
+최초 한 번 과거 사례를 시딩한다.
 
 ```bash
 python -m qdrant.seed
 python -m elastic.seed_cases
 ```
 
-백엔드 실행 (venv 없으면 생성 + 의존성 설치까지 자동):
+종료:
+
+```bash
+scripts/dev_infra.sh down
+```
+
+### 2.2 애플리케이션과 psutil Agent 실행
 
 ```bash
 scripts/run_app.sh
 ```
 
-자세한 사용 흐름은 [TESTING.md](TESTING.md) 참고.
+`run_app.sh`는 다음 작업을 한 번에 수행한다.
 
-## fluentbit 사용법
+1. `venv`가 없으면 생성
+2. `requirements.txt` 설치 확인
+3. Flask 백엔드 실행
+4. psutil Agent 실행
+5. 기본 30초마다 시스템 메트릭 전송
+6. 시작 시 14일 이전 시스템 메트릭 삭제
+7. 이후 기본 24시간마다 보존 작업 반복
+8. 백엔드 종료 시 Agent와 보존 작업 함께 종료
 
-fluent-bit는 `scripts/dev_infra.sh up`으로 Docker 컨테이너로 뜬다 (위
-"로컬 인프라 자동 실행" 참고). 동작 확인:
-
-1. `scripts/run_app.sh`로 백엔드 실행
-2. 다른 터미널에서 `fluentbit` 디렉토리 진입 후
-   `echo '{"timestamp":"2026-07-13T19:40:00+0900","level":"INFO","message":"HTTP output test"}' >> application.log` 수행
-3. 백엔드 실행한 터미널이나 `docker logs -f hanati-fluentbit`에서 API 넘어온 것 확인
-
-
-
-
-fluentbit api 주소
-
-http://localhost:8080/api/v1/logs POST
-
-
-
-
-구현 방법
-
-ports 디렉토리 하위에
-
-case_searcher.py : Qdrant 구현
-log_repository.py : ElasticSearch 구현
-recommendation_generator.py : LLM 구현
-
-
-## log gernerator 사용법
-현재 프로젝트 내의 실행하고 있는 프로그램 내에 loggenerator_example.py 코드 삽입
-
-수행과 함께 /app.log 경로에 로그 발생
-
-## LLM API 사용법
-
-프로젝트 최상단에서 아래 명령어 수행 API 서버 기동
-
-```
-uvicorn llm_agent.app:app --host 127.0.0.1 --port 8000 --reload
-```
-
-API는 http://127.0.0.1:8000/docs 에서 확인
-
-
-## 웹 콘솔 (운영자 UI)
-
-메인 서비스(`python app.py`)를 띄운 뒤 브라우저에서
-`http://localhost:8080/` 로 접속하면 운영자용 단일 페이지가 나온다.
-
-1. `log_generator`가 만드는 6개 장애 시나리오 중 하나를 고르고 **분석** 클릭
-2. LLM이 판단한 **현재 오류 원인**과, 호출하면 좋은 **조치 스크립트를
-   추천도 높은 순**으로 정렬한 리스트(점수 바 포함)가 표시된다
-3. 리스트에서 **실행**을 누르면 해당 스크립트가 실제로 호출되고
-   (`작업 수행.. / 작업 완료..`) 결과가 화면에 출력된다
-
-원인/랭킹은 `RECOMMENDATION_BACKEND`(기본값 `llm`)가 담당한다.
-`OPENAI_API_KEY`가 있으면 LLM이, 없으면 `recommendation_ranker.py`의
-결정론적 랭킹이 자동으로 대체하므로 키 없이도 페이지가 동작한다.
-
-인식하는 오류 코드는 `DISK_FULL`, `DNS_RESOLUTION_FAILURE`,
-`DB_CONNECTION_FAILURE`, `EXTERNAL_API_FAILURE`, `MEMORY_LEAK`,
-`REDIS_CONNECTION_FAILURE`(+ 기존 `ORA-28040`)이며, 각 코드의 진단/조치
-스크립트는 `config.ERROR_RULES`에 정의되어 있고 실제 파일은
-`test-runbooks/`에 있다.
-
-
-## Qdrant 연동 (case_searcher)
-
-기존에는 `case_searcher`가 항상 `MockCaseSearcher`(하드코딩된 응답)로 동작했는데,
-`CASE_SEARCHER_BACKEND` 환경변수로 mock / Qdrant 중 선택해서 실행할 수 있도록 수정했다.
-
-### 변경된 파일
-
-- `config.py` : `CASE_SEARCHER_BACKEND`, `QDRANT_URL`, `QDRANT_PATH`,
-  `QDRANT_COLLECTION`, `EMBEDDING_MODEL_NAME`, `EMBEDDING_VECTOR_SIZE` 설정 추가
-- `qdrant/client.py` (신규) : Qdrant 클라이언트 / 임베딩 모델(`BAAI/bge-m3`)을
-  lazy singleton으로 생성하는 공용 모듈
-- `qdrant/seed.py` (신규, 기존 `qdrant/qdrant.py` 데모 스크립트를 대체) :
-  `incident_cases` 컬렉션에 테스트용 과거 사례를 시딩하는 스크립트
-- `adapters/qdrant_adapters.py` (신규) : `CaseSearcher` 포트를 구현하는
-  `QdrantCaseSearcher` (질의를 임베딩 후 벡터 검색, `MockCaseSearcher`와
-  동일한 응답 스키마로 반환)
-- `dependencies.py` : `CASE_SEARCHER_BACKEND` 값에 따라 `MockCaseSearcher` /
-  `QdrantCaseSearcher` 중 하나를 주입
-- `app.py` : `/health`의 `case_search` 값이 실제 사용 중인 백엔드를 반영
-- `requirements.txt` : `qdrant-client`, `sentence-transformers` 추가
-
-### 사용법
+Agent를 비활성화하려면:
 
 ```bash
-# 1. 의존성 설치
-pip install -r requirements.txt
-
-# 2. incident_cases 컬렉션 시딩 (최초 1회, 데이터 갱신 시 재실행)
-python -m qdrant.seed
-
-# 3. Qdrant 백엔드로 서버 실행
-CASE_SEARCHER_BACKEND=qdrant python app.py
+METRICS_AGENT_ENABLED=false scripts/run_app.sh
 ```
 
-`CASE_SEARCHER_BACKEND`를 지정하지 않으면 기존과 동일하게 mock으로 동작한다.
+Agent만 한 번 실행하려면:
 
-기본값은 로컬 파일 기반 Qdrant(`qdrant/qdrant_data/`, git에는 커밋되지 않음)이며,
-Docker 등으로 별도 Qdrant 서버를 띄운 경우 `QDRANT_URL`(예: `http://localhost:6333`)을
-지정하면 해당 서버를 사용한다.
+```bash
+python -m collector.agent --once
+```
 
+메트릭 보존 작업만 한 번 실행하려면:
 
-## 구현 내용
+```bash
+python -m elastic.metric_retention --once
+```
 
-### 1. Elasticsearch Client 구성
+보존 작업은 `application-system-metrics`에서 `timestamp`가 현재보다
+14일 이상 오래된 문서만 `delete_by_query`로 삭제한다. 최근 메트릭과
+검증된 장애 사례, 추천, 조치 및 운영자 피드백 인덱스는 삭제하지 않는다.
+Elasticsearch 연결 실패 시 현재 실행은 실패 기록만 남기고 다음 주기에
+재시도하므로 웹 앱과 메트릭 수집은 계속 동작한다.
 
-파일: elastic/client.py
+운영자 콘솔은 `http://localhost:8080/`, 상태 확인은
+`http://localhost:8080/health`에서 가능하다.
 
-구현 내용:
+## 3. 수집 데이터
 
-- Python Elasticsearch Client 연결 구현
-- Elasticsearch 서버 연결 설정
-- Basic Authentication 적용
-- HTTPS 환경에서 Elasticsearch 통신 구성
+psutil Agent는 다음 정보를 수집한다.
 
+- CPU 전체·코어별 사용률과 Load Average
+- 메모리, 가용 메모리, Swap
+- 루트 디스크 사용량과 디스크 I/O 누적값
+- 네트워크 송수신량, 오류, 드롭
+- TCP 상태별 연결 수와 LISTEN 포트
+- CPU 기준 상위 프로세스의 PID, 이름, 메모리, 스레드 수
 
-### 2. 로그 Index 생성 및 Mapping 설계
+민감정보 노출을 줄이기 위해 프로세스 명령행과 환경변수는 수집하지 않는다.
+Linux에서 전체 연결 조회 권한이 없으면
+`network.connections.access_denied=true`로 기록하고 나머지는 계속 수집한다.
 
-파일: elastic/mapping.py
+Fluent Bit은 `fluentbit/application.log`를 읽어
+`POST /api/v1/logs`로 전송한다. 현재 Fluent Bit은 로그 수집을 담당하고
+호스트 리소스는 psutil Agent가 담당한다.
 
-구현 내용:
+## 4. 주요 API
 
-- 로그 데이터 저장을 위한 Elasticsearch Index 생성
-- 로그 분석 목적에 맞는 Field Mapping 설계
-- 로그 검색 성능을 고려한 데이터 타입 설정
-
-생성 Index: application-logs
-
-Mapping:
-
-
-Mapping:
-
-|Field|Type|설명|
+| Method | 경로 | 역할 |
 |---|---|---|
-|timestamp|date|로그 발생 시간|
-|service|keyword|서비스명|
-|level|keyword|로그 레벨(INFO, ERROR 등)|
-|message|text|로그 메시지|
-|user_id|keyword|사용자 식별 정보|
-|request_url|keyword|요청 URL|
-|method|keyword|HTTP Method|
-|error|text|오류 내용|
-|host|keyword|서버 정보|
+| `GET` | `/health` | 백엔드 설정 및 상태 확인 |
+| `POST` | `/api/v1/logs` | 단건/배열 로그 분석 |
+| `POST` | `/api/v1/metrics` | 시스템 메트릭 저장 및 자동 분석 |
+| `GET` | `/api/v1/log-generator/incidents` | 영속화된 최근 Incident 목록 |
+| `POST` | `/api/v1/remediations/approve` | Incident에 연결된 Runbook 승인 및 실행 |
+| `POST` | `/api/v1/remediations/reject` | Runbook 거부 기록 |
+| `POST` | `/api/v1/remediations/diagnose` | 진단 스크립트 재실행 |
+| `POST` | `/api/v1/remediations/verify` | 조치 전후 메트릭으로 복구 검증 |
+| `POST` | `/api/v1/guidance/feedback` | 리소스 가설에 대한 운영자 피드백 |
 
-
-### 3. 로그 데이터 적재 기능 구현
-
-파일: elastic/insert_log.py
-
-구현 내용:
-
-- Python Dictionary 형태의 로그 데이터 생성
-- Elasticsearch Document 형태로 변환 및 저장
-- 저장된 로그 ID 반환 기능 구현
-
-
-저장 예시:
-
-```json
-{
-  "timestamp": "2026-07-13T21:29:25",
-  "service": "auth-service",
-  "level": "ERROR",
-  "message": "로그인 실패",
-  "user_id": "user123",
-  "request_url": "/login",
-  "method": "POST",
-  "error": "Invalid password",
-  "host": "server01"
-}
-
-4. 로그 조회 및 검색 기능 구현
-
-파일: elastic/search_log.py
-
-구현 내용:
-- Elasticsearch 저장 로그 조회
-- 저장된 Document 검색 기능 구현
-- 장애 로그 분석을 위한 검색 기반 마련
-
-
-## Elasticsearch 연동 (log_repository)
-
-`elastic/` 디렉토리의 스크립트들은 원래 `from client import get_client`처럼
-스크립트 자신의 디렉토리를 기준으로 하는 import를 사용하고 있어서, 패키지로
-`import elastic.xxx` 하면 `ModuleNotFoundError`가 발생했다. 또한 접속 정보
-(URL, 비밀번호)가 `elastic/client.py`에 하드코딩되어 있었다. 이번에 아래와
-같이 수정해서 `case_searcher`와 동일한 방식으로 `log_repository`도 mock /
-Elasticsearch를 스위치할 수 있도록 통합했다.
-
-### 변경된 파일
-
-- `elastic/*.py` : 내부 import를 `from client import ...` →
-  `from elastic.client import ...` 형태로 수정해 패키지로 정상 import되도록
-  변경 (`elastic/client.py`, `mapping.py`, `insert_log.py`, `search_log.py`,
-  `search_test.py`, `main.py`, `bulk_insert.py`)
-- `elastic/client.py` : 하드코딩되어 있던 URL/비밀번호를 제거하고
-  `config.py`의 `ELASTICSEARCH_URL` / `ELASTICSEARCH_USER` /
-  `ELASTICSEARCH_PASSWORD` / `ELASTICSEARCH_VERIFY_CERTS` 환경변수를 사용하도록 변경
-- `config.py` : `LOG_REPOSITORY_BACKEND`, `ELASTICSEARCH_URL`,
-  `ELASTICSEARCH_USER`, `ELASTICSEARCH_PASSWORD`,
-  `ELASTICSEARCH_VERIFY_CERTS`, `ELASTIC_LOG_INDEX`,
-  `ELASTIC_DIAGNOSIS_INDEX`, `ELASTIC_RECOMMENDATION_INDEX` 설정 추가
-- `adapters/elastic_adapters.py` (신규) : `LogRepository` 포트를 구현하는
-  `ElasticLogRepository` (`save_log` / `save_diagnosis` /
-  `save_recommendation`을 각각 별도 인덱스에 저장)
-- `dependencies.py` : `LOG_REPOSITORY_BACKEND` 값에 따라 `MockLogRepository` /
-  `ElasticLogRepository` 중 하나를 주입
-- `app.py` : `/health`의 `storage` 값이 실제 사용 중인 백엔드를 반영
-- 루트의 `elastic_repository.py` 삭제 : `config.ELASTICSEARCH_URL`이 정의되어
-  있지 않아 애초에 import가 실패하던 죽은 코드였고, 동일한 역할을
-  `adapters/elastic_adapters.py`가 대체함
-
-### 사용법
+피드백 요청 예시:
 
 ```bash
-# 1. 의존성 설치 (elasticsearch 패키지는 requirements.txt에 이미 포함)
-pip install -r requirements.txt
-
-# 2. 접속 정보를 환경변수로 지정 (비밀번호는 기본값 없음, 반드시 지정)
-export ELASTICSEARCH_URL=https://localhost:9200
-export ELASTICSEARCH_USER=elastic
-export ELASTICSEARCH_PASSWORD=your-password
-
-# 3. elastic 백엔드로 서버 실행
-LOG_REPOSITORY_BACKEND=elastic python app.py
+curl -X POST http://localhost:8080/api/v1/guidance/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "guidance_id": "가이드 UUID",
+    "operator": "operator01",
+    "verdict": "confirmed",
+    "confirmed_root_cause": "HTTP 응답 객체 close 누락",
+    "successful_action": "애플리케이션 수정 및 재배포",
+    "recovered": true,
+    "confirmed_error_code": "EXTERNAL_API_FAILURE"
+  }'
 ```
 
-`LOG_REPOSITORY_BACKEND`를 지정하지 않으면 기존과 동일하게 mock으로 동작한다.
+복구 검증 요청 예시:
 
-> 참고: 이 환경에는 실행 중인 Elasticsearch 서버가 없어서(포트 9200
-> connection refused) 실제 저장/조회까지는 검증하지 못했다. import 경로와
-> mock ↔ elastic 스위치 배선, 그리고 연결 실패 시 에러가 앱을 죽이지 않고
-> `processing_failed` 응답으로 깔끔하게 전파되는 것까지는 확인했다.
-> 로컬에 Elasticsearch를 띄운 뒤(`elastic/main.py`로 연결 확인,
-> `elastic/mapping.py`로 인덱스 생성) 실제 저장 결과를 검증해보길 권장한다.
+```bash
+curl -X POST http://localhost:8080/api/v1/remediations/verify \
+  -H 'Content-Type: application/json' \
+  -d '{"incident_id":"장애 UUID"}'
+```
+
+## 5. 저장 인덱스
+
+| Elasticsearch 인덱스 | 데이터 |
+|---|---|
+| `application-logs` | 수신 로그 |
+| `application-system-metrics` | 30초 단위 리소스 스냅샷 |
+| `application-diagnoses` | 진단 스크립트 결과 |
+| `application-recommendations` | Runbook 및 리소스 가이드 |
+| `application-remediations` | 승인·거부·실행 결과 |
+| `application-resource-guidance` | 미등록/저신뢰 로그의 리소스 가설 |
+| `application-operator-feedback` | 가설에 대한 운영자 판단 |
+| `application-recovery-verifications` | 조치 전후 복구 판정 |
+| `incident-cases` | 검증된 과거 장애 사례 |
+| `application-incidents` | 운영 중 Incident 상태·버전·최신 추천 |
+
+Qdrant의 `incident_cases` 컬렉션에는 장애 요약 임베딩과 오류 코드 payload를
+저장한다. 검색 시 의미 유사도와 오류 코드 필터를 함께 적용한다.
+
+## 6. 주요 환경변수
+
+### API·수집
+
+- `API_HOST` / `API_PORT`
+- `METRICS_API_URL`
+- `METRICS_COLLECT_INTERVAL_SECONDS` 기본 `30`
+- `METRICS_PROCESS_LIMIT` 기본 `20`
+- `METRICS_AGENT_ENABLED` 기본 `true`
+- `METRICS_RETENTION_ENABLED` 기본 `true`
+- `METRICS_RETENTION_DAYS` 기본 `14`
+- `METRICS_RETENTION_INTERVAL_SECONDS` 기본 `86400`(24시간)
+
+### 검색·저장
+
+- `ELASTICSEARCH_URL`
+- `ELASTICSEARCH_USER`
+- `ELASTICSEARCH_PASSWORD`
+- `QDRANT_URL`
+- `QDRANT_COLLECTION`
+- `CASE_SEARCHER_BACKEND`: `qdrant`, `elastic`, `hybrid`(기본)
+- `OPENAI_API_KEY`
+- `ELASTIC_INCIDENT_INDEX` 기본 `application-incidents`
+- `RECOMMENDATION_TTL_MINUTES` 기본 `30`
+
+### 탐지·품질 기준
+
+- `INCIDENT_COOLDOWN_MINUTES` 기본 `5`
+- `RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD` 기본 `60`
+- `RESOURCE_CPU_PERCENT_THRESHOLD` 기본 `90`
+- `ANOMALY_MEMORY_PERCENT_THRESHOLD` 기본 `90`
+- `ANOMALY_MEMORY_GROWTH_THRESHOLD` 기본 `10`
+- `ANOMALY_DISK_PERCENT_THRESHOLD` 기본 `90`
+- `ANOMALY_CLOSE_WAIT_THRESHOLD` 기본 `100`
+- `ANOMALY_NETWORK_ERROR_GROWTH_THRESHOLD` 기본 `20`
+
+## 7. 테스트
+
+```bash
+python -m unittest discover -s tests -v
+python -m compileall -q .
+bash -n scripts/run_app.sh
+```
+
+현재 테스트는 시스템 수집, 메트릭 특징 추출, 이상 탐지, 장애 사례 생성,
+복구 검증, 미등록 로그 fallback, 추천 품질 검사, 운영자 피드백과 검증 사례
+승격을 포함한다.
