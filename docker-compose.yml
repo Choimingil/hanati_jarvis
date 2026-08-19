@@ -33,7 +33,7 @@ services:
       elasticsearch:
         condition: service_healthy
     command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      sh -c "pip install --no-cache-dir -r /workspace/elastic/requirements.txt && \
       python -m elastic.main && \
       python -m elastic.mapping && \
       python -m elastic.seed_cases"
@@ -50,7 +50,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS http://localhost:6333/healthz >/dev/null || exit 1",
+          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 && printf \"GET /healthz HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q \"200 OK\" <&3'",
         ]
       interval: 10s
       timeout: 5s
@@ -72,7 +72,7 @@ services:
       qdrant:
         condition: service_healthy
     command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      sh -c "pip install --no-cache-dir -r /workspace/qdrant/requirements.txt && \
       python -m qdrant.seed"
     restart: "no"
 
@@ -86,7 +86,7 @@ services:
     environment:
       - PYTHONPATH=/workspace/log_generator:/workspace
     command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt && \
+      sh -c "pip install --no-cache-dir -r /workspace/log_generator/requirements.txt && \
       python /workspace/log_generator/main.py"
     restart: "no"
 
@@ -101,6 +101,81 @@ services:
       - log-generator
     ports:
       - "9880:9880"
+
+  collector:
+    image: python:3.11-slim
+    container_name: hanati-collector
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      - PYTHONPATH=/workspace
+      - METRICS_API_URL=http://aiops:8080/api/v1/metrics
+      - METRICS_COLLECT_INTERVAL_SECONDS=30
+      - METRICS_PROCESS_LIMIT=20
+    depends_on:
+      - aiops
+    command: >
+      sh -c "pip install --no-cache-dir -r /workspace/collector/requirements.txt && \
+      python -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30"
+    restart: "no"
+
+  llm-agent:
+    image: python:3.11-slim
+    container_name: hanati-llm-agent
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      - PYTHONPATH=/workspace
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "pip install --no-cache-dir -r /workspace/llm_agent/requirements.txt && \
+      uvicorn llm_agent.app:app --host 0.0.0.0 --port 8000"
+    restart: "no"
+
+  aiops:
+    image: python:3.11-slim
+    container_name: hanati-aiops
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      - PYTHONPATH=/workspace
+      - API_HOST=0.0.0.0
+      - API_PORT=8080
+      - LOG_REPOSITORY_BACKEND=elastic
+      - CASE_SEARCHER_BACKEND=elastic
+      - RECOMMENDATION_BACKEND=llm
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=incident_cases
+      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      - EMBEDDING_VECTOR_SIZE=1024
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      llm-agent:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    command: >
+      sh -c "pip install --no-cache-dir -r /workspace/aiops/requirements.txt && \
+      python /workspace/app.py"
+    restart: "no"
 
 volumes:
   elastic-data:

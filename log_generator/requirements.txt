@@ -1,0 +1,2 @@
+# log_generator is implemented with Python standard library only.
+# No third-party package dependencies are required.
