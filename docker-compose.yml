@@ -92,13 +92,23 @@ services:
 
   fluent-bit:
     image: fluent/fluent-bit:latest
-    container_name: hanati-fluent-bit
+    # routes/log_generator_routes.py의 FLUENTBIT_CONTAINER, dev_infra.sh와
+    # 동일한 이름으로 맞춘다(웹 콘솔 activity 로그 조회가 이 이름을 쓴다).
+    container_name: hanati-fluentbit
     volumes:
       - ./fluentbit:/fluent-bit/etc
       - log-volume:/var/log/app
     command: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
     depends_on:
       - log-generator
+      - aiops
+    # fluent-bit.conf의 OUTPUT은 `Host host.docker.internal:8080`으로
+    # 백엔드에 전달한다. 리눅스 컨테이너에서는 이 이름이 기본으로 해석되지
+    # 않으므로 host-gateway로 매핑해준다(dev_infra.sh의 --add-host와 동일).
+    # aiops 서비스가 8080을 호스트에 게시(ports: 8080:8080)하고 있어 이
+    # 경로로 백엔드까지 도달한다.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "9880:9880"
 
