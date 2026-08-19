@@ -23,6 +23,7 @@ def _slim_result(result: dict[str, Any]) -> dict[str, Any]:
     slim = {"status": result.get("status")}
     for key in (
         "reason", "error_code", "diagnosis_count", "message",
+        "incident_id", "coalesced",
     ):
         if key in result:
             slim[key] = result[key]
@@ -61,7 +62,9 @@ def receive_logs():
             continue
 
         try:
-            result = log_processor.process(
+            # 접수만 빠르게 하고 무거운 분석은 백그라운드로 넘긴다(비동기).
+            # 같은 장애 그룹은 디스패처가 진행 중인 분석 1건으로 묶는다.
+            result = log_processor.submit(
                 raw_log
             )
             responses.append(_slim_result(result))

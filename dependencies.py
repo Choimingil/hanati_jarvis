@@ -4,8 +4,13 @@ from adapters.elastic_adapters import (
 )
 from adapters.llm_adapters import LLMRecommendationGenerator
 from adapters.qdrant_adapters import QdrantCaseSearcher
-from config import CASE_SEARCHER_BACKEND
+from config import (
+    CASE_SEARCHER_BACKEND,
+    INCIDENT_ANALYSIS_ASYNC,
+    INCIDENT_ANALYSIS_WORKERS,
+)
 from log_processor import LogProcessor
+from aiops.incident_dispatcher import IncidentAnalysisDispatcher
 from aiops.analysis_service import MetricAnalysisService
 from aiops.anomaly_detector import AnomalyDetector
 from aiops.context_builder import ContextBuilder
@@ -58,6 +63,16 @@ log_processor = LogProcessor(
     fallback_guidance_generator=FallbackGuidanceGenerator(),
     incident_service=operational_incident_service,
 )
+
+# 비동기 분석 디스패처. 같은 장애 그룹은 진행 중인 분석 1건으로 묶는다.
+# INCIDENT_ANALYSIS_ASYNC=false면 디스패처를 붙이지 않아 동기로 동작한다.
+incident_dispatcher = None
+if INCIDENT_ANALYSIS_ASYNC:
+    incident_dispatcher = IncidentAnalysisDispatcher(
+        worker=log_processor._analyze,
+        max_workers=INCIDENT_ANALYSIS_WORKERS,
+    )
+    log_processor.dispatcher = incident_dispatcher
 
 recovery_verifier = RecoveryVerifier()
 

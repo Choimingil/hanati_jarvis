@@ -367,3 +367,14 @@ ELASTIC_INCIDENT_INDEX = os.getenv(
 RECOMMENDATION_TTL_MINUTES = int(
     os.getenv("RECOMMENDATION_TTL_MINUTES", "30")
 )
+
+# 장애 분석(진단 스크립트 실행 + 과거 사례 검색 + LLM 추천 생성)을 HTTP 요청
+# 처리 스레드에서 동기로 돌리지 않고 백그라운드 워커에서 비동기로 처리할지
+# 여부. false로 두면 기존처럼 요청 스레드에서 끝까지 동기 처리한다.
+INCIDENT_ANALYSIS_ASYNC = (
+    os.getenv("INCIDENT_ANALYSIS_ASYNC", "true").lower() == "true"
+)
+# 비동기 분석을 처리하는 백그라운드 워커 스레드 수.
+INCIDENT_ANALYSIS_WORKERS = max(
+    1, int(os.getenv("INCIDENT_ANALYSIS_WORKERS", "2"))
+)

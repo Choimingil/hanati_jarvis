@@ -16,13 +16,26 @@ routes/log_routes.py (log_blueprint)
 dependencies.py 가 조립해 둔 LogProcessor 인스턴스
         │
         ▼
-log_processor.py : LogProcessor.process()
+log_processor.py : LogProcessor.submit()  — 비동기 진입점
+    [접수(_ingest), 요청 스레드에서 즉시 처리]
     1) log_normalizer.normalize_log()      — 로그 형태 정규화
     2) error_detector.detect_error_code()  — 에러 코드 판별
-    3) script_runner.run_script()          — 진단 스크립트 실행 (ERROR_RULES 기반)
-    4) case_searcher.search()              — 과거 유사 사례 검색 (ports/CaseSearcher, Qdrant/Elasticsearch에 학습된 데이터 기반)
-    5) recommendation_generator.generate() — 대응 방안 생성 (ports/RecommendationGenerator)
-    6) repository.save_*()                 — 로그/진단/추천 결과 저장 (ports/LogRepository)
+    3) operational_incident_service.start() — fingerprint 기반 장애 그룹 집계
+    4) repository.save_log()               — 로그 저장 (ports/LogRepository)
+        │  → {"status": "accepted"} 즉시 반환 (HTTP 응답을 막지 않음)
+        │
+        ▼
+IncidentAnalysisDispatcher (aiops/incident_dispatcher.py) — 백그라운드 워커 풀
+    · 같은 장애 그룹(incident_id)은 진행 중인 분석 1건으로 묶는다(coalescing)
+        │
+        ▼
+log_processor.py : LogProcessor._analyze()  — 무거운 분석, 워커 스레드에서
+    5) script_runner.run_script()          — 진단 스크립트 실행 (ERROR_RULES 기반)
+    6) case_searcher.search()              — 과거 유사 사례 검색 (ports/CaseSearcher, Qdrant/Elasticsearch에 학습된 데이터 기반)
+    7) recommendation_generator.generate() — 대응 방안 생성 (ports/RecommendationGenerator)
+    8) operational_incident_service.complete_analysis() + repository.save_recommendation()
+        │
+        │  ※ INCIDENT_ANALYSIS_ASYNC=false면 디스패처 없이 process()로 동기 처리
         │
         ▼  (운영자가 recommended_actions 중 하나를 선택)
         │  POST /api/v1/remediations/approve
@@ -62,6 +75,7 @@ collector.agent → SystemCollector(psutil) → POST /api/v1/metrics
 | `fallback_guidance_generator.py` | 가설과 검증 사례만 근거로 운영자용 추가 진단 가이드 생성 |
 | `operator_feedback_service.py` | 운영자 판단 저장, 확인+복구된 결과만 장애 사례로 승격 |
 | `operational_incident_service.py` | ERROR fingerprint 기반 운영 Incident 생성·집계·버전·상태 전환, Recommendation Action 연결 |
+| `incident_dispatcher.py` | `IncidentAnalysisDispatcher` — 무거운 분석(진단·사례검색·LLM추천)을 백그라운드 워커 스레드 풀에서 비동기로 실행. 같은 장애 그룹(`incident_id`)에 대한 분석 요청은 진행 중인 1건으로 묶어(coalescing) 중복 실행을 막고, 처리 중 유입분이 있으면 끝난 뒤 한 번 더 돌려 최종 집계 상태를 반영한다. |
 
 `case_searcher`, `recommendation_generator`, `repository` 세 가지는 모두
 `ports/`에 정의된 인터페이스이고, 실제 구현체는 `adapters/`에 있다.
@@ -193,7 +207,7 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 
 | 파일 | 역할 |
 |---|---|
-| `routes/log_routes.py` | `log_blueprint` — `POST /api/v1/logs`. 단건/배열 JSON을 받아 각각 `dependencies.log_processor.process()`로 전달하고 결과 리스트를 반환 (탐지 → 진단 → 추천까지). |
+| `routes/log_routes.py` | `log_blueprint` — `POST /api/v1/logs`. 단건/배열 JSON을 받아 각각 `dependencies.log_processor.submit()`으로 전달한다. 접수(정규화 → 에러 판별 → 장애 그룹 집계 → 저장)만 마치고 `{"status":"accepted","incident_id":...,"coalesced":...}`를 즉시 반환하며, 무거운 분석(진단 → 추천)은 `IncidentAnalysisDispatcher`가 백그라운드에서 처리한다(같은 장애 그룹은 하나로 묶음). |
 | `routes/metrics_routes.py` | `metrics_blueprint` — `POST /api/v1/metrics`. 시스템 스냅샷의 필수 필드를 검증하고 Elasticsearch 메트릭 인덱스에 저장. |
 | `routes/remediation_routes.py` | `remediation_blueprint` — `POST /api/v1/remediations/approve`. 운영자가 추천된 `script_id`/`error_code`/`approved_by`를 보내면, `ERROR_RULES`의 `remediation_candidates`에 있는 스크립트인지 검증한 뒤 `script_runner.run_script()`로 실행하고 `dependencies.repository.save_remediation()`으로 결과를 저장한다. **이전에는 `app.py`에 등록되지 않고 삭제된 `elastic_repository.py`를 참조해 로드조차 안 되던 미사용 코드였는데, 이번에 `dependencies.repository`를 쓰도록 고치고 `app.py`에 등록해서 정상 동작하도록 복구했다.** (부수적으로 `run_script()`가 절대 반환하지 않는 `"executed"` 상태와 비교하던 상태 코드 버그도 `"success"`로 수정.) |
 | `routes/web_routes.py` | `web_blueprint` — `GET /`. 운영자용 단일 페이지(HTML/CSS/JS 인라인, 외부 의존성 없음). 장애 시나리오를 골라 `/api/v1/logs`로 분석하면 오류 원인과 추천도 높은 순 조치 스크립트 리스트를 보여주고, 그중 하나를 선택하면 `/api/v1/remediations/approve`로 실제 실행한 결과(stdout)를 표시한다. |
@@ -218,6 +232,13 @@ Flask 앱과는 독립적으로, 정상/장애 로그를 합성해 파일에 계
 | `CaseSearcher` | `MockCaseSearcher` | `QdrantCaseSearcher` / `ElasticCaseSearcher` / `HybridCaseSearcher`(둘 다) | `CASE_SEARCHER_BACKEND=qdrant`\|`elastic`\|`hybrid` |
 | `LogRepository` | `MockLogRepository` | `ElasticLogRepository` | `LOG_REPOSITORY_BACKEND=elastic` |
 | `RecommendationGenerator` | `LLMRecommendationGenerator`(기본) | `MockRecommendationGenerator` | `RECOMMENDATION_BACKEND=llm`\|`mock` |
+
+장애 분석 실행 방식도 환경변수로 전환한다.
+
+| 설정 | 기본값 | 설명 |
+|---|---|---|
+| `INCIDENT_ANALYSIS_ASYNC` | `true` | 무거운 분석을 백그라운드 워커에서 비동기 처리(같은 장애 그룹은 묶음). `false`면 요청 스레드에서 동기 처리. |
+| `INCIDENT_ANALYSIS_WORKERS` | `2` | 비동기 분석 워커 스레드 수. |
 
 운영자 승인 → 스크립트 실행(`routes/remediation_routes.py`)은 백엔드 스위치와
 무관하게 항상 `script_runner.run_script()` + 현재 주입된 `repository`를

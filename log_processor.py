@@ -28,6 +28,7 @@ class LogProcessor:
         resource_hypothesis_engine=None,
         fallback_guidance_generator=None,
         incident_service=None,
+        dispatcher=None,
     ) -> None:
         self.repository = repository
         self.case_searcher = case_searcher
@@ -39,11 +40,54 @@ class LogProcessor:
         self.resource_hypothesis_engine = resource_hypothesis_engine
         self.fallback_guidance_generator = fallback_guidance_generator
         self.incident_service = incident_service
+        # 있으면 무거운 분석을 비동기로 위임하고, 없으면 동기로 처리한다.
+        self.dispatcher = dispatcher
+
+    def submit(
+        self,
+        raw_log: dict[str, Any],
+    ) -> dict[str, Any]:
+        """비동기 처리 진입점.
+
+        로그를 접수(정규화 → 에러 판별 → 장애 그룹 집계 → 저장)만 빠르게
+        마치고, 무거운 분석은 디스패처에 위임한 뒤 곧바로 반환한다. 같은
+        장애 그룹은 디스패처가 진행 중인 분석 1건으로 묶는다. 디스패처가
+        없으면 기존과 동일하게 동기로 끝까지 처리한다.
+        """
+        early, job = self._ingest(raw_log)
+        if early is not None:
+            return early
+        if self.dispatcher is None:
+            return self._analyze(job)
+
+        disposition = self.dispatcher.submit(job)
+        return {
+            "status": "accepted",
+            "incident_id": job["incident_id"],
+            "error_code": job["error_code"],
+            # 같은 장애 그룹이라 진행 중인 분석에 묶인 경우 True.
+            "coalesced": disposition == "coalesced",
+        }
 
     def process(
         self,
         raw_log: dict[str, Any],
     ) -> dict[str, Any]:
+        """동기 처리 진입점. 접수부터 분석까지 한 번에 끝낸다."""
+        early, job = self._ingest(raw_log)
+        if early is not None:
+            return early
+        return self._analyze(job)
+
+    def _ingest(
+        self,
+        raw_log: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """저렴한 접수 단계.
+
+        분석까지 갈 필요가 없으면 ``(early_result, None)``을, 분석이 필요하면
+        ``(None, job)``을 반환한다.
+        """
         log = normalize_log(raw_log)
 
         if log["level"] != "ERROR":
@@ -54,7 +98,7 @@ class LogProcessor:
             return {
                 "status": "ignored",
                 "reason": "log level is not ERROR",
-            }
+            }, None
 
         error_code = detect_error_code(
             log["message"]
@@ -72,6 +116,26 @@ class LogProcessor:
             ),
             **log,
         })
+
+        job = {
+            "log": log,
+            "error_code": error_code,
+            "incident": incident,
+            "incident_id": (
+                incident.get("incident_id")
+                if incident else None
+            ),
+        }
+        return None, job
+
+    def _analyze(
+        self,
+        job: dict[str, Any],
+    ) -> dict[str, Any]:
+        """무거운 분석 단계(진단 → 사례 검색 → 추천 → 저장)."""
+        log = job["log"]
+        error_code = job["error_code"]
+        incident = self._latest_incident(job)
 
         if error_code is None:
             return self._resource_fallback(
@@ -158,6 +222,23 @@ class LogProcessor:
             ),
             "recommendation": recommendation,
         }
+
+    def _latest_incident(
+        self,
+        job: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """분석 직전에 장애 그룹의 최신 집계 상태를 다시 읽는다.
+
+        비동기 경로에서는 접수(ingest) 이후 같은 그룹의 로그가 더 들어와
+        발생 횟수/영향 호스트/버전이 바뀌었을 수 있다. 최신 상태로 분석해야
+        complete_analysis의 버전 충돌 없이 최종 집계가 반영된다.
+        """
+        incident = job.get("incident")
+        incident_id = job.get("incident_id")
+        if self.incident_service is None or not incident_id:
+            return incident
+        latest = self.repository.get_operational_incident(incident_id)
+        return latest or incident
 
     def _resource_fallback(
         self,
