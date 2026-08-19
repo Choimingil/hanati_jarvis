@@ -3,6 +3,8 @@ name: Deploy to EC2
 on:
   push:
     branches: ["master"]
+    paths-ignore:
+      - ".github/workflows/aws.yml"
 
 jobs:
   deploy:
@@ -24,6 +26,6 @@ jobs:
 
             git pull origin master
 
-            docker compose up -d
+            docker compose up -d --build
 
             docker compose ps
