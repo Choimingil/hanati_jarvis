@@ -109,8 +109,6 @@ services:
     # 경로로 백엔드까지 도달한다.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "9880:9880"
 
   collector:
     image: python:3.11-slim
@@ -130,26 +128,10 @@ services:
       python -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30"
     restart: "no"
 
-  llm-agent:
-    image: python:3.11-slim
-    container_name: hanati-llm-agent
-    working_dir: /workspace
-    volumes:
-      - .:/workspace
-    environment:
-      - PYTHONPATH=/workspace
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
-      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
-    ports:
-      - "8000:8000"
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/llm_agent/requirements.txt && \
-      uvicorn llm_agent.app:app --host 0.0.0.0 --port 8000"
-    restart: "no"
-
+  # NOTE: llm_agent는 별도 HTTP 서비스가 아니라 aiops가 인프로세스로
+  # import해 쓰는 라이브러리다(adapters/llm_adapters.py -> LLMService).
+  # LLM 호출은 aiops가 OPENAI_* 설정으로 직접 나가므로 별도 llm-agent
+  # 컨테이너(8000)는 데이터 경로 밖이라 두지 않는다.
   aiops:
     image: python:3.11-slim
     container_name: hanati-aiops
@@ -178,8 +160,6 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      llm-agent:
-        condition: service_started
     ports:
       - "8080:8080"
     command: >
