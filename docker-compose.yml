@@ -77,7 +77,10 @@ services:
     restart: "no"
 
   log-generator:
-    image: python:3.11-slim
+    image: hanati-log-generator:local
+    build:
+      context: .
+      dockerfile: log_generator/Dockerfile
     container_name: hanati-log-generator
     working_dir: /workspace
     volumes:
@@ -85,9 +88,7 @@ services:
       - log-volume:/workspace/fluentbit
     environment:
       - PYTHONPATH=/workspace/log_generator:/workspace
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/log_generator/requirements.txt && \
-      python /workspace/log_generator/main.py"
+    command: ["python", "/workspace/log_generator/main.py"]
     restart: "no"
 
   fluent-bit:
@@ -121,7 +122,10 @@ services:
     restart: "no"
 
   llm-agent:
-    image: python:3.11-slim
+    image: hanati-llm-agent:local
+    build:
+      context: .
+      dockerfile: llm_agent/Dockerfile
     container_name: hanati-llm-agent
     working_dir: /workspace
     volumes:
@@ -135,13 +139,15 @@ services:
       - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
     ports:
       - "8000:8000"
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/llm_agent/requirements.txt && \
-      uvicorn llm_agent.app:app --host 0.0.0.0 --port 8000"
+    command:
+      ["uvicorn", "llm_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
 
   aiops:
-    image: python:3.11-slim
+    image: hanati-aiops:local
+    build:
+      context: .
+      dockerfile: aiops/Dockerfile
     container_name: hanati-aiops
     working_dir: /workspace
     volumes:
@@ -172,9 +178,7 @@ services:
         condition: service_started
     ports:
       - "8080:8080"
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/aiops/requirements.txt && \
-      python /workspace/app.py"
+    command: ["python", "/workspace/app.py"]
     restart: "no"
 
 volumes:
