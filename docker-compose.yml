@@ -102,13 +102,11 @@ services:
     depends_on:
       - log-generator
       - aiops
-    # fluent-bit.conf의 OUTPUT은 `Host host.docker.internal:8080`으로
-    # 백엔드에 전달한다. 리눅스 컨테이너에서는 이 이름이 기본으로 해석되지
-    # 않으므로 host-gateway로 매핑해준다(dev_infra.sh의 --add-host와 동일).
-    # aiops 서비스가 8080을 호스트에 게시(ports: 8080:8080)하고 있어 이
-    # 경로로 백엔드까지 도달한다.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # fluent-bit.conf의 OUTPUT은 `Host host.docker.internal:8080`으로 보낸다.
+    # 이 이름은 aiops 서비스에 네트워크 alias로 붙여 두었으므로(아래 aiops
+    # 참고), compose 네트워크 안에서 곧바로 aiops 컨테이너의 8080으로 해석된다.
+    # 호스트 게시 포트(run_app.sh와 겹치지 않게 18080으로 옮김)와 무관하게
+    # 컨테이너-투-컨테이너로 도달한다.
 
   collector:
     image: python:3.11-slim
@@ -160,8 +158,18 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+    # 호스트 게시 포트는 18080. 호스트에서 직접 돌리는 run_app.sh(기본 8080)와
+    # 겹치지 않게 하기 위함이다. 컨테이너 내부는 그대로 8080이고, compose
+    # 내부 서비스(collector/fluent-bit)는 서비스명:8080으로 접근하므로 영향 없다.
+    # 풀 도커 모드에서 웹 콘솔은 http://localhost:18080/ 로 접속한다.
     ports:
-      - "8080:8080"
+      - "18080:8080"
+    # compose 안의 fluent-bit이 fluent-bit.conf의 `host.docker.internal`로
+    # aiops에 곧바로 도달하도록 이 이름을 aiops의 네트워크 alias로 붙인다.
+    networks:
+      default:
+        aliases:
+          - host.docker.internal
     command: >
       sh -c "pip install --no-cache-dir -r /workspace/aiops/requirements.txt && \
       python /workspace/app.py"

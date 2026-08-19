@@ -97,26 +97,56 @@ cleanup() {
 
 # 이전 실행이 비정상 종료돼 포트를 계속 물고 있으면 새 app.py가 바인딩에
 # 실패한다. 기동 전에 그 포트를 쓰고 있는 프로세스를 정리한다.
+#
+# 단, 그 포트를 Docker(컨테이너 게시용 docker-proxy/dockerd 등)가 물고
+# 있으면 절대 죽이지 않는다. `docker compose up`으로 aiops 컨테이너가
+# 8080을 게시 중일 때 이걸 kill -9 하면 docker-proxy가 죽어 컨테이너
+# 포트 매핑이 깨지고 Docker 자체가 불안정해진다. 이 경우엔 죽이는 대신
+# 명확히 안내하고 중단한다(compose는 aiops를 18080으로 옮겨 기본적으로는
+# 겹치지 않지만, 다른 컨테이너가 이 포트를 게시한 경우를 대비한 안전장치).
 kill_port_listener() {
   local port="$1"
-  local pids
+  local pids pid pname docker_pids="" other_pids=""
   pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
   if [ -z "$pids" ]; then
     return 0
   fi
-  echo "[app] 포트 ${port} 사용 중인 기존 프로세스 종료: ${pids}"
-  kill $pids 2>/dev/null || true
+
+  for pid in $pids; do
+    pname=$(ps -p "$pid" -o comm= 2>/dev/null | tr -d ' ')
+    case "$pname" in
+      docker-proxy|dockerd|containerd*|com.docker*|Docker|vpnkit*)
+        docker_pids="$docker_pids $pid" ;;
+      *)
+        other_pids="$other_pids $pid" ;;
+    esac
+  done
+
+  if [ -n "${docker_pids// /}" ]; then
+    echo "[app] 포트 ${port}을(를) Docker가 사용 중입니다 (pid:${docker_pids} )." >&2
+    echo "[app] Docker 프로세스는 죽이지 않습니다 - 컨테이너가 이 포트를" >&2
+    echo "[app] 게시 중일 가능성이 큽니다. 'docker compose down'으로 내리거나" >&2
+    echo "[app] API_PORT=<다른 포트> 를 지정해 다시 실행하세요." >&2
+    exit 1
+  fi
+
+  if [ -z "${other_pids// /}" ]; then
+    return 0
+  fi
+
+  echo "[app] 포트 ${port} 사용 중인 기존 프로세스 종료:${other_pids}"
+  kill $other_pids 2>/dev/null || true
   for _ in 1 2 3 4 5; do
-    pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
-    if [ -z "$pids" ]; then
+    if [ -z "$(lsof -ti "tcp:${port}" 2>/dev/null || true)" ]; then
       return 0
     fi
     sleep 1
   done
-  pids=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
-  if [ -n "$pids" ]; then
-    echo "[app] 정상 종료 실패 - 강제 종료: ${pids}"
-    kill -9 $pids 2>/dev/null || true
+  local remaining
+  remaining=$(lsof -ti "tcp:${port}" 2>/dev/null || true)
+  if [ -n "$remaining" ]; then
+    echo "[app] 정상 종료 실패 - 강제 종료: ${remaining}"
+    kill -9 $remaining 2>/dev/null || true
   fi
 }
 
