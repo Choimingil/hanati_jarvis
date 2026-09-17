@@ -22,10 +22,24 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
+
             cd /opt/jarvis
 
-            git pull origin master
+            git fetch origin master
+            git checkout -B master origin/master
+            git reset --hard origin/master
 
-            docker compose up -d --build --no-deps aiops
+            echo "Deployed commit:"
+            git log -1 --oneline
+
+            docker compose up -d --build --no-deps --force-recreate aiops
 
             docker compose ps aiops
+
+            echo "Container source check:"
+            docker compose exec -T aiops sh -c \
+              "grep -n '변경한 문구' /workspace/routes/web_routes.py || true"
+
+            echo "Health check:"
+            curl -fsS http://127.0.0.1:8080/health
