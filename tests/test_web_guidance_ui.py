@@ -32,6 +32,7 @@ class GuidanceWebTest(unittest.TestCase):
         app = Flask(__name__)
         app.register_blueprint(web_blueprint)
         app.register_blueprint(log_generator_blueprint)
+        cls.app = app
         cls.client = app.test_client()
 
     def test_page_contains_guidance_and_feedback_panels(self):
@@ -77,6 +78,50 @@ class GuidanceWebTest(unittest.TestCase):
                 "order": "desc",
                 "unmapped_type": "date",
             }}],
+        )
+
+    def test_admin_run_is_shared_with_every_client(self):
+        triggered_at = "2026-09-17T22:28:53+09:00"
+        generated = {
+            "error_code": "DISK_FULL",
+            "events": [{
+                "level": "ERROR",
+                "message": "No space left on device.",
+            }],
+        }
+
+        with (
+            patch(
+                "routes.log_generator_routes.now_iso",
+                return_value=triggered_at,
+            ),
+            patch(
+                "routes.log_generator_routes.run_scenario",
+                return_value=generated,
+            ),
+        ):
+            response = self.client.post(
+                "/api/v1/log-generator/run",
+                json={"scenario": "disk_full"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+        clients = [self.app.test_client() for _ in range(3)]
+        latest_runs = [
+            client.get(
+                "/api/v1/log-generator/latest-run"
+            ).get_json()
+            for client in clients
+        ]
+
+        self.assertTrue(all(item == latest_runs[0] for item in latest_runs))
+        self.assertEqual(latest_runs[0]["status"], "ready")
+        self.assertEqual(
+            latest_runs[0]["run"]["error_code"], "DISK_FULL"
+        )
+        self.assertEqual(
+            latest_runs[0]["run"]["triggered_at"], triggered_at
         )
 
 if __name__ == "__main__":
