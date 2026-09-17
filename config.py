@@ -207,6 +207,94 @@ ERROR_RULES = {
         "auto_diagnose": True,
         "auto_remediate": False,
     },
+    "DB_DEADLOCK": {
+        "diagnostic_scripts": [
+            "check_db_locks",
+        ],
+        "remediation_candidates": [
+            "kill_blocking_session",
+            "retry_failed_transactions",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "CONNECTION_POOL_EXHAUSTED": {
+        "diagnostic_scripts": [
+            "check_connection_pool",
+        ],
+        "remediation_candidates": [
+            "increase_connection_pool_size",
+            "restart_db_connection_pool",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "DB_REPLICATION_LAG": {
+        "diagnostic_scripts": [
+            "check_replication_lag",
+        ],
+        "remediation_candidates": [
+            "route_reads_to_primary",
+            "restart_replication",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "FILE_DESCRIPTOR_EXHAUSTED": {
+        "diagnostic_scripts": [
+            "check_open_files",
+        ],
+        "remediation_candidates": [
+            "increase_fd_limit",
+            "restart_application",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "UPSTREAM_GATEWAY_TIMEOUT": {
+        "diagnostic_scripts": [
+            "check_upstream_health",
+        ],
+        "remediation_candidates": [
+            "drain_unhealthy_upstream",
+            "increase_proxy_timeout",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "PAYMENT_GATEWAY_FAILURE": {
+        "diagnostic_scripts": [
+            "check_payment_gateway",
+        ],
+        "remediation_candidates": [
+            "switch_payment_provider",
+            "enable_payment_retry_queue",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "CLOCK_SKEW_DETECTED": {
+        "diagnostic_scripts": [
+            "check_time_sync",
+        ],
+        "remediation_candidates": [
+            "resync_ntp_time",
+            "restart_time_service",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
+    "POD_CRASHLOOP_BACKOFF": {
+        "diagnostic_scripts": [
+            "check_pod_status",
+        ],
+        "remediation_candidates": [
+            "rollback_deployment",
+            "increase_pod_resources",
+        ],
+        "auto_diagnose": True,
+        "auto_remediate": False,
+    },
 }
 
 
@@ -250,6 +338,30 @@ SCRIPT_DESCRIPTIONS = {
     "restart_auth_service": "인증 서비스 재시작",
     "check_container_memory_limits": "컨테이너 메모리 제한(cgroup) 점검",
     "increase_memory_limit": "컨테이너 메모리 제한 증설",
+    # --- 신규 장애 유형 (진단) ---
+    "check_db_locks": "DB 락·데드락 상태 점검",
+    "check_connection_pool": "DB 커넥션 풀 사용률 점검",
+    "check_replication_lag": "읽기 복제본 복제 지연 점검",
+    "check_open_files": "열린 파일 디스크립터 수와 ulimit 점검",
+    "check_upstream_health": "업스트림 노드 헬스 점검",
+    "check_payment_gateway": "결제 게이트웨이 연동 상태 점검",
+    "check_time_sync": "NTP 시각 동기 상태 점검",
+    "check_pod_status": "Pod 상태와 재시작 횟수 점검",
+    # --- 신규 장애 유형 (조치) ---
+    "kill_blocking_session": "데드락을 유발한 차단 세션 종료",
+    "retry_failed_transactions": "롤백된 주문 트랜잭션 재처리",
+    "increase_connection_pool_size": "DB 커넥션 풀 최대 크기 증설",
+    "route_reads_to_primary": "읽기 트래픽을 주 DB로 전환",
+    "restart_replication": "복제 프로세스 재시작",
+    "increase_fd_limit": "파일 디스크립터 한도 상향",
+    "drain_unhealthy_upstream": "불량 업스트림 노드를 로드밸런서에서 제외",
+    "increase_proxy_timeout": "프록시 타임아웃 상향",
+    "switch_payment_provider": "예비 결제 대행사로 전환",
+    "enable_payment_retry_queue": "결제 재시도 큐 활성화",
+    "resync_ntp_time": "NTP 강제 재동기화",
+    "restart_time_service": "시각 동기 서비스 재시작",
+    "rollback_deployment": "직전 안정 버전으로 배포 롤백",
+    "increase_pod_resources": "Pod 리소스 요청·제한 증설",
 }
 
 
