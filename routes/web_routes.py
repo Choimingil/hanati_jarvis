@@ -1,6 +1,13 @@
 """운영자용 웹 UI.
 
-`GET /` 에서 단일 페이지를 제공한다. 흐름은 다음과 같다.
+같은 페이지를 두 모드로 제공한다.
+
+- `GET /`, `GET /admin` (어드민): 아래 흐름 전체 + 장애 시나리오/수집·분석 로그
+- `GET /client` (클라이언트): 오류 내용(원인·Runbook/리소스 가이드)만 표시.
+  어드민이 시나리오를 실행하면 `/api/v1/log-generator/latest-run` 폴링으로
+  같은 장애의 분석 결과를 따라 보여준다.
+
+흐름은 다음과 같다.
 
 1. 장애 시나리오(=log_generator/main.py가 발생시키는 오류)를 하나 골라
    "분석" 클릭 -> 서버가 `log_generator/trigger.py`로 그 시나리오를 실제
@@ -28,7 +35,7 @@ _PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hanati Jarvis — 장애 대응 콘솔</title>
+<title>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --fg: #1c2333; --muted: #5b6472;
@@ -198,6 +205,8 @@ _PAGE = """<!doctype html>
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
   .scenario-card { margin-top:18px; }
+  body.mode-client .admin-only { display:none !important; }
+  body.mode-admin .client-only { display:none !important; }
   @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
@@ -205,11 +214,11 @@ _PAGE = """<!doctype html>
   }
 </style>
 </head>
-<body>
+<body class="mode-__MODE__">
 <div class="wrap">
   <div class="console-head">
-    <div><h1>Hanati Jarvis — 장애 대응 콘솔</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
-    <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle">로그 조회</button></div>
+    <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
+    <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
   <div class="incident-stats">
     <div class="incident-stat"><span>진행 중</span><strong id="stat-open">0건</strong></div>
@@ -217,7 +226,11 @@ _PAGE = """<!doctype html>
     <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
     <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
   </div>
-  <div class="card scenario-card">
+  <div id="client-status" class="card client-only">
+    <strong>장애 모니터링</strong>
+    <div id="client-status-text" class="muted" style="margin-top:6px">발생한 장애가 없습니다. 장애가 감지되면 이 화면에 오류 내용이 표시됩니다.</div>
+  </div>
+  <div class="card scenario-card admin-only">
     <div class="row">
       <div>
         <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
@@ -226,7 +239,7 @@ _PAGE = """<!doctype html>
       <button id="analyze" disabled>분석</button>
     </div>
   </div>
-  <div id="log-tabs-panel" class="card hidden">
+  <div id="log-tabs-panel" class="card hidden admin-only">
     <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
     <div class="log-tabs" style="margin-top:12px">
       <button class="log-tab selected" data-panel="log">log_generator</button>
@@ -234,7 +247,7 @@ _PAGE = """<!doctype html>
       <button class="log-tab" data-panel="internal-panel">Elasticsearch/Qdrant</button>
     </div>
   </div>
-  <div id="log" class="card hidden logs-section">
+  <div id="log" class="card hidden logs-section admin-only">
     <div class="card-head">
       <div><strong>log_generator 실행 로그</strong>
         <span class="muted">(fluentbit/application.log 기록분)</span></div>
@@ -246,10 +259,10 @@ _PAGE = """<!doctype html>
     </div>
   </div>
 
-  <div id="fluentbit-panel" class="card hidden logs-section">
+  <div id="fluentbit-panel" class="card hidden logs-section admin-only">
     <div class="card-head">
-      <div><strong>Fluent Bit 수집 상태</strong>
-        <span class="muted">(수집·전송 메트릭)</span></div>
+      <div><strong>fluent-bit → aiops 수신 로그</strong>
+        <span class="muted">(Elasticsearch application-logs, 이번 실행 이후분)</span></div>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
@@ -257,16 +270,16 @@ _PAGE = """<!doctype html>
     </div>
   </div>
 
-  <div id="internal-panel" class="card hidden logs-section">
+  <div id="internal-panel" class="card hidden logs-section admin-only">
     <div class="card-head">
-      <div><strong>Qdrant / Elasticsearch 상태</strong>
-        <span class="muted">(서비스 상태·인덱스 정보)</span></div>
+      <div><strong>Qdrant / Elasticsearch 저장 내용</strong>
+        <span class="muted">(이번 실행 이후 저장분)</span></div>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
-      <div class="sub-label">Qdrant (hanati-qdrant)</div>
+      <div class="sub-label">Qdrant (incident_cases 컬렉션)</div>
       <pre id="qdrant-output" class="src-qdrant"></pre>
-      <div class="sub-label">Elasticsearch (hanati-es)</div>
+      <div class="sub-label">Elasticsearch (진단·추천)</div>
       <pre id="es-output" class="src-elasticsearch"></pre>
     </div>
   </div>
@@ -336,6 +349,8 @@ _PAGE = """<!doctype html>
 </div>
 
 <script>
+const MODE = "__MODE__";
+const IS_CLIENT = MODE === "client";
 const $ = (id) => document.getElementById(id);
 const sel = $("scenario");
 let currentErrorCode = null;
@@ -414,7 +429,7 @@ async function postJSON(url, body) {
   return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
-(async function loadScenarios() {
+if (!IS_CLIENT) (async function loadScenarios() {
   const scenarios = await getJSON("/api/v1/log-generator/scenarios");
   scenarios.forEach((s) => {
     const o = document.createElement("option");
@@ -497,31 +512,76 @@ async function pollActivity() {
   }
 }
 
-async function waitForRecommendation(errorCode, since) {
-  $("wait-status").textContent =
-    "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
+// 클라이언트 화면은 로그 패널이 없으므로 상태 문구를 상단 카드에 쓴다.
+const statusEl = () => $(IS_CLIENT ? "client-status-text" : "wait-status");
+
+async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
+  if (!IS_CLIENT) {
+    statusEl().textContent =
+      "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
+  }
 
   for (let i = 0; i < 80; i++) {
     await sleep(1500);
-    await pollActivity();
+    if (!isCurrent()) return;
+    if (!IS_CLIENT) await pollActivity();
     const data = await getJSON(
       `/api/v1/log-generator/latest-recommendation?error_code=${encodeURIComponent(errorCode)}&since=${encodeURIComponent(since)}`
     );
+    if (!isCurrent()) return;
     if (data.status === "ready") {
-      $("wait-status").textContent = "";
-      renderRecommendation(errorCode, data.recommendation);
+      if (!IS_CLIENT) statusEl().textContent = "";
+      renderRecommendation(errorCode, data.recommendation, data.decisions || []);
       await loadIncidents();
       return;
     }
   }
 
-  $("wait-status").textContent =
-    "추천 결과 대기 시간 초과 — fluentbit/Elasticsearch/Qdrant 상태를 확인하세요.";
+  statusEl().textContent = IS_CLIENT
+    ? "분석 결과를 불러오지 못했습니다. 잠시 후 다시 확인하세요."
+    : "추천 결과 대기 시간 초과 — fluentbit/Elasticsearch/Qdrant 상태를 확인하세요.";
 }
 
-function renderRecommendation(errorCode, rec) {
+// 클라이언트: 어드민에서 실행한 최신 장애 시나리오를 따라간다.
+let clientRunId = null;
+let clientRunPrefix = "";
+function setClientStatus(state) {
+  if (IS_CLIENT && clientRunPrefix) {
+    $("client-status-text").textContent = `${clientRunPrefix} — ${state}`;
+  }
+}
+async function followLatestRun() {
+  let data;
+  try {
+    data = await getJSON("/api/v1/log-generator/latest-run");
+  } catch (e) {
+    return;
+  }
+  if (data.status !== "ready" || data.run.run_id === clientRunId) return;
+
+  const run = data.run;
+  clientRunId = run.run_id;
+  $("result").classList.add("hidden");
+  $("guidance-result").classList.add("hidden");
+  $("exec").classList.add("hidden");
+  currentGuidance = null;
+  selectedVerdict = null;
+  clientRunPrefix = `장애 감지: ${run.label} (${formatTime(run.triggered_at)})`;
+  setClientStatus("오류를 분석하는 중…");
+
+  await waitForRecommendation(
+    run.error_code, run.triggered_at, () => clientRunId === run.run_id
+  );
+}
+if (IS_CLIENT) {
+  followLatestRun();
+  setInterval(followLatestRun, 3000);
+}
+
+function renderRecommendation(errorCode, rec, decisions = []) {
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);
+    setClientStatus("분석 완료");
     return;
   }
   currentErrorCode = errorCode;
@@ -573,8 +633,42 @@ function renderRecommendation(errorCode, rec) {
       "click", () => requestDiagnosis(errorCode, el)
     );
 
+    // 이미 승인/거부한 Runbook은 새로고침해도 처리된 상태로 보여준다.
+    const decided = action && decisions.find(
+      (d) => d.action_id === action.action_id
+    );
+    if (decided) markDecided(el, decided.decision);
+
     box.appendChild(el);
   });
+
+  if (decisions.length) {
+    const last = decisions[decisions.length - 1];
+    showExecResult(last.script_id, last.result || {}, 200);
+  }
+  setClientStatus(decisions.some(
+    (d) => d.decision === "approve" && d.result?.status === "success"
+  ) ? "조치 완료" : "분석 완료");
+}
+
+function markDecided(el, decision) {
+  el.classList.add("decided");
+  el.querySelector(".decision").textContent =
+    decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
+  setRunbookButtonsDisabled(el, true);
+}
+
+function showExecResult(scriptId, data, status) {
+  $("exec").classList.remove("hidden");
+  $("exec-title").textContent = scriptId;
+  const ok = ["success", "rejected", "already_processed"].includes(data.status);
+  const s = $("exec-status");
+  s.className = ok ? "status-ok" : "status-err";
+  s.textContent = `${data.status}` + (data.returncode !== undefined
+    ? ` (exit ${data.returncode})` : ` (HTTP ${status})`);
+  $("exec-output").textContent =
+    (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :
+      (data.reason ? "\\n" + data.reason : ""));
 }
 
 function addList(container, title, items) {
@@ -734,18 +828,11 @@ async function decideRunbook(scriptId, action, el, decision) {
       incident_version: currentRecommendation.incident_version,
       approved_by: "web-ui",
     });
-    const ok = data.status === "success" || data.status === "rejected";
-    const s = $("exec-status");
-    s.className = ok ? "status-ok" : "status-err";
-    s.textContent = `${data.status}` + (data.returncode !== undefined
-      ? ` (exit ${data.returncode})` : ` (HTTP ${status})`);
-    $("exec-output").textContent =
-      (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :
-        (data.reason ? "\\n" + data.reason : ""));
-
-    el.classList.add("decided");
-    el.querySelector(".decision").textContent =
-      decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
+    showExecResult(scriptId, data, status);
+    markDecided(el, decision);
+    if (decision === "approve" && data.status === "success") {
+      setClientStatus("조치 완료");
+    }
     await loadIncidents();
   } catch (e) {
     $("exec-status").className = "status-err";
@@ -786,6 +873,25 @@ async function requestDiagnosis(errorCode, el) {
 """
 
 
+def _render(mode: str, title_suffix: str) -> Response:
+    page = (
+        _PAGE.replace("__MODE__", mode)
+        .replace("__TITLE_SUFFIX__", title_suffix)
+    )
+    return Response(page, mimetype="text/html")
+
+
 @web_blueprint.get("/")
-def index() -> Response:
-    return Response(_PAGE, mimetype="text/html")
+@web_blueprint.get("/admin")
+def admin() -> Response:
+    """장애 시나리오 실행·수집/분석 로그까지 보이는 운영자(어드민) 화면."""
+    return _render("admin", " (Admin)")
+
+
+@web_blueprint.get("/client")
+def client() -> Response:
+    """오류 내용(원인·Runbook/리소스 가이드)만 보이는 클라이언트 화면.
+
+    어드민에서 시나리오를 실행하면 latest-run 폴링으로 같은 장애를 따라간다.
+    """
+    return _render("client", "")
