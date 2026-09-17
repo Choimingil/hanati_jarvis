@@ -130,7 +130,7 @@ _PAGE = """<!doctype html>
   .runbook button.diagnose {
     background: transparent; color: var(--muted); border: 1px solid var(--border);
   }
-  .runbook.decided { opacity: .6; }
+  .runbook.decided, .runbook.locked { opacity: .6; }
   .runbook .decision {
     font-size: 13px; font-weight: 700; margin-top: 10px;
   }
@@ -623,6 +623,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     const action = (rec.actions || []).find(
       (candidate) => candidate.script_id === rb.script_id
     );
+    if (action) el.dataset.actionId = action.action_id;
     el.querySelector(".approve").addEventListener(
       "click", () => decideRunbook(rb.script_id, action, el, "approve")
     );
@@ -642,6 +643,9 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     box.appendChild(el);
   });
 
+  // 한 추천에서는 조치 하나만 실행한다 - 이미 승인된 게 있으면 나머지를 잠근다.
+  if (decisions.some((d) => d.decision === "approve")) lockOtherRunbooks();
+
   if (decisions.length) {
     const last = decisions[decisions.length - 1];
     showExecResult(last.script_id, last.result || {}, 200);
@@ -649,6 +653,32 @@ function renderRecommendation(errorCode, rec, decisions = []) {
   setClientStatus(decisions.some(
     (d) => d.decision === "approve" && d.result?.status === "success"
   ) ? "조치 완료" : "분석 완료");
+}
+
+const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 없습니다.";
+
+function setDecisionButtonsDisabled(el, disabled) {
+  el.querySelectorAll(".approve, .reject").forEach((b) => {
+    b.disabled = disabled;
+  });
+}
+
+// 아직 처리되지 않은 나머지 Runbook의 승인/거부를 막는다 (진단 요청은 허용).
+function lockOtherRunbooks(exceptEl = null) {
+  document.querySelectorAll("#actions .runbook").forEach((el) => {
+    if (el === exceptEl || el.classList.contains("decided")) return;
+    el.classList.add("locked");
+    setDecisionButtonsDisabled(el, true);
+    el.querySelector(".decision").textContent = OTHER_ACTION_LOCKED;
+  });
+}
+
+function unlockOtherRunbooks() {
+  document.querySelectorAll("#actions .runbook.locked").forEach((el) => {
+    el.classList.remove("locked");
+    setDecisionButtonsDisabled(el, false);
+    el.querySelector(".decision").textContent = "";
+  });
 }
 
 function markDecided(el, decision) {
@@ -809,6 +839,8 @@ async function decideRunbook(scriptId, action, el, decision) {
     return;
   }
   setRunbookButtonsDisabled(el, true);
+  // 응답을 기다리는 동안 다른 조치를 누르지 못하게 먼저 잠근다.
+  if (decision === "approve") lockOtherRunbooks(el);
 
   const endpoint = decision === "approve"
     ? "/api/v1/remediations/approve"
@@ -829,6 +861,26 @@ async function decideRunbook(scriptId, action, el, decision) {
       approved_by: "web-ui",
     });
     showExecResult(scriptId, data, status);
+    if (data.status === "blocked" && data.approved_action_id) {
+      // 다른 화면/사용자가 먼저 다른 조치를 승인한 경우
+      const approvedEl = document.querySelector(
+        `#actions .runbook[data-action-id="${data.approved_action_id}"]`
+      );
+      if (approvedEl) markDecided(approvedEl, "approve");
+      el.classList.add("locked");
+      setRunbookButtonsDisabled(el, false);
+      setDecisionButtonsDisabled(el, true);
+      el.querySelector(".decision").textContent =
+        `${OTHER_ACTION_LOCKED} (실행된 조치: ${data.approved_script_id})`;
+      lockOtherRunbooks(el);
+      return;
+    }
+    if (decision === "approve" && !data.execution_id) {
+      // 검증 실패 등으로 스크립트가 실행되지 않았으면 잠금을 푼다.
+      setRunbookButtonsDisabled(el, false);
+      unlockOtherRunbooks();
+      return;
+    }
     markDecided(el, decision);
     if (decision === "approve" && data.status === "success") {
       setClientStatus("조치 완료");
@@ -838,6 +890,7 @@ async function decideRunbook(scriptId, action, el, decision) {
     $("exec-status").className = "status-err";
     $("exec-status").textContent = "요청 실패: " + e;
     setRunbookButtonsDisabled(el, false);
+    if (decision === "approve") unlockOtherRunbooks();
   }
 }
 
