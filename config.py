@@ -400,11 +400,12 @@ QDRANT_COLLECTION = os.getenv(
 )
 
 EMBEDDING_MODEL_NAME = os.getenv(
-    "EMBEDDING_MODEL_NAME", "BAAI/bge-m3"
+    "EMBEDDING_MODEL_NAME",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 )
-# "BAAI/bge-m3" 모델의 임베딩 차원 수
+# paraphrase-multilingual-MiniLM-L12-v2 모델의 임베딩 차원 수
 EMBEDDING_VECTOR_SIZE = int(
-    os.getenv("EMBEDDING_VECTOR_SIZE", "1024")
+    os.getenv("EMBEDDING_VECTOR_SIZE", "384")
 )
 
 

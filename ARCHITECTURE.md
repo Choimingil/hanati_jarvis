@@ -120,7 +120,7 @@ AIOps 대응 루프다. 자세한 서비스 관점 설명과 실제 테스트 �
 
 | 파일 | 역할 |
 |---|---|
-| `qdrant/client.py` | `get_client()` (Qdrant 클라이언트), `get_embedding_model()` (`BAAI/bge-m3` `SentenceTransformer`), `encode()` — 둘 다 `lru_cache`로 lazy singleton. `QdrantCaseSearcher`와 `seed.py`가 공용으로 사용. |
+| `qdrant/client.py` | `get_client()` (Qdrant 클라이언트), `get_embedding_model()` (`paraphrase-multilingual-MiniLM-L12-v2` `SentenceTransformer`), `encode()` — 둘 다 `lru_cache`로 lazy singleton. `QdrantCaseSearcher`와 `seed.py`가 공용으로 사용. |
 | `qdrant/seed.py` | `incident_cases.py`의 `INCIDENT_CASES`를 임베딩해 `incident_cases` 컬렉션에 업로드하는 시딩 스크립트. `python -m qdrant.seed`로 실행. |
 | `qdrant/qdrant_data/` | 로컬 파일 기반 Qdrant 저장소(자동 생성, git에는 커밋되지 않음). |
 

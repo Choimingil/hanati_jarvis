@@ -58,22 +58,25 @@ services:
       start_period: 10s
 
   qdrant-init:
-    image: python:3.11-slim
+    image: hanati-qdrant-init:local
+    build:
+      context: .
+      dockerfile: qdrant/Dockerfile
     container_name: hanati-qdrant-init
     working_dir: /workspace
     volumes:
       - .:/workspace
+      - embedding-cache:/models
     environment:
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION=incident_cases
-      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
-      - EMBEDDING_VECTOR_SIZE=1024
+      - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - EMBEDDING_VECTOR_SIZE=384
+      - HF_HOME=/models
     depends_on:
       qdrant:
         condition: service_healthy
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/qdrant/requirements.txt && \
-      python -m qdrant.seed"
+    command: ["python", "-m", "qdrant.seed"]
     restart: "no"
 
   log-generator:
@@ -154,6 +157,7 @@ services:
     volumes:
       - .:/workspace
       - log-volume:/workspace/fluentbit
+      - embedding-cache:/models
     environment:
       - PYTHONPATH=/workspace
       - API_HOST=0.0.0.0
@@ -164,8 +168,9 @@ services:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - QDRANT_URL=http://qdrant:6333
       - QDRANT_COLLECTION=incident_cases
-      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
-      - EMBEDDING_VECTOR_SIZE=1024
+      - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - EMBEDDING_VECTOR_SIZE=384
+      - HF_HOME=/models
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
@@ -176,6 +181,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      qdrant-init:
+        condition: service_completed_successfully
       llm-agent:
         condition: service_started
     ports:
@@ -187,3 +194,4 @@ volumes:
   elastic-data:
   qdrant-data:
   log-volume:
+  embedding-cache:
