@@ -152,6 +152,7 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
+      - log-volume:/workspace/fluentbit
     environment:
       - PYTHONPATH=/workspace
       - API_HOST=0.0.0.0
