@@ -20,9 +20,9 @@ from config import (
     ELASTIC_INCIDENT_INDEX,
     ELASTIC_LOG_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
-    ELASTIC_REMEDIATION_INDEX,
     QDRANT_COLLECTION,
 )
+from dependencies import repository
 from elastic.client import get_client
 from utils.time_utils import now_iso
 
@@ -179,25 +179,11 @@ def _safe_decisions(recommendation_id: str | None) -> list[dict]:
     """
     if not recommendation_id:
         return []
-    try:
-        response = get_client().search(
-            index=ELASTIC_REMEDIATION_INDEX,
-            query={"match_phrase": {
-                "recommendation_id": recommendation_id
-            }},
-            sort=[{"approved_at": "asc"}],
-            size=20,
-            ignore_unavailable=True,
-        )
-    except Exception:
-        return []
 
     decisions = []
-    for hit in response["hits"]["hits"]:
-        doc = hit["_source"]
-        # match_phrase는 토큰 단위라 정확히 같은 id만 남긴다.
-        if doc.get("recommendation_id") != recommendation_id:
-            continue
+    for doc in repository.find_remediation_executions(
+        recommendation_id
+    ):
         result = doc.get("result") or {}
         decisions.append({
             "action_id": doc.get("action_id"),

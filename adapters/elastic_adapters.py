@@ -246,6 +246,31 @@ class ElasticLogRepository(LogRepository):
             return None
         return response.get("_source")
 
+    def find_remediation_executions(
+        self, recommendation_id: str
+    ) -> list[dict[str, Any]]:
+        """한 추천에 대해 내려진 승인/거부 이력을 오래된 순으로 반환한다."""
+        try:
+            response = self.client.search(
+                index=ELASTIC_REMEDIATION_INDEX,
+                query={"match_phrase": {
+                    "recommendation_id": recommendation_id
+                }},
+                sort=[{"approved_at": "asc"}],
+                size=50,
+                ignore_unavailable=True,
+            )
+        except Exception:
+            return []
+        # recommendation_id가 text 필드라 토큰 단위로 매칭되므로
+        # 정확히 같은 id만 남긴다.
+        return [
+            hit["_source"]
+            for hit in response["hits"]["hits"]
+            if hit["_source"].get("recommendation_id")
+            == recommendation_id
+        ]
+
     def save_remediation_execution(
         self, document: dict[str, Any]
     ) -> None:

@@ -3,8 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches: ["master"]
-    paths-ignore:
-      - ".github/workflows/aws.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -22,10 +21,20 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
+
             cd /opt/jarvis
 
-            git pull origin master
+            git -c safe.directory=/opt/jarvis fetch origin master
+            git -c safe.directory=/opt/jarvis checkout -B master origin/master
+            git -c safe.directory=/opt/jarvis reset --hard origin/master
 
-            docker compose up -d --build
+            echo "Deployed commit:"
+            git -c safe.directory=/opt/jarvis log -1 --oneline
 
-            docker compose ps
+            docker compose up -d --build --no-deps --force-recreate aiops
+
+            docker compose ps aiops
+
+            echo "Health check:"
+            curl -fsS http://127.0.0.1:8080/health
