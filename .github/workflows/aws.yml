@@ -24,6 +24,8 @@ jobs:
           script: |
             set -e
 
+            git config --global --add safe.directory /opt/jarvis
+
             cd /opt/jarvis
 
             git fetch origin master
@@ -36,10 +38,6 @@ jobs:
             docker compose up -d --build --no-deps --force-recreate aiops
 
             docker compose ps aiops
-
-            echo "Container source check:"
-            docker compose exec -T aiops sh -c \
-              "grep -n '변경한 문구' /workspace/routes/web_routes.py || true"
 
             echo "Health check:"
             curl -fsS http://127.0.0.1:8080/health
