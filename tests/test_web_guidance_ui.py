@@ -39,6 +39,7 @@ class GuidanceWebTest(unittest.TestCase):
         self.assertIn('data-verdict="confirmed"', html)
         self.assertIn('id="feedback-root-cause"', html)
         self.assertIn("renderResourceGuidance", html)
+        self.assertIn("for (let i = 0; i < 80; i++)", html)
 
     def test_polling_endpoint_returns_resource_guidance(self):
         with patch(
@@ -57,6 +58,26 @@ class GuidanceWebTest(unittest.TestCase):
         self.assertEqual(
             data["recommendation"]["status"], "resource_guidance"
         )
+
+    def test_activity_returns_service_status_messages(self):
+        responses = [
+            {"input": {"records": 3}},
+            {"result": {"points_count": 4}},
+            {"status": "green"},
+        ]
+        with patch(
+            "routes.log_generator_routes._http_json",
+            side_effect=responses,
+        ):
+            response = self.client.get(
+                "/api/v1/log-generator/activity"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("Fluent Bit metrics", data["fluentbit_log"][0])
+        self.assertIn("points_count", data["qdrant_log"][0])
+        self.assertIn("green", data["elasticsearch_log"][0])
 
 
 if __name__ == "__main__":

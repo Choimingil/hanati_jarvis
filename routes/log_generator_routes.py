@@ -7,20 +7,17 @@
 두 엔드포인트로 구성된다.
 """
 
-import subprocess
+import json
 import sys
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from flask import Blueprint, jsonify, request
 
 from config import ELASTIC_INCIDENT_INDEX, ELASTIC_RECOMMENDATION_INDEX
 from elastic.client import get_client
 from utils.time_utils import now_iso
-
-# scripts/dev_infra.sh가 띄우는 컨테이너 이름과 일치해야 한다.
-FLUENTBIT_CONTAINER = "hanati-fluentbit"
-ES_CONTAINER = "hanati-es"
-QDRANT_CONTAINER = "hanati-qdrant"
 
 LOG_GENERATOR_DIR = (
     Path(__file__).resolve().parent.parent / "log_generator"
@@ -179,60 +176,42 @@ def recent_incidents():
     })
 
 
-def _container_tail(
-    container: str, since: str | None = None, lines: int = 60
-) -> list[str]:
-    cmd = ["docker", "logs"]
-    # since가 있으면(=이번 트리거 이후) 그 시점부터만, 없으면 기존처럼
-    # 마지막 N줄 (과거 실행분이 섞여 보이는 걸 막기 위한 기본 스코프)
-    if since:
-        cmd += ["--since", since]
-    else:
-        cmd += ["--tail", str(lines)]
-    cmd.append(container)
-
+def _http_json(url: str) -> dict:
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (
-        FileNotFoundError,
-        subprocess.TimeoutExpired,
-    ):
-        return []
+        with urlopen(url, timeout=2) as response:
+            return json.load(response)
+    except (OSError, URLError, ValueError) as exc:
+        return {"error": str(exc)}
 
-    output = result.stdout + result.stderr
-    return [
-        line
-        for line in output.splitlines()
-        if line.strip()
-        # docker CLI/데몬 자체의 전송 계층 오류(예: 컨테이너 json 로그
-        # 파일 손상)는 컨테이너가 실제로 찍은 로그가 아니다 - 그대로
-        # 보여주면 컨테이너 내부 에러처럼 오해하게 된다.
-        and not line.lstrip().startswith((
-            "error from daemon",
-            "Error response from daemon",
-        ))
-    ]
+
+def _service_activity() -> dict[str, list[str]]:
+    fluent = _http_json(
+        "http://fluent-bit:2020/api/v1/metrics"
+    )
+    qdrant = _http_json(
+        "http://qdrant:6333/collections/incident_cases"
+    )
+    elastic = _http_json(
+        "http://elasticsearch:9200/_cluster/health"
+    )
+    return {
+        "fluentbit_log": [
+            "Fluent Bit metrics: "
+            + json.dumps(fluent, ensure_ascii=False)
+        ],
+        "qdrant_log": [
+            "Qdrant incident_cases: "
+            + json.dumps(qdrant, ensure_ascii=False)
+        ],
+        "elasticsearch_log": [
+            "Elasticsearch cluster: "
+            + json.dumps(elastic, ensure_ascii=False)
+        ],
+    }
 
 
 @log_generator_blueprint.get(
     "/api/v1/log-generator/activity"
 )
 def activity():
-    since = request.args.get("since")
-
-    return jsonify({
-        "fluentbit_log": _container_tail(
-            FLUENTBIT_CONTAINER, since
-        ),
-        "qdrant_log": _container_tail(
-            QDRANT_CONTAINER, since
-        ),
-        "elasticsearch_log": _container_tail(
-            ES_CONTAINER, since
-        ),
-    })
+    return jsonify(_service_activity())

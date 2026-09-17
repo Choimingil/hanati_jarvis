@@ -248,8 +248,8 @@ _PAGE = """<!doctype html>
 
   <div id="fluentbit-panel" class="card hidden logs-section">
     <div class="card-head">
-      <div><strong>fluent-bit 컨테이너 로그</strong>
-        <span class="muted">(docker logs hanati-fluentbit, 이번 실행 이후분)</span></div>
+      <div><strong>Fluent Bit 수집 상태</strong>
+        <span class="muted">(수집·전송 메트릭)</span></div>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
@@ -259,8 +259,8 @@ _PAGE = """<!doctype html>
 
   <div id="internal-panel" class="card hidden logs-section">
     <div class="card-head">
-      <div><strong>Qdrant / Elasticsearch 컨테이너 로그</strong>
-        <span class="muted">(docker logs, 이번 실행 이후분)</span></div>
+      <div><strong>Qdrant / Elasticsearch 상태</strong>
+        <span class="muted">(서비스 상태·인덱스 정보)</span></div>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
@@ -501,7 +501,7 @@ async function waitForRecommendation(errorCode, since) {
   $("wait-status").textContent =
     "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
 
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 80; i++) {
     await sleep(1500);
     await pollActivity();
     const data = await getJSON(
