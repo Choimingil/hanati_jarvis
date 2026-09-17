@@ -266,7 +266,12 @@ def _es_since(
     response = get_client().search(
         index=index,
         query={"range": {time_field: {"gte": since or "now-5m"}}},
-        sort=[{time_field: "desc"}],
+        sort=[{
+            time_field: {
+                "order": "desc",
+                "unmapped_type": "date",
+            }
+        }],
         size=size,
         ignore_unavailable=True,
     )

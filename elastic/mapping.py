@@ -11,6 +11,14 @@ es = get_client()
 def create_log_index():
 
     if es.indices.exists(index=INDEX_NAME):
+        es.indices.put_mapping(
+            index=INDEX_NAME,
+            body={
+                "properties": {
+                    "received_at": {"type": "date"}
+                }
+            },
+        )
         print(f"{INDEX_NAME} already exists")
         return
 
@@ -22,6 +30,10 @@ def create_log_index():
             "properties": {
 
                 "timestamp": {
+                    "type": "date"
+                },
+
+                "received_at": {
                     "type": "date"
                 },
 

@@ -3,12 +3,16 @@ from unittest.mock import patch
 
 from flask import Flask
 
-from routes.log_generator_routes import log_generator_blueprint
+from routes.log_generator_routes import _es_since, log_generator_blueprint
 from routes.web_routes import web_blueprint
 
 
 class _ElasticClient:
+    def __init__(self):
+        self.last_search = None
+
     def search(self, **kwargs):
+        self.last_search = kwargs
         return {
             "hits": {"hits": [{"_source": {
                 "timestamp": "2026-08-07T12:00:01+09:00",
@@ -57,6 +61,22 @@ class GuidanceWebTest(unittest.TestCase):
         self.assertEqual(data["status"], "ready")
         self.assertEqual(
             data["recommendation"]["status"], "resource_guidance"
+        )
+
+    def test_es_since_allows_unmapped_date_sort(self):
+        client = _ElasticClient()
+        with patch(
+            "routes.log_generator_routes.get_client",
+            return_value=client,
+        ):
+            _es_since("application-logs", "received_at", None)
+
+        self.assertEqual(
+            client.last_search["sort"],
+            [{"received_at": {
+                "order": "desc",
+                "unmapped_type": "date",
+            }}],
         )
 
 if __name__ == "__main__":
