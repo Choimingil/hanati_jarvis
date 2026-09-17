@@ -35,6 +35,30 @@ from scenario.ssl_certificate_expired_scenario import (
 from scenario.thread_pool_exhausted_scenario import (
     ThreadPoolExhaustedScenario,
 )
+from scenario.database_deadlock_scenario import (
+    DatabaseDeadlockScenario,
+)
+from scenario.connection_pool_exhausted_scenario import (
+    ConnectionPoolExhaustedScenario,
+)
+from scenario.database_replication_lag_scenario import (
+    DatabaseReplicationLagScenario,
+)
+from scenario.file_descriptor_exhausted_scenario import (
+    FileDescriptorExhaustedScenario,
+)
+from scenario.upstream_gateway_timeout_scenario import (
+    UpstreamGatewayTimeoutScenario,
+)
+from scenario.payment_gateway_failure_scenario import (
+    PaymentGatewayFailureScenario,
+)
+from scenario.clock_skew_detected_scenario import (
+    ClockSkewDetectedScenario,
+)
+from scenario.pod_crashloop_backoff_scenario import (
+    PodCrashLoopBackOffScenario,
+)
 
 
 SCENARIO_REGISTRY = {
@@ -97,5 +121,45 @@ SCENARIO_REGISTRY = {
         ContainerOOMKilledScenario,
         "컨테이너 OOM Kill (CONTAINER_OOM_KILLED)",
         "CONTAINER_OOM_KILLED",
+    ),
+    "db_deadlock": (
+        DatabaseDeadlockScenario,
+        "DB 데드락 (DB_DEADLOCK)",
+        "DB_DEADLOCK",
+    ),
+    "connection_pool_exhausted": (
+        ConnectionPoolExhaustedScenario,
+        "DB 커넥션 풀 고갈 (CONNECTION_POOL_EXHAUSTED)",
+        "CONNECTION_POOL_EXHAUSTED",
+    ),
+    "db_replication_lag": (
+        DatabaseReplicationLagScenario,
+        "DB 복제 지연 (DB_REPLICATION_LAG)",
+        "DB_REPLICATION_LAG",
+    ),
+    "file_descriptor_exhausted": (
+        FileDescriptorExhaustedScenario,
+        "파일 디스크립터 고갈 (FILE_DESCRIPTOR_EXHAUSTED)",
+        "FILE_DESCRIPTOR_EXHAUSTED",
+    ),
+    "upstream_gateway_timeout": (
+        UpstreamGatewayTimeoutScenario,
+        "업스트림 게이트웨이 타임아웃 (UPSTREAM_GATEWAY_TIMEOUT)",
+        "UPSTREAM_GATEWAY_TIMEOUT",
+    ),
+    "payment_gateway_failure": (
+        PaymentGatewayFailureScenario,
+        "결제 게이트웨이 장애 (PAYMENT_GATEWAY_FAILURE)",
+        "PAYMENT_GATEWAY_FAILURE",
+    ),
+    "clock_skew_detected": (
+        ClockSkewDetectedScenario,
+        "시각 동기 이탈 (CLOCK_SKEW_DETECTED)",
+        "CLOCK_SKEW_DETECTED",
+    ),
+    "pod_crashloop_backoff": (
+        PodCrashLoopBackOffScenario,
+        "컨테이너 재시작 루프 (POD_CRASHLOOP_BACKOFF)",
+        "POD_CRASHLOOP_BACKOFF",
     ),
 }
