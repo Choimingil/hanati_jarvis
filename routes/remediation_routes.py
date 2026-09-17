@@ -1,4 +1,5 @@
 import hashlib
+import threading
 from datetime import UTC, datetime
 
 from flask import Blueprint, jsonify, request
@@ -21,6 +22,21 @@ remediation_blueprint = Blueprint(
     "remediation",
     __name__,
 )
+
+# 한 추천의 조치 제안 중 하나만 실행되도록, 실행 중인 추천 id를 잡아둔다
+# (저장 이력만 보면 동시에 들어온 두 승인 요청을 둘 다 통과시킬 수 있다).
+_approving_recommendations: set[str] = set()
+_approving_lock = threading.Lock()
+
+
+def _approved_execution(recommendation_id: str) -> dict | None:
+    """이 추천에서 이미 승인(실행)된 조치가 있으면 그 이력을 반환한다."""
+    for execution in repository.find_remediation_executions(
+        recommendation_id
+    ):
+        if (execution.get("result") or {}).get("status") != "rejected":
+            return execution
+    return None
 
 
 def _execution_id(body: dict, decision: str) -> str:
@@ -173,7 +189,34 @@ def approve_remediation():
     if error is not None:
         return jsonify(error[0]), error[1]
     execution_id = _execution_id(body, "approve")
+    recommendation_id = body["recommendation_id"]
 
+    with _approving_lock:
+        if recommendation_id in _approving_recommendations:
+            return jsonify({
+                "status": "blocked",
+                "reason": "another action is running "
+                          "for this recommendation",
+            }), 409
+        approved = _approved_execution(recommendation_id)
+        if approved is not None:
+            return jsonify({
+                "status": "blocked",
+                "reason": "another action was already approved "
+                          "for this recommendation",
+                "approved_action_id": approved.get("action_id"),
+                "approved_script_id": approved.get("script_id"),
+            }), 409
+        _approving_recommendations.add(recommendation_id)
+
+    try:
+        return _run_approved_action(body, context, execution_id)
+    finally:
+        with _approving_lock:
+            _approving_recommendations.discard(recommendation_id)
+
+
+def _run_approved_action(body, context, execution_id):
     incident = operational_incident_service.transition(
         context["incident"],
         "REMEDIATING",
