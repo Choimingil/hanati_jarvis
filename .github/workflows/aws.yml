@@ -3,8 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches: ["master"]
-    paths-ignore:
-      - ".github/workflows/aws.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -24,16 +23,14 @@ jobs:
           script: |
             set -e
 
-            git config --global --add safe.directory /opt/jarvis
-
             cd /opt/jarvis
 
-            git fetch origin master
-            git checkout -B master origin/master
-            git reset --hard origin/master
+            git -c safe.directory=/opt/jarvis fetch origin master
+            git -c safe.directory=/opt/jarvis checkout -B master origin/master
+            git -c safe.directory=/opt/jarvis reset --hard origin/master
 
             echo "Deployed commit:"
-            git log -1 --oneline
+            git -c safe.directory=/opt/jarvis log -1 --oneline
 
             docker compose up -d --build --no-deps --force-recreate aiops
 
