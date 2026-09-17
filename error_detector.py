@@ -54,6 +54,38 @@ ERROR_PATTERNS = {
         r"Container killed by OOM killer",
         re.IGNORECASE,
     ),
+    "DB_DEADLOCK": re.compile(
+        r"Deadlock detected while updating order rows",
+        re.IGNORECASE,
+    ),
+    "CONNECTION_POOL_EXHAUSTED": re.compile(
+        r"Connection pool exhausted, cannot acquire connection",
+        re.IGNORECASE,
+    ),
+    "DB_REPLICATION_LAG": re.compile(
+        r"Read replica replication lag exceeded threshold",
+        re.IGNORECASE,
+    ),
+    "FILE_DESCRIPTOR_EXHAUSTED": re.compile(
+        r"Too many open files",
+        re.IGNORECASE,
+    ),
+    "UPSTREAM_GATEWAY_TIMEOUT": re.compile(
+        r"HTTP 504 gateway timeout from upstream",
+        re.IGNORECASE,
+    ),
+    "PAYMENT_GATEWAY_FAILURE": re.compile(
+        r"Payment authorization failed at gateway",
+        re.IGNORECASE,
+    ),
+    "CLOCK_SKEW_DETECTED": re.compile(
+        r"Clock skew detected against NTP server",
+        re.IGNORECASE,
+    ),
+    "POD_CRASHLOOP_BACKOFF": re.compile(
+        r"Pod entered CrashLoopBackOff state",
+        re.IGNORECASE,
+    ),
 }
 
 
