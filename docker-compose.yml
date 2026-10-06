@@ -383,6 +383,7 @@ services:
     working_dir: /workspace
     volumes:
     - .:/workspace:ro
+    - log-volume:/workspace/fluentbit
     - /var/run/docker.sock:/var/run/docker.sock:ro
     command: [python, -m, operations.deployment_check]
     mem_limit: 128m

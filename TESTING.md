@@ -14,3 +14,13 @@ docker compose run --rm --no-deps aiops sh -c 'pip install "fakeredis[lua]" && p
 
 - `tests/test_business_operations.py`: 업무 우선순위, 반복 장애의 분석 재사용과 승인 버전 유지, 영향 상승·새 호스트·재발, 기동 검사 OOM, 읽기 전용 업무 지표의 신선도·거래 표본·잘못된 업무·리다이렉트 차단
 - 실제 서버의 짧은 기동/부하 명령은 OPERATIONS.md 참고. 결과를 측정하기 전에는 처리량이나 기동 성공을 보장하지 않습니다.
+
+실제 구성 요소 전달 경로 검사(기존 이미지 사용):
+
+```sh
+docker compose --profile verification run --rm deployment-check python -m operations.integration_check --wait-seconds 20
+```
+
+검사 범위: API→Redis→Worker→Elasticsearch, 공유 로그→Fluent Bit→API→Worker→Elasticsearch, Qdrant 컬렉션·384차원 저장 벡터·필터 검색, 최근 메트릭 접수, LLM Agent health. INFO 표식 두 건을 남기며 오류 분석·조치·업무 거래는 실행하지 않습니다. Fluent Bit의 파일 발견을 기다린 뒤 표식을 쓰고 경로별 제한 시간 내 도착을 확인합니다. 검사 컨테이너에 기존 로그 volume을 연결합니다. 기본 Fluent Bit 설정은 로그를 stdout에도 출력합니다.
+
+이 검사는 모델 임베딩 추론이나 외부 LLM 생성의 정상 여부까지 보장하지 않습니다. Qdrant 검색은 이미 저장된 실제 벡터를 재사용합니다. 실제 Docker 실행 환경에서 위 명령을 수행해야 연동을 검증했다고 말할 수 있습니다. 초기화·수집 모듈이 공통 config를 import하므로 elastic/collector/qdrant 각 requirements에 python-dotenv를 명시합니다.
