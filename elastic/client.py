@@ -1,3 +1,4 @@
+from functools import lru_cache
 from elasticsearch import Elasticsearch
 
 from config import (
@@ -8,6 +9,7 @@ from config import (
 )
 
 
+@lru_cache(maxsize=1)
 def get_client():
     return Elasticsearch(
         ELASTICSEARCH_URL,

@@ -66,8 +66,6 @@ ERROR_RULES = {
             "update_jdbc_driver",
             "modify_sqlnet",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "DISK_FULL": {
         "diagnostic_scripts": [
@@ -78,8 +76,6 @@ ERROR_RULES = {
             "compress_old_logs",
             "cleanup_temp_files",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "DNS_RESOLUTION_FAILURE": {
         "diagnostic_scripts": [
@@ -89,8 +85,6 @@ ERROR_RULES = {
             "flush_dns_cache",
             "restart_dns_resolver",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "DB_CONNECTION_FAILURE": {
         "diagnostic_scripts": [
@@ -100,8 +94,6 @@ ERROR_RULES = {
             "restart_db_connection_pool",
             "failover_database",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "EXTERNAL_API_FAILURE": {
         "diagnostic_scripts": [
@@ -111,8 +103,6 @@ ERROR_RULES = {
             "enable_circuit_breaker",
             "switch_api_endpoint",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "MEMORY_LEAK": {
         "diagnostic_scripts": [
@@ -122,8 +112,6 @@ ERROR_RULES = {
             "restart_application",
             "increase_heap_size",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "REDIS_CONNECTION_FAILURE": {
         "diagnostic_scripts": [
@@ -133,8 +121,6 @@ ERROR_RULES = {
             "restart_redis",
             "clear_redis_cache",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "MESSAGE_QUEUE_CONNECTION_LOST": {
         "diagnostic_scripts": [
@@ -144,8 +130,6 @@ ERROR_RULES = {
             "restart_kafka_consumer",
             "failover_message_broker",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "SSL_CERTIFICATE_EXPIRED": {
         "diagnostic_scripts": [
@@ -155,8 +139,6 @@ ERROR_RULES = {
             "renew_ssl_certificate",
             "reload_tls_config",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "THREAD_POOL_EXHAUSTED": {
         "diagnostic_scripts": [
@@ -166,8 +148,6 @@ ERROR_RULES = {
             "increase_thread_pool_size",
             "restart_application",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "RATE_LIMIT_EXCEEDED": {
         # 대응 스크립트 없음 - 감지되면 runbook 추천 대신
@@ -176,8 +156,6 @@ ERROR_RULES = {
         # "no_remediation_candidates").
         "diagnostic_scripts": [],
         "remediation_candidates": [],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "AUTH_TOKEN_VALIDATION_FAILURE": {
         "diagnostic_scripts": [
@@ -187,8 +165,6 @@ ERROR_RULES = {
             "rotate_signing_key",
             "restart_auth_service",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "CONTAINER_OOM_KILLED": {
         "diagnostic_scripts": [
@@ -198,8 +174,6 @@ ERROR_RULES = {
             "increase_memory_limit",
             "restart_application",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "DB_DEADLOCK": {
         "diagnostic_scripts": [
@@ -209,8 +183,6 @@ ERROR_RULES = {
             "kill_blocking_session",
             "retry_failed_transactions",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "CONNECTION_POOL_EXHAUSTED": {
         "diagnostic_scripts": [
@@ -220,8 +192,6 @@ ERROR_RULES = {
             "increase_connection_pool_size",
             "restart_db_connection_pool",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "DB_REPLICATION_LAG": {
         "diagnostic_scripts": [
@@ -231,8 +201,6 @@ ERROR_RULES = {
             "route_reads_to_primary",
             "restart_replication",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "FILE_DESCRIPTOR_EXHAUSTED": {
         "diagnostic_scripts": [
@@ -242,8 +210,6 @@ ERROR_RULES = {
             "increase_fd_limit",
             "restart_application",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "UPSTREAM_GATEWAY_TIMEOUT": {
         "diagnostic_scripts": [
@@ -253,8 +219,6 @@ ERROR_RULES = {
             "drain_unhealthy_upstream",
             "increase_proxy_timeout",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "PAYMENT_GATEWAY_FAILURE": {
         "diagnostic_scripts": [
@@ -264,8 +228,6 @@ ERROR_RULES = {
             "switch_payment_provider",
             "enable_payment_retry_queue",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "CLOCK_SKEW_DETECTED": {
         "diagnostic_scripts": [
@@ -275,8 +237,6 @@ ERROR_RULES = {
             "resync_ntp_time",
             "restart_time_service",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
     "POD_CRASHLOOP_BACKOFF": {
         "diagnostic_scripts": [
@@ -286,8 +246,6 @@ ERROR_RULES = {
             "rollback_deployment",
             "increase_pod_resources",
         ],
-        "auto_diagnose": True,
-        "auto_remediate": False,
     },
 }
 
@@ -359,7 +317,6 @@ SCRIPT_DESCRIPTIONS = {
 }
 
 
-# ERROR_RULES에 등장하는 모든 스크립트 id를 실제 파일 경로로 매핑.
 # 실행 명령 allowlist는 대상 Agent의 manifest에서 관리한다.
 
 # "qdrant" / "elastic" / "hybrid" (기본값) 중 선택. mock 없음 - Qdrant/
@@ -391,15 +348,13 @@ EMBEDDING_VECTOR_SIZE = int(
 
 
 # LLMRecommendationGenerator. LLM(OpenAI 호환)에게 오류 원인과 추천
-# 스크립트 랭킹을 물어본다. OPENAI_API_KEY가 없으면 llm_agent 쪽
+# 스크립트 랭킹을 물어본다. OPENAI_API_KEY가 없으면 분석 Worker에서
 # 결정론적 fallback 랭킹으로 동작한다 - 이건 mock이 아니라 LLM 자체의
 # 내부 fallback이라 그대로 둔다.
-RECOMMENDATION_BACKEND = "llm"
 
 
 # repository는 항상 ElasticLogRepository. mock 없음 - Elasticsearch가
 # 꺼져 있으면 로그/진단/추천 저장 요청이 그대로 실패한다.
-LOG_REPOSITORY_BACKEND = "elastic"
 
 # Docker Compose Elasticsearch 서비스는 개발용으로
 # xpack.security.enabled=false, 즉 http/무인증이라 기본값도 맞춰둔다.

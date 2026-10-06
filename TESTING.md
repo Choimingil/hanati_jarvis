@@ -21,6 +21,9 @@ docker compose run --rm --no-deps aiops sh -c 'pip install "fakeredis[lua]" && p
 docker compose --profile verification run --rm deployment-check python -m operations.integration_check --wait-seconds 20
 ```
 
-검사 범위: API→Redis→Worker→Elasticsearch, 공유 로그→Fluent Bit→API→Worker→Elasticsearch, Qdrant 컬렉션·384차원 저장 벡터·필터 검색, 최근 메트릭 접수, LLM Agent health. INFO 표식 두 건을 남기며 오류 분석·조치·업무 거래는 실행하지 않습니다. Fluent Bit의 파일 발견을 기다린 뒤 표식을 쓰고 경로별 제한 시간 내 도착을 확인합니다. 검사 컨테이너에 기존 로그 volume을 연결합니다. 기본 Fluent Bit 설정은 로그를 stdout에도 출력합니다.
+검사 범위: API→Redis→Worker→Elasticsearch, 공유 로그→Fluent Bit→API→Worker→Elasticsearch, Qdrant 컬렉션·384차원 저장 벡터·필터 검색, 최근 메트릭 접수. INFO 표식 두 건을 남기며 오류 분석·조치·업무 거래는 실행하지 않습니다. Fluent Bit의 파일 발견을 기다린 뒤 표식을 쓰고 경로별 제한 시간 내 도착을 확인합니다. 검사 컨테이너에 기존 로그 volume을 연결합니다. 기본 Fluent Bit 설정은 로그를 stdout에도 출력합니다.
 
 이 검사는 모델 임베딩 추론이나 외부 LLM 생성의 정상 여부까지 보장하지 않습니다. Qdrant 검색은 이미 저장된 실제 벡터를 재사용합니다. 실제 Docker 실행 환경에서 위 명령을 수행해야 연동을 검증했다고 말할 수 있습니다. 초기화·수집 모듈이 공통 config를 import하므로 elastic/collector/qdrant 각 requirements에 python-dotenv를 명시합니다.
+
+
+정리·최적화 검사는 `tests/test_cleanup_optimizations.py`에 추가했습니다. 기존 데이터 보존, 검색원 장애 격리, ES 연결 실패 전파, 큐 분리와 backoff, 아카이빙 저장 실패 시 원본 보존, 원자 갱신의 중복 GET 제거를 확인합니다. Admin·Client DOM 초기화, 사건 선택과 출력 이스케이프는 jsdom에서 모의 API 응답으로 확인했습니다. 실제 배포 브라우저·Docker 연동·외부 LLM 생성은 이 검사로 보장하지 않습니다.

@@ -4,8 +4,6 @@ from config import (
     API_HOST,
     API_PORT,
 )
-# NOTE: mock 백엔드 없음. LOG_REPOSITORY_BACKEND="elastic",
-# RECOMMENDATION_BACKEND="llm" 고정값 (config.py 참고).
 from routes.log_generator_routes import (
     log_generator_blueprint,
 )
@@ -17,7 +15,7 @@ from routes.remediation_routes import (
 )
 from routes.web_routes import web_blueprint
 from routes.operations_routes import operations_blueprint
-from operations.health import service_status
+from operations.health import cached_service_status as service_status
 from operations.privacy import redact
 
 

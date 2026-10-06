@@ -375,14 +375,25 @@ function actionBody(action, el) {
     preflight_id: el.preflightId || null,
   };
 }
+function schedulePoll(callback, interval) {
+  let delay=interval;
+  async function tick() {
+    if (!document.hidden) {
+      try { const ok=await callback(); delay=ok===false ? Math.min(60000,delay*2) : interval; }
+      catch (_) { delay=Math.min(60000,delay*2); }
+    }
+    setTimeout(tick,delay);
+  }
+  tick();
+}
 async function loadOperationsStatus() {
   try {
     const data = await getJSON("/api/v1/operations/status");
     $("operations-status").textContent = `${data.status} / 확인 시각: ${data.checked_at} / 대기 ${data.queue?.stream_length || 0}건 / 실패 보관 ${data.queue?.dead_letters || 0}건`;
     $("collection-hosts").textContent = (data.hosts || []).map(h => `${h.host}: ${h.status} (마지막 수집 ${h.last_sample_at || "없음"})${h.connections_access_denied ? " / 연결 조회 권한 부족" : ""}`).join(" · ");
-  } catch (error) { $("operations-status").textContent = "상태 조회 실패 — 현재 표시된 데이터가 최신인지 확인하세요."; }
+  } catch (error) { $("operations-status").textContent = "상태 조회 실패 — 현재 표시된 데이터가 최신인지 확인하세요."; return false; }
 }
-loadOperationsStatus(); setInterval(loadOperationsStatus,15000);
+schedulePoll(loadOperationsStatus,15000);
 $("refresh-execution").addEventListener("click", async () => {
   if (!lastExecutionId) return;
   const data = await getJSON("/api/v1/remediations/executions/" + encodeURIComponent(lastExecutionId));
@@ -417,12 +428,22 @@ async function loadIncidents() {
     const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
     incidentItems = data.incidents || [];
     $("stat-open").textContent = incidentItems.filter(i => i.status !== "RESOLVED").length + "건";
-    $("business-incidents").innerHTML = incidentItems.length ? "<table><thead><tr><th>우선순위</th><th>업무/환경</th><th>상태</th><th>발생 수</th><th>판단 근거</th></tr></thead><tbody>" + incidentItems.map(i => "<tr><td>"+esc(i.priority || "P3")+"</td><td>"+esc(i.service)+" / "+esc(i.environment)+"</td><td>"+esc(i.status)+"</td><td>"+esc(i.occurrence_count)+"</td><td>"+esc((i.priority_reasons || []).join(" · "))+"</td></tr>").join("")+"</tbody></table>" : "최근 장애 없음";
+    $("business-incidents").innerHTML = incidentItems.length ? "<table><thead><tr><th>우선순위</th><th>업무/환경</th><th>상태</th><th>발생 수</th><th>판단 근거</th></tr></thead><tbody>" + incidentItems.map((i,index) => "<tr><td>"+esc(i.priority || "P3")+"</td><td>"+'<button class="incident-detail secondary" data-index="'+index+'">'+esc(i.service)+'</button> / ' +esc(i.environment)+"</td><td>"+esc(i.status)+"</td><td>"+esc(i.occurrence_count)+"</td><td>"+esc((i.priority_reasons || []).join(" · "))+"</td></tr>").join("")+"</tbody></table>" : "최근 장애 없음";
+    $("business-incidents").querySelectorAll(".incident-detail").forEach(button => button.addEventListener("click", () => {
+      const incident=incidentItems[Number(button.dataset.index)];
+      const rec=incident.latest_recommendation;
+      $("result").classList.add("hidden"); $("guidance-result").classList.add("hidden");
+      if (!rec) { $("operations-status").textContent="선택한 사건은 분석 중이거나 추천이 없습니다."; return; }
+      clientRunPrefix=incident.service+" / "+incident.incident_id;
+      renderRecommendation(incident.error_code,rec);
+      setClientStatus("사건 상세 조회: "+incident.status);
+    }));
     $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
     $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
     $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
   } catch (error) {
     $("operations-status").textContent = "사건 조회 실패 — 표시된 사건 수는 마지막 조회 결과입니다.";
+    return false;
   }
 }
 function showLogSource(panelId) {
@@ -450,8 +471,7 @@ document.querySelectorAll(".log-tab").forEach((button) => {
     showLogSource(button.dataset.panel);
   });
 });
-loadIncidents();
-setInterval(loadIncidents, 15000);
+schedulePoll(loadIncidents,15000);
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -564,7 +584,7 @@ async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
   for (let i = 0; i < 80; i++) {
     await sleep(1500);
     if (!isCurrent()) return;
-    if (!IS_CLIENT) await pollActivity();
+    if (!IS_CLIENT && !document.hidden) await pollActivity();
     const data = await getJSON(
       `/api/v1/log-generator/latest-recommendation?error_code=${encodeURIComponent(errorCode)}&since=${encodeURIComponent(since)}`
     );
@@ -583,41 +603,12 @@ async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
 }
 
 // 클라이언트: 어드민에서 실행한 최신 장애 시나리오를 따라간다.
-let clientRunId = null;
 let clientRunPrefix = "";
 function setClientStatus(state) {
   if (IS_CLIENT && clientRunPrefix) {
     $("client-status-text").textContent = `${clientRunPrefix} — ${state}`;
   }
 }
-async function followLatestRun() {
-  let data;
-  try {
-    data = await getJSON("/api/v1/log-generator/latest-run");
-  } catch (e) {
-    return;
-  }
-  if (data.status !== "ready" || data.run.run_id === clientRunId) return;
-
-  const run = data.run;
-  clientRunId = run.run_id;
-  $("result").classList.add("hidden");
-  $("guidance-result").classList.add("hidden");
-  $("exec").classList.add("hidden");
-  currentGuidance = null;
-  selectedVerdict = null;
-  clientRunPrefix = `장애 감지: ${run.label} (${formatTime(run.triggered_at)})`;
-  setClientStatus("오류를 분석하는 중…");
-
-  await waitForRecommendation(
-    run.error_code, run.triggered_at, () => clientRunId === run.run_id
-  );
-}
-if (IS_CLIENT) {
-  followLatestRun();
-  setInterval(followLatestRun, 3000);
-}
-
 function renderRecommendation(errorCode, rec, decisions = []) {
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);

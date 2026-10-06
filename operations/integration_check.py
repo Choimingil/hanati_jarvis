@@ -143,12 +143,6 @@ def main():
 
         check("recent_metric_ingestion", lambda: wait_for(collector, args.wait_seconds))
 
-        def llm():
-            r = http.get("http://llm-agent:8000/health")
-            r.raise_for_status()
-            return r.json().get("status") == "ok"
-
-        check("llm_agent_network_and_health", llm)
     passed = all(c["passed"] for c in checks)
     print(
         json.dumps(

@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from operations.health import service_status
+from operations.health import cached_service_status as service_status
 from operations.queue import AnalysisQueue
 from operations.redis_store import client
 

@@ -5,6 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 from config import QDRANT_URL
 from elastic.client import get_client
 from operations.redis_store import client
+import threading
+import time
+
+HTTP = httpx.Client(timeout=2, trust_env=False)
+_CACHE = None
+_CACHE_UNTIL = 0
+_CACHE_LOCK = threading.Lock()
+
 from operations.settings import FRESHNESS_SECONDS, registry
 
 
@@ -17,9 +25,7 @@ def probe(name, callback):
 
 def service_status():
     def qdrant():
-        response = httpx.get(
-            QDRANT_URL.rstrip("/") + "/healthz", timeout=2, trust_env=False
-        )
+        response = HTTP.get(QDRANT_URL.rstrip("/") + "/healthz", timeout=2)
         return response.status_code == 200
 
     callbacks = {
@@ -67,11 +73,14 @@ def service_status():
                     }
                 )
             queue = {
-                "stream_length": redis.xlen("jarvis:analysis"),
+                "stream_length": redis.xlen("jarvis:analysis")
+                + redis.xlen("jarvis:metrics-analysis"),
                 "dead_letters": redis.xlen("jarvis:dead-letter"),
             }
             try:
-                groups = redis.xinfo_groups("jarvis:analysis")
+                groups = redis.xinfo_groups("jarvis:analysis") + redis.xinfo_groups(
+                    "jarvis:metrics-analysis"
+                )
                 queue["pending"] = sum(g["pending"] for g in groups)
             except Exception:
                 queue["pending"] = 0
@@ -91,3 +100,12 @@ def service_status():
         "hosts": hosts,
         "queue": queue,
     }
+
+
+def cached_service_status():
+    global _CACHE, _CACHE_UNTIL
+    with _CACHE_LOCK:
+        if _CACHE is None or time.monotonic() >= _CACHE_UNTIL:
+            _CACHE = service_status()
+            _CACHE_UNTIL = time.monotonic() + 5
+        return _CACHE

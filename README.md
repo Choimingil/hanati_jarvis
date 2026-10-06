@@ -33,3 +33,6 @@ Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수�
 [구조](ARCHITECTURE.md) · [운영](OPERATIONS.md) · [검증](TESTING.md)
 
 업무 개선으로 서비스 중요도·피해 지표에 따른 P1~P3 우선순위, 반복 오류 분석 재사용, 읽기 전용 업무 KPI 복구 검사, 기존 이미지 기반 짧은 기동·부하 검사 도구를 추가했습니다. 실제 업무 API와 기준은 설정이 필요하며 [운영 안내](OPERATIONS.md)에 예제가 있습니다.
+
+
+미사용 예제와 독립 LLM HTTP 서버 코드는 [보관 설명](old/unused-2026-10-06/README.md)에 보존하고 활성 경로에서 제거했습니다. LLM은 Worker가 직접 호출합니다. Collector와 ES 초기화는 Compose에 정의된 전용 이미지에서 의존성을 빌드 시 설치합니다. 상시 메모리 상한은 Agent 포함 5632MiB(5.5GiB)입니다.

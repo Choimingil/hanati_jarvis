@@ -11,7 +11,6 @@ EXPECTED = {
     "redis": 384,
     "aiops": 1024,
     "analysis-worker": 1536,
-    "llm-agent": 256,
     "collector": 192,
     "fluent-bit": 128,
 }

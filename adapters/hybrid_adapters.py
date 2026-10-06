@@ -23,28 +23,33 @@ class HybridCaseSearcher(CaseSearcher):
         message: str,
         limit: int = 3,
     ) -> list[dict[str, Any]]:
-        vector_results = self.vector_searcher.search(
-            error_code=error_code,
-            message=message,
-            limit=limit,
-        )
-        keyword_results = self.keyword_searcher.search(
-            error_code=error_code,
-            message=message,
-            limit=limit,
-        )
+        results = []
+        failures = []
+        for searcher in (self.vector_searcher, self.keyword_searcher):
+            try:
+                results.append(
+                    searcher.search(error_code=error_code, message=message, limit=limit)
+                )
+            except Exception as exc:
+                failures.append(type(exc).__name__)
+                results.append([])
+        if len(failures) == 2:
+            raise RuntimeError("all case search backends unavailable")
+        vector_results, keyword_results = results
+        if failures:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Partial case search: %s", ",".join(failures)
+            )
 
         merged: dict[Any, dict[str, Any]] = {}
 
         for case in [*vector_results, *keyword_results]:
-            key = case.get(
-                "incident_id", id(case)
-            )
+            key = case.get("incident_id", id(case))
             existing = merged.get(key)
 
-            if existing is None or case.get(
-                "score", 0
-            ) > existing.get("score", 0):
+            if existing is None or case.get("score", 0) > existing.get("score", 0):
                 merged[key] = case
 
         ranked = sorted(

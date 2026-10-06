@@ -13,7 +13,6 @@ from aiops.feature_extractor import MetricFeatureExtractor
 from aiops.incident_case_builder import IncidentCaseBuilder
 from aiops.incident_correlator import IncidentCorrelator
 from aiops.incident_indexer import QdrantIncidentIndexer
-from aiops.recovery_verifier import RecoveryVerifier
 from aiops.fallback_guidance_generator import FallbackGuidanceGenerator
 from aiops.operator_feedback_service import OperatorFeedbackService
 from aiops.operational_incident_service import OperationalIncidentService
@@ -59,7 +58,6 @@ log_processor = LogProcessor(
     incident_service=operational_incident_service,
 )
 
-recovery_verifier = RecoveryVerifier()
 
 metric_analysis_service = MetricAnalysisService(
     repository=repository,

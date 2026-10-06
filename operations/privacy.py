@@ -35,6 +35,7 @@ OPAQUE_KEYS = {
     "script_id",
     "container_id",
     "image_id",
+    "stream_id",
 }
 OPAQUE_ID = re.compile(r"[A-Za-z0-9_.:-]{1,200}\Z")
 

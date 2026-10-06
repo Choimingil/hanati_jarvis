@@ -10,6 +10,7 @@ from operations.privacy import redact
 from operations.settings import JOB_RETENTION_SECONDS
 
 STREAM = "jarvis:analysis"
+METRIC_STREAM = "jarvis:metrics-analysis"
 GROUP = "analysis-workers"
 
 
@@ -18,11 +19,12 @@ class AnalysisQueue:
         self.redis = redis
 
     def ensure_group(self):
-        try:
-            self.redis.xgroup_create(STREAM, GROUP, id="0", mkstream=True)
-        except ResponseError as exc:
-            if "BUSYGROUP" not in str(exc):
-                raise
+        for stream in (STREAM, METRIC_STREAM):
+            try:
+                self.redis.xgroup_create(stream, GROUP, id="0", mkstream=True)
+            except ResponseError as exc:
+                if "BUSYGROUP" not in str(exc):
+                    raise
 
     def enqueue(self, kind, payload):
         return self.enqueue_many(kind, [payload])[0]
@@ -42,7 +44,9 @@ class AnalysisQueue:
                 "created_at": time.time(),
             }
             pipe.set("jarvis:job:" + job_id, json.dumps(document))
-            pipe.xadd(STREAM, {"job_id": job_id})
+            pipe.xadd(
+                METRIC_STREAM if kind == "metrics" else STREAM, {"job_id": job_id}
+            )
         pipe.hset("jarvis:collection", mapping={"last_" + kind: str(time.time())})
         pipe.execute()
         return job_ids
@@ -55,7 +59,7 @@ class AnalysisQueue:
         document.pop("payload", None)
         return document
 
-    def process(self, message_id, fields, handler, consumer="test"):
+    def process(self, message_id, fields, handler, consumer="test", stream=STREAM):
 
         job_id = fields["job_id"]
         key = "jarvis:job:" + job_id
@@ -66,14 +70,16 @@ class AnalysisQueue:
             pipe.xadd(
                 "jarvis:dead-letter", {"job_id": job_id, "reason": "missing_payload"}
             )
-            pipe.xack(STREAM, GROUP, message_id)
-            pipe.xdel(STREAM, message_id)
+            pipe.xack(stream, GROUP, message_id)
+            pipe.xdel(stream, message_id)
             pipe.execute()
             return
         job = json.loads(raw)
         if job["status"] in {"completed", "failed"}:
-            self.redis.xack(STREAM, GROUP, message_id)
-            self.redis.xdel(STREAM, message_id)
+            self.redis.xack(stream, GROUP, message_id)
+            self.redis.xdel(stream, message_id)
+            return
+        if job.get("next_attempt_at", 0) > time.time():
             return
         if job["kind"] == "logs":
             from aiops.operational_incident_service import build_fingerprint
@@ -97,8 +103,8 @@ class AnalysisQueue:
         # a job which another worker finished between receipt and acquisition.
         job = json.loads(self.redis.get(key))
         if job["status"] in {"completed", "failed"}:
-            self.redis.xack(STREAM, GROUP, message_id)
-            self.redis.xdel(STREAM, message_id)
+            self.redis.xack(stream, GROUP, message_id)
+            self.redis.xdel(stream, message_id)
             lock.release()
             return
         stop = threading.Event()
@@ -128,6 +134,9 @@ class AnalysisQueue:
                     finished_at=time.time(),
                 )
             if job["status"] == "retrying":
+                job["next_attempt_at"] = time.time() + min(
+                    60, 5 * 2 ** (job["attempts"] - 1)
+                )
                 self.redis.set(key, json.dumps(job))
                 return  # pending message is reclaimed after the visibility interval
             pipe = self.redis.pipeline(transaction=True)
@@ -145,8 +154,8 @@ class AnalysisQueue:
                     "analysis_status": job["status"],
                 },
             )
-            pipe.xack(STREAM, GROUP, message_id)
-            pipe.xdel(STREAM, message_id)
+            pipe.xack(stream, GROUP, message_id)
+            pipe.xdel(stream, message_id)
             pipe.execute()
         finally:
             stop.set()

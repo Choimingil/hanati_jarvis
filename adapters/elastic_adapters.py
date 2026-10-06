@@ -1,4 +1,5 @@
 from typing import Any
+from elasticsearch import NotFoundError
 
 from config import (
     ELASTIC_DIAGNOSIS_INDEX,
@@ -96,11 +97,11 @@ class ElasticLogRepository(LogRepository):
                     ]
                 }
             },
-            sort=[{"timestamp": "asc"}],
+            sort=[{"timestamp": "desc"}],
             size=1000,
             ignore_unavailable=True,
         )
-        return [hit["_source"] for hit in response["hits"]["hits"]]
+        return list(reversed([hit["_source"] for hit in response["hits"]["hits"]]))
 
     def recent_error_logs(self, host: str, minutes: int) -> list[dict[str, Any]]:
         response = self.client.search(
@@ -150,7 +151,7 @@ class ElasticLogRepository(LogRepository):
                 index=ELASTIC_INCIDENT_CASES_INDEX,
                 id=incident_id,
             )
-        except Exception:
+        except NotFoundError:
             return None
         return response.get("_source")
 
@@ -160,7 +161,7 @@ class ElasticLogRepository(LogRepository):
                 index=ELASTIC_INCIDENT_INDEX,
                 id=incident_id,
             )
-        except Exception:
+        except NotFoundError:
             return None
         return response.get("_source")
 
@@ -195,10 +196,13 @@ class ElasticLogRepository(LogRepository):
                     "changes": redact(changes),
                 },
             },
-            refresh="wait_for",
+            refresh=False,
+            source=True,
         )
         if response.get("result") == "noop":
             raise RuntimeError("incident version conflict")
+        if response.get("get", {}).get("_source") is not None:
+            return response["get"]["_source"]
         updated = self.client.get(
             index=ELASTIC_INCIDENT_INDEX,
             id=incident_id,
@@ -220,10 +224,13 @@ class ElasticLogRepository(LogRepository):
                     "changes": redact(changes),
                 },
             },
-            refresh="wait_for",
+            refresh=False,
+            source=True,
         )
         if response.get("result") == "noop":
             raise RuntimeError("incident aggregation conflict; retry")
+        if response.get("get", {}).get("_source") is not None:
+            return response["get"]["_source"]
         return self.client.get(index=ELASTIC_INCIDENT_INDEX, id=incident_id)["_source"]
 
     def list_operational_incidents(self, minutes: int = 60) -> list[dict[str, Any]]:
@@ -236,7 +243,16 @@ class ElasticLogRepository(LogRepository):
                     }
                 }
             },
-            sort=[{"last_seen": "desc"}],
+            sort=[
+                {
+                    "priority_rank": {
+                        "order": "asc",
+                        "missing": "_last",
+                        "unmapped_type": "long",
+                    }
+                },
+                {"last_seen": "desc"},
+            ],
             size=200,
             ignore_unavailable=True,
         )
@@ -248,7 +264,7 @@ class ElasticLogRepository(LogRepository):
                 index=ELASTIC_RECOMMENDATION_INDEX,
                 id=recommendation_id,
             )
-        except Exception:
+        except NotFoundError:
             return None
         source = response.get("_source", {})
         return source.get("recommendation") or source.get("guidance")
@@ -259,7 +275,7 @@ class ElasticLogRepository(LogRepository):
                 index=ELASTIC_REMEDIATION_INDEX,
                 id=execution_id,
             )
-        except Exception:
+        except NotFoundError:
             return None
         return response.get("_source")
 
@@ -275,7 +291,7 @@ class ElasticLogRepository(LogRepository):
                 size=50,
                 ignore_unavailable=True,
             )
-        except Exception:
+        except NotFoundError:
             return []
         # recommendation_id가 text 필드라 토큰 단위로 매칭되므로
         # 정확히 같은 id만 남긴다.
@@ -311,7 +327,7 @@ class ElasticLogRepository(LogRepository):
                 index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
                 id=guidance_id,
             )
-        except Exception:
+        except NotFoundError:
             return None
         return response.get("_source")
 
@@ -330,7 +346,7 @@ class ElasticLogRepository(LogRepository):
                 aggs={"by_status": {"terms": {"field": "result.status.keyword"}}},
                 ignore_unavailable=True,
             )
-        except Exception:
+        except NotFoundError:
             return {"success": 0, "failure": 0}
 
         buckets = (

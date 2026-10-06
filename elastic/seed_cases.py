@@ -14,41 +14,34 @@ from incident_cases import INCIDENT_CASES
 def seed() -> None:
     client = get_client()
 
-    if client.indices.exists(
-        index=ELASTIC_INCIDENT_CASES_INDEX
-    ):
-        client.indices.delete(
-            index=ELASTIC_INCIDENT_CASES_INDEX
-        )
-
-    client.indices.create(
-        index=ELASTIC_INCIDENT_CASES_INDEX,
-        body={
-            "mappings": {
-                "properties": {
-                    "incident_id": {
-                        "type": "keyword"
-                    },
-                    "error_code": {
-                        "type": "keyword"
-                    },
-                    "summary": {"type": "text"},
-                    "root_cause": {"type": "text"},
-                    "resolution": {"type": "text"},
+    if client.indices.exists(index=ELASTIC_INCIDENT_CASES_INDEX):
+        if client.count(index=ELASTIC_INCIDENT_CASES_INDEX).get("count", 0) > 0:
+            print("Existing populated incident index preserved; seed skipped.")
+            return
+    else:
+        client.indices.create(
+            index=ELASTIC_INCIDENT_CASES_INDEX,
+            body={
+                "mappings": {
+                    "properties": {
+                        "incident_id": {"type": "keyword"},
+                        "error_code": {"type": "keyword"},
+                        "summary": {"type": "text"},
+                        "root_cause": {"type": "text"},
+                        "resolution": {"type": "text"},
+                    }
                 }
-            }
-        },
-    )
+            },
+        )
 
     for case in INCIDENT_CASES:
         client.index(
             index=ELASTIC_INCIDENT_CASES_INDEX,
+            id=case["incident_id"],
             document=case,
         )
 
-    client.indices.refresh(
-        index=ELASTIC_INCIDENT_CASES_INDEX
-    )
+    client.indices.refresh(index=ELASTIC_INCIDENT_CASES_INDEX)
 
     print(
         f"[ELASTIC SEED] {len(INCIDENT_CASES)}건의 "

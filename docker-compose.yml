@@ -1,5 +1,5 @@
-# 8 GiB / 2 vCPU: per-container ceilings, not reserved allocations.
-# Steady-state RAM ceilings total 5888 MiB with optional execution Agent.
+# 8 GiB / 2 vCPU: per-container ceilings, not reservations.
+# Steady-state RAM ceilings: 5632 MiB including optional execution Agent.
 name: hanati-jarvis
 services:
   elasticsearch:
@@ -25,7 +25,7 @@ services:
     memswap_limit: 1536m
     cpus: 0.65
   elastic-init:
-    image: python:3.11-slim
+    image: hanati-elastic-init:local
     container_name: hanati-elastic-init
     working_dir: /workspace
     volumes:
@@ -41,12 +41,14 @@ services:
     command:
     - sh
     - -c
-    - pip install --no-cache-dir -r /workspace/elastic/requirements.txt && python
-      -m elastic.main && python -m elastic.mapping && python -m elastic.seed_cases
+    - python -m elastic.main && python -m elastic.mapping && python -m elastic.seed_cases
     restart: 'no'
     mem_limit: 256m
     memswap_limit: 256m
     cpus: 0.35
+    build:
+      context: .
+      dockerfile: elastic/Dockerfile
   qdrant:
     image: qdrant/qdrant:latest
     container_name: hanati-qdrant
@@ -134,7 +136,7 @@ services:
     memswap_limit: 128m
     cpus: 0.1
   collector:
-    image: python:3.11-slim
+    image: hanati-collector:local
     container_name: hanati-collector
     working_dir: /workspace
     volumes:
@@ -147,44 +149,20 @@ services:
     depends_on:
     - aiops
     command:
-    - sh
-    - -c
-    - pip install --no-cache-dir -r /workspace/collector/requirements.txt && python
-      -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30
+    - python
+    - -m
+    - collector.agent
+    - --url
+    - http://aiops:8080/api/v1/metrics
+    - --interval
+    - '30'
     restart: unless-stopped
     mem_limit: 192m
     memswap_limit: 192m
     cpus: 0.1
-  llm-agent:
-    image: hanati-llm-agent:local
     build:
       context: .
-      dockerfile: llm_agent/Dockerfile
-    container_name: hanati-llm-agent
-    working_dir: /workspace
-    volumes:
-    - .:/workspace
-    environment:
-    - PYTHONPATH=/workspace
-    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-    - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-    - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-    - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
-    - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
-    - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
-    ports:
-    - 127.0.0.1:8000:8000
-    command:
-    - uvicorn
-    - llm_agent.app:app
-    - --host
-    - 0.0.0.0
-    - --port
-    - '8000'
-    restart: 'no'
-    mem_limit: 256m
-    memswap_limit: 256m
-    cpus: 0.15
+      dockerfile: collector/Dockerfile
   aiops:
     image: hanati-aiops:local
     build:
@@ -200,9 +178,7 @@ services:
     - PYTHONPATH=/workspace
     - API_HOST=0.0.0.0
     - API_PORT=8080
-    - LOG_REPOSITORY_BACKEND=elastic
     - CASE_SEARCHER_BACKEND=hybrid
-    - RECOMMENDATION_BACKEND=llm
     - ELASTICSEARCH_URL=http://elasticsearch:9200
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_COLLECTION=incident_cases
@@ -230,8 +206,6 @@ services:
         condition: service_healthy
       qdrant-init:
         condition: service_completed_successfully
-      llm-agent:
-        condition: service_started
       redis:
         condition: service_healthy
     ports:
@@ -299,9 +273,7 @@ services:
     - PYTHONPATH=/workspace
     - API_HOST=0.0.0.0
     - API_PORT=8080
-    - LOG_REPOSITORY_BACKEND=elastic
     - CASE_SEARCHER_BACKEND=hybrid
-    - RECOMMENDATION_BACKEND=llm
     - ELASTICSEARCH_URL=http://elasticsearch:9200
     - QDRANT_URL=http://qdrant:6333
     - QDRANT_COLLECTION=incident_cases
@@ -329,8 +301,6 @@ services:
         condition: service_healthy
       qdrant-init:
         condition: service_completed_successfully
-      llm-agent:
-        condition: service_started
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -379,16 +349,20 @@ services:
     cpus: 0.15
   deployment-check:
     image: hanati-aiops:local
-    profiles: [verification]
+    profiles:
+    - verification
     working_dir: /workspace
     volumes:
     - .:/workspace:ro
     - log-volume:/workspace/fluentbit
     - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: [python, -m, operations.deployment_check]
+    command:
+    - python
+    - -m
+    - operations.deployment_check
     mem_limit: 128m
     memswap_limit: 128m
-    cpus: 0.10
+    cpus: 0.1
 volumes:
   elastic-data: null
   qdrant-data: null

@@ -17,7 +17,6 @@ from flask import Blueprint, jsonify, request
 from config import (
     CASE_SEARCHER_BACKEND,
     ELASTIC_DIAGNOSIS_INDEX,
-    ELASTIC_INCIDENT_INDEX,
     ELASTIC_LOG_INDEX,
     ELASTIC_RECOMMENDATION_INDEX,
     QDRANT_COLLECTION,
@@ -26,9 +25,7 @@ from dependencies import repository
 from elastic.client import get_client
 from utils.time_utils import now_iso
 
-LOG_GENERATOR_DIR = (
-    Path(__file__).resolve().parent.parent / "log_generator"
-)
+LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
     sys.path.insert(0, str(LOG_GENERATOR_DIR))
 
@@ -36,9 +33,7 @@ from registry import SCENARIO_REGISTRY  # noqa: E402
 from trigger import run_scenario  # noqa: E402
 
 
-log_generator_blueprint = Blueprint(
-    "log_generator", __name__
-)
+log_generator_blueprint = Blueprint("log_generator", __name__)
 
 # 어드민 콘솔에서 마지막으로 실행한 시나리오. 클라이언트 화면(/client)이
 # 이걸 폴링해서 같은 장애의 분석 결과를 따라 보여준다. 단일 프로세스
@@ -47,28 +42,28 @@ _latest_run: dict | None = None
 _latest_run_lock = threading.Lock()
 
 
-@log_generator_blueprint.get(
-    "/api/v1/log-generator/scenarios"
-)
+@log_generator_blueprint.get("/api/v1/log-generator/scenarios")
 def list_scenarios():
-    return jsonify([
-        {"key": key, "label": label}
-        for key, (_, label, _) in SCENARIO_REGISTRY.items()
-    ])
+    return jsonify(
+        [
+            {"key": key, "label": label}
+            for key, (_, label, _) in SCENARIO_REGISTRY.items()
+        ]
+    )
 
 
-@log_generator_blueprint.post(
-    "/api/v1/log-generator/run"
-)
+@log_generator_blueprint.post("/api/v1/log-generator/run")
 def run():
     body = request.get_json(silent=True) or {}
     key = body.get("scenario")
 
     if key not in SCENARIO_REGISTRY:
-        return jsonify({
-            "status": "invalid_request",
-            "reason": "unknown scenario",
-        }), 400
+        return jsonify(
+            {
+                "status": "invalid_request",
+                "reason": "unknown scenario",
+            }
+        ), 400
 
     global _latest_run
 
@@ -84,17 +79,17 @@ def run():
             "error_code": result["error_code"],
         }
 
-    return jsonify({
-        "status": "triggered",
-        "triggered_at": triggered_at,
-        "error_code": result["error_code"],
-        "events": result["events"],
-    })
+    return jsonify(
+        {
+            "status": "triggered",
+            "triggered_at": triggered_at,
+            "error_code": result["error_code"],
+            "events": result["events"],
+        }
+    )
 
 
-@log_generator_blueprint.get(
-    "/api/v1/log-generator/latest-run"
-)
+@log_generator_blueprint.get("/api/v1/log-generator/latest-run")
 def latest_run():
     with _latest_run_lock:
         run = dict(_latest_run) if _latest_run else None
@@ -103,17 +98,17 @@ def latest_run():
     return jsonify({"status": "ready", "run": run})
 
 
-@log_generator_blueprint.get(
-    "/api/v1/log-generator/latest-recommendation"
-)
+@log_generator_blueprint.get("/api/v1/log-generator/latest-recommendation")
 def latest_recommendation():
     error_code = request.args.get("error_code")
     since = request.args.get("since")
 
     if not error_code or not since:
-        return jsonify({
-            "status": "invalid_request",
-        }), 400
+        return jsonify(
+            {
+                "status": "invalid_request",
+            }
+        ), 400
 
     client = get_client()
 
@@ -123,12 +118,8 @@ def latest_recommendation():
             query={
                 "bool": {
                     "should": [
-                        {"match": {
-                            "recommendation.error_code": error_code
-                        }},
-                        {"match": {
-                            "guidance.original_error_code": error_code
-                        }},
+                        {"match": {"recommendation.error_code": error_code}},
+                        {"match": {"guidance.original_error_code": error_code}},
                     ],
                     "minimum_should_match": 1,
                     # 같은 에러코드 추천이 누적되므로 시간 조건·정렬 없이
@@ -149,27 +140,24 @@ def latest_recommendation():
 
     hits = response["hits"]["hits"]
     fresh = [
-        hit["_source"]
-        for hit in hits
-        if hit["_source"].get("timestamp", "") > since
+        hit["_source"] for hit in hits if hit["_source"].get("timestamp", "") > since
     ]
 
     if not fresh:
         return jsonify({"status": "pending"})
 
     latest = max(fresh, key=lambda doc: doc["timestamp"])
-    recommendation = (
-        latest.get("recommendation")
-        or latest.get("guidance")
-    )
+    recommendation = latest.get("recommendation") or latest.get("guidance")
 
-    return jsonify({
-        "status": "ready",
-        "recommendation": recommendation,
-        "decisions": _safe_decisions(
-            (recommendation or {}).get("recommendation_id")
-        ),
-    })
+    return jsonify(
+        {
+            "status": "ready",
+            "recommendation": recommendation,
+            "decisions": _safe_decisions(
+                (recommendation or {}).get("recommendation_id")
+            ),
+        }
+    )
 
 
 def _safe_decisions(recommendation_id: str | None) -> list[dict]:
@@ -181,72 +169,54 @@ def _safe_decisions(recommendation_id: str | None) -> list[dict]:
         return []
 
     decisions = []
-    for doc in repository.find_remediation_executions(
-        recommendation_id
-    ):
+    for doc in repository.find_remediation_executions(recommendation_id):
         result = doc.get("result") or {}
-        decisions.append({
-            "action_id": doc.get("action_id"),
-            "script_id": doc.get("script_id"),
-            "decision": (
-                "reject" if result.get("status") == "rejected"
-                else "approve"
-            ),
-            "approved_by": doc.get("approved_by"),
-            "approved_at": doc.get("approved_at"),
-            "result": result,
-        })
+        decisions.append(
+            {
+                "action_id": doc.get("action_id"),
+                "script_id": doc.get("script_id"),
+                "decision": (
+                    "reject" if result.get("status") == "rejected" else "approve"
+                ),
+                "approved_by": doc.get("approved_by"),
+                "approved_at": doc.get("approved_at"),
+                "result": result,
+            }
+        )
     return decisions
 
 
-@log_generator_blueprint.get(
-    "/api/v1/log-generator/incidents"
-)
+@log_generator_blueprint.get("/api/v1/log-generator/incidents")
 def recent_incidents():
     """영속화된 운영 Incident를 최근 갱신 순으로 반환한다."""
     minutes = request.args.get("minutes", default=60, type=int)
     minutes = max(1, min(minutes or 60, 1440))
-    client = get_client()
-
     try:
-        response = client.search(
-            index=ELASTIC_INCIDENT_INDEX,
-            query={
-                "range": {
-                    "last_seen": {
-                        "gte": f"now-{minutes}m",
-                    }
-                }
-            },
-            sort=[{"priority_rank":{"order":"asc","missing":"_last","unmapped_type":"long"}},{"last_seen":"desc"}],
-            size=200,
-            ignore_unavailable=True,
-        )
-    except Exception:
-        return jsonify({
-            "status": "unavailable",
-            "incidents": [],
-        })
+        documents = repository.list_operational_incidents(minutes)
+    except Exception as exc:
+        return jsonify(
+            status="unavailable", incidents=[], error=type(exc).__name__
+        ), 503
 
     incidents = []
-    for hit in response.get("hits", {}).get("hits", []):
-        incident = dict(hit.get("_source", {}))
+    for document in documents:
+        incident = dict(document)
         hosts = incident.get("affected_hosts") or []
         incident["hosts"] = hosts
         incident["host_count"] = len(hosts)
-        incident["count"] = incident.get(
-            "occurrence_count", 0
-        )
-        incident["recommendation"] = incident.get(
-            "latest_recommendation"
-        ) or {}
+        incident["count"] = incident.get("occurrence_count", 0)
+        incident["recommendation"] = incident.get("latest_recommendation") or {}
         incidents.append(incident)
 
-    incidents.sort(key=lambda i: (i.get("status")=="RESOLVED", i.get("priority_rank",3)))
-    return jsonify({
-        "status": "ready",
-        "incidents": incidents,
-    })
+    incidents.sort(
+        key=lambda i: (i.get("status") == "RESOLVED", i.get("priority_rank", 3))
+    )
+    return jsonify(
+        {
+            "status": "ready",
+            "incidents": incidents,
+        }
+    )
 
 
 def _format_time(value: str | None) -> str:
@@ -267,12 +237,14 @@ def _es_since(
     response = get_client().search(
         index=index,
         query={"range": {time_field: {"gte": since or "now-5m"}}},
-        sort=[{
-            time_field: {
-                "order": "desc",
-                "unmapped_type": "date",
+        sort=[
+            {
+                time_field: {
+                    "order": "desc",
+                    "unmapped_type": "date",
+                }
             }
-        }],
+        ],
         size=size,
         ignore_unavailable=True,
     )
@@ -287,8 +259,7 @@ def _received_logs(since: str | None) -> list[str]:
         f"{_format_time(doc.get('received_at'))} "
         f"[{doc.get('level')}] {doc.get('host')} "
         f"{doc.get('message')}"
-        + (f"  (incident={doc['incident_id']})"
-           if doc.get("incident_id") else "")
+        + (f"  (incident={doc['incident_id']})" if doc.get("incident_id") else "")
         for doc in _es_since(ELASTIC_LOG_INDEX, "received_at", since)
     ]
 
@@ -298,13 +269,9 @@ def _stored_analysis(since: str | None) -> list[str]:
         f"{_format_time(doc.get('timestamp'))} [진단] "
         f"{doc.get('error_code')} {doc.get('script_id')} "
         f"-> {(doc.get('result') or {}).get('status', '')}"
-        for doc in _es_since(
-            ELASTIC_DIAGNOSIS_INDEX, "timestamp", since, size=30
-        )
+        for doc in _es_since(ELASTIC_DIAGNOSIS_INDEX, "timestamp", since, size=30)
     ]
-    for doc in _es_since(
-        ELASTIC_RECOMMENDATION_INDEX, "timestamp", since, size=30
-    ):
+    for doc in _es_since(ELASTIC_RECOMMENDATION_INDEX, "timestamp", since, size=30):
         if doc.get("guidance"):
             guidance = doc["guidance"]
             lines.append(
@@ -333,7 +300,8 @@ def _qdrant_status() -> list[str]:
         + (
             " (로그 분석은 Elasticsearch로 검색 - Qdrant는 메트릭 이상 탐지/"
             "운영자 피드백 저장 시에만 쓰임)"
-            if CASE_SEARCHER_BACKEND == "elastic" else ""
+            if CASE_SEARCHER_BACKEND == "elastic"
+            else ""
         ),
     ]
 
@@ -347,18 +315,16 @@ def _safe(source: str, fetch) -> list[str]:
         return [f"{source} 조회 실패: {error}"]
 
 
-@log_generator_blueprint.get(
-    "/api/v1/log-generator/activity"
-)
+@log_generator_blueprint.get("/api/v1/log-generator/activity")
 def activity():
     since = request.args.get("since")
 
-    return jsonify({
-        "fluentbit_log": _safe(
-            "Elasticsearch", lambda: _received_logs(since)
-        ),
-        "qdrant_log": _safe("Qdrant", _qdrant_status),
-        "elasticsearch_log": _safe(
-            "Elasticsearch", lambda: _stored_analysis(since)
-        ),
-    })
+    return jsonify(
+        {
+            "fluentbit_log": _safe("Elasticsearch", lambda: _received_logs(since)),
+            "qdrant_log": _safe("Qdrant", _qdrant_status),
+            "elasticsearch_log": _safe(
+                "Elasticsearch", lambda: _stored_analysis(since)
+            ),
+        }
+    )

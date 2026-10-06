@@ -383,6 +383,8 @@ class QueueAndPrivacyTests(unittest.TestCase):
             raise RuntimeError("password=do-not-save")
 
         for attempt in range(3):
+            raw=json.loads(self.redis.get("jarvis:job:"+job_id));raw["next_attempt_at"]=0
+            self.redis.set("jarvis:job:"+job_id,json.dumps(raw))
             self.queue.process(message_id, fields, failed)
         self.assertEqual(self.queue.get(job_id)["attempts"], 3)
         self.assertEqual(self.queue.get(job_id)["status"], "failed")
@@ -458,7 +460,7 @@ class QueueAndPrivacyTests(unittest.TestCase):
             patch("operations.health.client", return_value=self.redis),
             patch("operations.health.get_client", return_value=es),
             patch(
-                "operations.health.httpx.get",
+                "operations.health.HTTP.get",
                 return_value=types.SimpleNamespace(status_code=200),
             ),
             patch("operations.health.registry", return_value=[TARGET]),

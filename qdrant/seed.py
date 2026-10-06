@@ -15,31 +15,38 @@ from config import (
 )
 from incident_cases import INCIDENT_CASES
 from qdrant.client import encode, get_client
+from uuid import uuid5, NAMESPACE_URL
 
 
 def seed() -> None:
     client = get_client()
 
     if client.collection_exists(QDRANT_COLLECTION):
-        client.delete_collection(
-            collection_name=QDRANT_COLLECTION
+        info = client.get_collection(QDRANT_COLLECTION)
+        vectors = info.config.params.vectors
+        if (
+            getattr(vectors, "size", None) != EMBEDDING_VECTOR_SIZE
+            or getattr(vectors, "distance", None) != Distance.COSINE
+        ):
+            raise ValueError(
+                "existing collection schema differs; automatic replacement is forbidden"
+            )
+        if info.points_count:
+            print("Existing populated collection preserved; seed skipped.")
+            return
+    else:
+        client.create_collection(
+            collection_name=QDRANT_COLLECTION,
+            vectors_config=VectorParams(
+                size=EMBEDDING_VECTOR_SIZE, distance=Distance.COSINE
+            ),
         )
-
-    client.create_collection(
-        collection_name=QDRANT_COLLECTION,
-        vectors_config=VectorParams(
-            size=EMBEDDING_VECTOR_SIZE,
-            distance=Distance.COSINE,
-        ),
-    )
 
     points = [
         PointStruct(
-            id=idx,
+            id=str(uuid5(NAMESPACE_URL, "hanati-jarvis/seed/" + str(idx))),
             vector=encode(
-                f"{case['error_code']} "
-                f"{case['summary']} "
-                f"{case['root_cause']}"
+                f"{case['error_code']} {case['summary']} {case['root_cause']}"
             ),
             payload=case,
         )
