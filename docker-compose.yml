@@ -1,3 +1,5 @@
+# 8 GiB / 2 vCPU: per-container ceilings, not reserved allocations.
+# Steady-state RAM ceilings total 5888 MiB with optional execution Agent.
 name: hanati-jarvis
 services:
   elasticsearch:
@@ -19,6 +21,9 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 0.65
   elastic-init:
     image: python:3.11-slim
     container_name: hanati-elastic-init
@@ -39,6 +44,9 @@ services:
     - pip install --no-cache-dir -r /workspace/elastic/requirements.txt && python
       -m elastic.main && python -m elastic.mapping && python -m elastic.seed_cases
     restart: 'no'
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.35
   qdrant:
     image: qdrant/qdrant:latest
     container_name: hanati-qdrant
@@ -55,6 +63,9 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.3
   qdrant-init:
     image: hanati-qdrant-init:local
     build:
@@ -71,6 +82,10 @@ services:
     - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
     - EMBEDDING_VECTOR_SIZE=384
     - HF_HOME=/models
+    - OMP_NUM_THREADS=1
+    - MKL_NUM_THREADS=1
+    - OPENBLAS_NUM_THREADS=1
+    - TOKENIZERS_PARALLELISM=false
     depends_on:
       qdrant:
         condition: service_healthy
@@ -79,6 +94,9 @@ services:
     - -m
     - qdrant.seed
     restart: 'no'
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 0.75
   log-generator:
     image: hanati-log-generator:local
     build:
@@ -95,6 +113,9 @@ services:
     - python
     - /workspace/log_generator/main.py
     restart: 'no'
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.05
   fluent-bit:
     image: fluent/fluent-bit:latest
     container_name: hanati-fluent-bit
@@ -109,6 +130,9 @@ services:
     - aiops
     ports:
     - 9880:9880
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.1
   collector:
     image: python:3.11-slim
     container_name: hanati-collector
@@ -128,6 +152,9 @@ services:
     - pip install --no-cache-dir -r /workspace/collector/requirements.txt && python
       -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30
     restart: unless-stopped
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.1
   llm-agent:
     image: hanati-llm-agent:local
     build:
@@ -155,6 +182,9 @@ services:
     - --port
     - '8000'
     restart: 'no'
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.15
   aiops:
     image: hanati-aiops:local
     build:
@@ -187,6 +217,10 @@ services:
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
+    - OMP_NUM_THREADS=1
+    - MKL_NUM_THREADS=1
+    - OPENBLAS_NUM_THREADS=1
+    - TOKENIZERS_PARALLELISM=false
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -218,6 +252,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpus: 0.4
   redis:
     image: redis:7.4-alpine
     command:
@@ -228,6 +265,8 @@ services:
     - always
     - --maxmemory-policy
     - noeviction
+    - --maxmemory
+    - 128mb
     ports:
     - 127.0.0.1:6379:6379
     volumes:
@@ -241,6 +280,9 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.2
   analysis-worker:
     image: hanati-aiops:local
     build:
@@ -272,6 +314,10 @@ services:
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
+    - OMP_NUM_THREADS=1
+    - MKL_NUM_THREADS=1
+    - OPENBLAS_NUM_THREADS=1
+    - TOKENIZERS_PARALLELISM=false
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -292,6 +338,9 @@ services:
     - -m
     - operations.worker
     container_name: hanati-analysis-worker
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 0.75
   execution-agent:
     image: hanati-aiops:local
     build:
@@ -321,6 +370,9 @@ services:
     - -m
     - execution_agent.app
     restart: unless-stopped
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.15
 volumes:
   elastic-data: null
   qdrant-data: null
