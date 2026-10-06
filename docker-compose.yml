@@ -216,6 +216,8 @@ services:
     - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
+    - BUSINESS_SERVICES_FILE=/workspace/business-services.json
+    - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
     - OMP_NUM_THREADS=1
     - MKL_NUM_THREADS=1
@@ -313,6 +315,8 @@ services:
     - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
+    - BUSINESS_SERVICES_FILE=/workspace/business-services.json
+    - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
     - OMP_NUM_THREADS=1
     - MKL_NUM_THREADS=1
@@ -373,6 +377,17 @@ services:
     mem_limit: 192m
     memswap_limit: 192m
     cpus: 0.15
+  deployment-check:
+    image: hanati-aiops:local
+    profiles: [verification]
+    working_dir: /workspace
+    volumes:
+    - .:/workspace:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: [python, -m, operations.deployment_check]
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.10
 volumes:
   elastic-data: null
   qdrant-data: null

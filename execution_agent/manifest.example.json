@@ -18,7 +18,23 @@
       "business_probe": "jarvis_pipeline",
       "probe_url": "http://aiops:8080",
       "expected_impact": "aiops 컨테이너 재시작 중 요청 처리 중단",
-      "rollback_description": "동일 이미지·컨테이너의 실행 상태 복원; 이미지 버전 변경은 수행하지 않음"
+      "rollback_description": "동일 이미지·컨테이너의 실행 상태 복원; 이미지 버전 변경은 수행하지 않음",
+      "business_recovery_example": {
+        "url": "https://payment-api.example.invalid/ops/business-status",
+        "allowed_hosts": [
+          "payment-api.example.invalid"
+        ],
+        "expected_service": "payment-api",
+        "expected_environment": "production",
+        "max_age_seconds": 120,
+        "token_env": "PAYMENT_PROBE_TOKEN",
+        "criteria": {
+          "success_rate_min": 0.99,
+          "failure_rate_max": 0.01,
+          "p95_latency_ms_max": 1000,
+          "transactions_min": 10
+        }
+      }
     },
     "check_memory_usage": {
       "enabled": false,

@@ -128,7 +128,7 @@ class DockerBackend:
             "state": current,
         }
 
-    def verify(self, action):
+    def verify(self, action, execution_started_at=None):
         container = self.container(action)
         running = container.attrs["State"].get("Running") is True
         health = container.attrs["State"].get("Health", {}).get("Status")
@@ -136,6 +136,12 @@ class DockerBackend:
             {"name": "container_running", "passed": running},
             {"name": "container_health", "passed": health == "healthy"},
         ]
+        if action.get("business_probe") == "http_kpi":
+            from operations.business_probe import verify_business
+
+            return checks + verify_business(
+                action.get("business_recovery"), execution_started_at or 0
+            )
         # Jarvis itself: prove that ingestion and a live worker can process a job.
         # This is a harmless INFO event, never an injected ERROR or real payment.
         if action.get("business_probe") != "jarvis_pipeline":

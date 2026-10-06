@@ -227,6 +227,7 @@ _PAGE = """<!doctype html>
     <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
     <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
   </div>
+  <div class="card"><strong>업무 영향별 장애 우선순위</strong><div id="business-incidents"></div></div>
   <div id="client-status" class="card client-only">
     <strong>장애 모니터링</strong>
     <div id="client-status-text" class="muted" style="margin-top:6px">발생한 장애가 없습니다. 장애가 감지되면 이 화면에 오류 내용이 표시됩니다.</div>
@@ -415,7 +416,8 @@ async function loadIncidents() {
   try {
     const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
     incidentItems = data.incidents || [];
-    $("stat-open").textContent = incidentItems.length + "건";
+    $("stat-open").textContent = incidentItems.filter(i => i.status !== "RESOLVED").length + "건";
+    $("business-incidents").innerHTML = incidentItems.length ? "<table><thead><tr><th>우선순위</th><th>업무/환경</th><th>상태</th><th>발생 수</th><th>판단 근거</th></tr></thead><tbody>" + incidentItems.map(i => "<tr><td>"+esc(i.priority || "P3")+"</td><td>"+esc(i.service)+" / "+esc(i.environment)+"</td><td>"+esc(i.status)+"</td><td>"+esc(i.occurrence_count)+"</td><td>"+esc((i.priority_reasons || []).join(" · "))+"</td></tr>").join("")+"</tbody></table>" : "최근 장애 없음";
     $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
     $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
     $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";

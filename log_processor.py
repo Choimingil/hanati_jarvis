@@ -14,13 +14,11 @@ from utils.time_utils import now_iso
 
 
 class LogProcessor:
-
     def __init__(
         self,
         repository: LogRepository,
         case_searcher: CaseSearcher,
-        recommendation_generator:
-            RecommendationGenerator,
+        recommendation_generator: RecommendationGenerator,
         quality_gate=None,
         resource_context_loader=None,
         resource_hypothesis_engine=None,
@@ -29,9 +27,7 @@ class LogProcessor:
     ) -> None:
         self.repository = repository
         self.case_searcher = case_searcher
-        self.recommendation_generator = (
-            recommendation_generator
-        )
+        self.recommendation_generator = recommendation_generator
         self.quality_gate = quality_gate
         self.resource_context_loader = resource_context_loader
         self.resource_hypothesis_engine = resource_hypothesis_engine
@@ -46,35 +42,54 @@ class LogProcessor:
         log = normalize_log(raw_log)
 
         if log["level"] != "ERROR":
-            self.repository.save_log({
-                "received_at": now_iso(),
-                **log,
-            })
+            self.repository.save_log(
+                {
+                    "received_at": now_iso(),
+                    **log,
+                }
+            )
             return {
                 "status": "ignored",
                 "reason": "log level is not ERROR",
             }
 
-        error_code = detect_error_code(
-            log["message"]
-        )
+        error_code = detect_error_code(log["message"])
         incident = (
             self.incident_service.start(log, error_code, ingestion_id=ingestion_id)
             if self.incident_service is not None
             else None
         )
-        self.repository.save_log({
-            "ingestion_id": ingestion_id,
-            "received_at": now_iso(),
-            "incident_id": (
-                incident.get("incident_id")
-                if incident else None
-            ),
-            **log,
-        })
+        self.repository.save_log(
+            {
+                "ingestion_id": ingestion_id,
+                "received_at": now_iso(),
+                "incident_id": (incident.get("incident_id") if incident else None),
+                **log,
+            }
+        )
+
+        if (
+            incident
+            and incident.get("analysis_suppressed")
+            and incident.get("status") not in {"REMEDIATING", "MONITORING"}
+        ):
+            persisted = getattr(self.repository, "get_recommendation", lambda _: True)(
+                incident.get("latest_recommendation_id")
+            )
+            if persisted:
+                return {
+                    "status": "aggregated",
+                    "incident_id": incident["incident_id"],
+                    "occurrence_count": incident["occurrence_count"],
+                    "priority": incident.get("priority"),
+                    "reason": "recent valid analysis reused; no duplicate recommendation",
+                }
 
         if incident and incident.get("status") in {"REMEDIATING", "MONITORING"}:
-            return {"status": "stored", "reason": "execution or recovery observation in progress"}
+            return {
+                "status": "stored",
+                "reason": "execution or recovery observation in progress",
+            }
 
         if error_code is None:
             return self._resource_fallback(
@@ -108,9 +123,7 @@ class LogProcessor:
             recommendation = self.recommendation_generator.generate(
                 error_code=error_code,
                 message=log["message"],
-                diagnosis_results=(
-                    diagnosis_results
-                ),
+                diagnosis_results=(diagnosis_results),
                 past_cases=past_cases,
                 remediation_candidates=rule.get(
                     "remediation_candidates",
@@ -135,30 +148,25 @@ class LogProcessor:
                 )
 
         if self.incident_service is not None and incident is not None:
-            recommendation, incident = (
-                self.incident_service.complete_analysis(
-                    incident,
-                    recommendation,
-                    status="ACTION_REQUIRED",
-                )
+            recommendation, incident = self.incident_service.complete_analysis(
+                incident,
+                recommendation,
+                status="ACTION_REQUIRED",
             )
 
-        self.repository.save_recommendation({
-            "timestamp": now_iso(),
-            "incident_id": (
-                incident.get("incident_id")
-                if incident else None
-            ),
-            "log": log,
-            "recommendation": recommendation,
-        })
+        self.repository.save_recommendation(
+            {
+                "timestamp": now_iso(),
+                "incident_id": (incident.get("incident_id") if incident else None),
+                "log": log,
+                "recommendation": recommendation,
+            }
+        )
 
         return {
             "status": "recommended",
             "error_code": error_code,
-            "diagnosis_count": len(
-                diagnosis_results
-            ),
+            "diagnosis_count": len(diagnosis_results),
             "recommendation": recommendation,
         }
 
@@ -169,11 +177,13 @@ class LogProcessor:
         original_error_code: str | None,
         incident: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        if not all([
-            self.resource_context_loader,
-            self.resource_hypothesis_engine,
-            self.fallback_guidance_generator,
-        ]):
+        if not all(
+            [
+                self.resource_context_loader,
+                self.resource_hypothesis_engine,
+                self.fallback_guidance_generator,
+            ]
+        ):
             return {
                 "status": "unknown_error",
                 "message": log["message"],
@@ -183,24 +193,24 @@ class LogProcessor:
         hypotheses = self.resource_hypothesis_engine.analyze(
             resource_context["features"]
         )
-        related_error_code = next((
-            hypothesis.get("related_error_code")
-            for hypothesis in hypotheses
-            if hypothesis.get("related_error_code")
-        ), None)
+        related_error_code = next(
+            (
+                hypothesis.get("related_error_code")
+                for hypothesis in hypotheses
+                if hypothesis.get("related_error_code")
+            ),
+            None,
+        )
         search_code = (
-            related_error_code
-            or original_error_code
-            or "UNKNOWN_RESOURCE_ISSUE"
+            related_error_code or original_error_code or "UNKNOWN_RESOURCE_ISSUE"
         )
         try:
             past_cases = self.case_searcher.search(
                 error_code=search_code,
                 message=(
-                    log["message"] + " "
-                    + " ".join(
-                        hypothesis["title"] for hypothesis in hypotheses
-                    )
+                    log["message"]
+                    + " "
+                    + " ".join(hypothesis["title"] for hypothesis in hypotheses)
                 ),
                 limit=3,
             )
@@ -216,25 +226,22 @@ class LogProcessor:
         )
         guidance["original_error_code"] = original_error_code
         if self.incident_service is not None and incident is not None:
-            guidance, incident = (
-                self.incident_service.complete_analysis(
-                    incident,
-                    guidance,
-                    status="INVESTIGATING",
-                )
+            guidance, incident = self.incident_service.complete_analysis(
+                incident,
+                guidance,
+                status="INVESTIGATING",
             )
         self.repository.save_resource_guidance(guidance)
-        self.repository.save_recommendation({
-            "timestamp": now_iso(),
-            "source": "resource_fallback",
-            "guidance_id": guidance["guidance_id"],
-            "incident_id": (
-                incident.get("incident_id")
-                if incident else None
-            ),
-            "log": log,
-            "guidance": guidance,
-        })
+        self.repository.save_recommendation(
+            {
+                "timestamp": now_iso(),
+                "source": "resource_fallback",
+                "guidance_id": guidance["guidance_id"],
+                "incident_id": (incident.get("incident_id") if incident else None),
+                "log": log,
+                "guidance": guidance,
+            }
+        )
         return guidance
 
     def _run_diagnostics(
@@ -254,14 +261,16 @@ class LogProcessor:
 
             results.append(result)
 
-            self.repository.save_diagnosis({
-                "timestamp": now_iso(),
-                "error_code": error_code,
-                "message": log["message"],
-                "host": log["host"],
-                "service": log["service"],
-                "script_id": script_id,
-                "result": result,
-            })
+            self.repository.save_diagnosis(
+                {
+                    "timestamp": now_iso(),
+                    "error_code": error_code,
+                    "message": log["message"],
+                    "host": log["host"],
+                    "service": log["service"],
+                    "script_id": script_id,
+                    "result": result,
+                }
+            )
 
         return results

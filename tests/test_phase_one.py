@@ -69,7 +69,7 @@ class FakeDockerBackend:
     def rollback(self, action, before):
         return {"status": "failed" if self.rollback_fail else "success"}
 
-    def verify(self, action):
+    def verify(self, action, execution_started_at=None):
         return [{"name": "pipeline", "passed": self.recovered}]
 
 

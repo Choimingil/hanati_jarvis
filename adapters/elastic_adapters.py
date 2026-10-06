@@ -19,7 +19,6 @@ from ports.log_repository import LogRepository
 
 
 class ElasticLogRepository(LogRepository):
-
     def __init__(self) -> None:
         self.client = get_client()
 
@@ -39,7 +38,9 @@ class ElasticLogRepository(LogRepository):
     ) -> None:
         ingestion_id = document.get("ingestion_id")
         if ingestion_id:
-            self.client.index(index=ELASTIC_LOG_INDEX, id=ingestion_id, document=redact(document))
+            self.client.index(
+                index=ELASTIC_LOG_INDEX, id=ingestion_id, document=redact(document)
+            )
         else:
             self._index(ELASTIC_LOG_INDEX, document)
 
@@ -54,13 +55,9 @@ class ElasticLogRepository(LogRepository):
         document: dict[str, Any],
     ) -> None:
         recommendation = (
-            document.get("recommendation")
-            or document.get("guidance")
-            or {}
+            document.get("recommendation") or document.get("guidance") or {}
         )
-        recommendation_id = recommendation.get(
-            "recommendation_id"
-        )
+        recommendation_id = recommendation.get("recommendation_id")
         if recommendation_id:
             self.client.index(
                 index=ELASTIC_RECOMMENDATION_INDEX,
@@ -68,9 +65,7 @@ class ElasticLogRepository(LogRepository):
                 document=redact(document),
             )
         else:
-            self._index(
-                ELASTIC_RECOMMENDATION_INDEX, document
-            )
+            self._index(ELASTIC_RECOMMENDATION_INDEX, document)
 
     def save_remediation(
         self,
@@ -84,35 +79,41 @@ class ElasticLogRepository(LogRepository):
     ) -> None:
         ingestion_id = document.get("ingestion_id")
         if ingestion_id:
-            self.client.index(index=ELASTIC_METRICS_INDEX, id=ingestion_id, document=redact(document))
+            self.client.index(
+                index=ELASTIC_METRICS_INDEX, id=ingestion_id, document=redact(document)
+            )
         else:
             self._index(ELASTIC_METRICS_INDEX, document)
 
-    def recent_metrics(
-        self, host: str, minutes: int
-    ) -> list[dict[str, Any]]:
+    def recent_metrics(self, host: str, minutes: int) -> list[dict[str, Any]]:
         response = self.client.search(
             index=ELASTIC_METRICS_INDEX,
-            query={"bool": {"filter": [
-                {"term": {"host.hostname.keyword": host}},
-                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
-            ]}},
+            query={
+                "bool": {
+                    "filter": [
+                        {"term": {"host.hostname.keyword": host}},
+                        {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+                    ]
+                }
+            },
             sort=[{"timestamp": "asc"}],
             size=1000,
             ignore_unavailable=True,
         )
         return [hit["_source"] for hit in response["hits"]["hits"]]
 
-    def recent_error_logs(
-        self, host: str, minutes: int
-    ) -> list[dict[str, Any]]:
+    def recent_error_logs(self, host: str, minutes: int) -> list[dict[str, Any]]:
         response = self.client.search(
             index=ELASTIC_LOG_INDEX,
-            query={"bool": {"filter": [
-                {"term": {"host": host}},
-                {"term": {"level": "ERROR"}},
-                {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
-            ]}},
+            query={
+                "bool": {
+                    "filter": [
+                        {"term": {"host": host}},
+                        {"term": {"level": "ERROR"}},
+                        {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+                    ]
+                }
+            },
             sort=[{"timestamp": "desc"}],
             size=20,
             ignore_unavailable=True,
@@ -127,16 +128,18 @@ class ElasticLogRepository(LogRepository):
             refresh="wait_for",
         )
 
-    def has_recent_incident(
-        self, host: str, detection_code: str, minutes: int
-    ) -> bool:
+    def has_recent_incident(self, host: str, detection_code: str, minutes: int) -> bool:
         response = self.client.count(
             index=ELASTIC_INCIDENT_CASES_INDEX,
-            query={"bool": {"filter": [
-                {"term": {"host.keyword": host}},
-                {"term": {"detection_code.keyword": detection_code}},
-                {"range": {"created_at": {"gte": f"now-{minutes}m"}}},
-            ]}},
+            query={
+                "bool": {
+                    "filter": [
+                        {"term": {"host.keyword": host}},
+                        {"term": {"detection_code.keyword": detection_code}},
+                        {"range": {"created_at": {"gte": f"now-{minutes}m"}}},
+                    ]
+                }
+            },
             ignore_unavailable=True,
         )
         return response.get("count", 0) > 0
@@ -151,9 +154,7 @@ class ElasticLogRepository(LogRepository):
             return None
         return response.get("_source")
 
-    def get_operational_incident(
-        self, incident_id: str
-    ) -> dict[str, Any] | None:
+    def get_operational_incident(self, incident_id: str) -> dict[str, Any] | None:
         try:
             response = self.client.get(
                 index=ELASTIC_INCIDENT_INDEX,
@@ -163,9 +164,7 @@ class ElasticLogRepository(LogRepository):
             return None
         return response.get("_source")
 
-    def create_operational_incident(
-        self, document: dict[str, Any]
-    ) -> None:
+    def create_operational_incident(self, document: dict[str, Any]) -> None:
         self.client.index(
             index=ELASTIC_INCIDENT_INDEX,
             id=document["incident_id"],
@@ -206,9 +205,28 @@ class ElasticLogRepository(LogRepository):
         )
         return updated["_source"]
 
-    def list_operational_incidents(
-        self, minutes: int = 60
-    ) -> list[dict[str, Any]]:
+    def record_incident_occurrence(
+        self, incident_id, changes, expected_version, expected_count
+    ):
+        response = self.client.update(
+            index=ELASTIC_INCIDENT_INDEX,
+            id=incident_id,
+            script={
+                "lang": "painless",
+                "source": "if (ctx._source.version != params.version || ctx._source.occurrence_count != params.count) { ctx.op='none'; return; } for (entry in params.changes.entrySet()) { ctx._source[entry.getKey()]=entry.getValue(); }",
+                "params": {
+                    "version": expected_version,
+                    "count": expected_count,
+                    "changes": redact(changes),
+                },
+            },
+            refresh="wait_for",
+        )
+        if response.get("result") == "noop":
+            raise RuntimeError("incident aggregation conflict; retry")
+        return self.client.get(index=ELASTIC_INCIDENT_INDEX, id=incident_id)["_source"]
+
+    def list_operational_incidents(self, minutes: int = 60) -> list[dict[str, Any]]:
         response = self.client.search(
             index=ELASTIC_INCIDENT_INDEX,
             query={
@@ -222,14 +240,9 @@ class ElasticLogRepository(LogRepository):
             size=200,
             ignore_unavailable=True,
         )
-        return [
-            hit["_source"]
-            for hit in response.get("hits", {}).get("hits", [])
-        ]
+        return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])]
 
-    def get_recommendation(
-        self, recommendation_id: str
-    ) -> dict[str, Any] | None:
+    def get_recommendation(self, recommendation_id: str) -> dict[str, Any] | None:
         try:
             response = self.client.get(
                 index=ELASTIC_RECOMMENDATION_INDEX,
@@ -238,14 +251,9 @@ class ElasticLogRepository(LogRepository):
         except Exception:
             return None
         source = response.get("_source", {})
-        return (
-            source.get("recommendation")
-            or source.get("guidance")
-        )
+        return source.get("recommendation") or source.get("guidance")
 
-    def get_remediation_execution(
-        self, execution_id: str
-    ) -> dict[str, Any] | None:
+    def get_remediation_execution(self, execution_id: str) -> dict[str, Any] | None:
         try:
             response = self.client.get(
                 index=ELASTIC_REMEDIATION_INDEX,
@@ -262,9 +270,7 @@ class ElasticLogRepository(LogRepository):
         try:
             response = self.client.search(
                 index=ELASTIC_REMEDIATION_INDEX,
-                query={"match_phrase": {
-                    "recommendation_id": recommendation_id
-                }},
+                query={"match_phrase": {"recommendation_id": recommendation_id}},
                 sort=[{"approved_at": "asc"}],
                 size=50,
                 ignore_unavailable=True,
@@ -276,13 +282,10 @@ class ElasticLogRepository(LogRepository):
         return [
             hit["_source"]
             for hit in response["hits"]["hits"]
-            if hit["_source"].get("recommendation_id")
-            == recommendation_id
+            if hit["_source"].get("recommendation_id") == recommendation_id
         ]
 
-    def save_remediation_execution(
-        self, document: dict[str, Any]
-    ) -> None:
+    def save_remediation_execution(self, document: dict[str, Any]) -> None:
         self.client.index(
             index=ELASTIC_REMEDIATION_INDEX,
             id=document["execution_id"],
@@ -291,14 +294,10 @@ class ElasticLogRepository(LogRepository):
             refresh="wait_for",
         )
 
-    def save_recovery_verification(
-        self, document: dict[str, Any]
-    ) -> None:
+    def save_recovery_verification(self, document: dict[str, Any]) -> None:
         self._index(ELASTIC_RECOVERY_INDEX, document)
 
-    def save_resource_guidance(
-        self, document: dict[str, Any]
-    ) -> None:
+    def save_resource_guidance(self, document: dict[str, Any]) -> None:
         self.client.index(
             index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
             id=document["guidance_id"],
@@ -306,9 +305,7 @@ class ElasticLogRepository(LogRepository):
             refresh="wait_for",
         )
 
-    def get_resource_guidance(
-        self, guidance_id: str
-    ) -> dict[str, Any] | None:
+    def get_resource_guidance(self, guidance_id: str) -> dict[str, Any] | None:
         try:
             response = self.client.get(
                 index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
@@ -318,9 +315,7 @@ class ElasticLogRepository(LogRepository):
             return None
         return response.get("_source")
 
-    def save_operator_feedback(
-        self, document: dict[str, Any]
-    ) -> None:
+    def save_operator_feedback(self, document: dict[str, Any]) -> None:
         self._index(ELASTIC_OPERATOR_FEEDBACK_INDEX, document)
 
     def remediation_history(
@@ -330,26 +325,16 @@ class ElasticLogRepository(LogRepository):
         try:
             response = self.client.search(
                 index=ELASTIC_REMEDIATION_INDEX,
-                query={
-                    "term": {"script_id.keyword": script_id}
-                },
+                query={"term": {"script_id.keyword": script_id}},
                 size=0,
-                aggs={
-                    "by_status": {
-                        "terms": {
-                            "field": "result.status.keyword"
-                        }
-                    }
-                },
+                aggs={"by_status": {"terms": {"field": "result.status.keyword"}}},
                 ignore_unavailable=True,
             )
         except Exception:
             return {"success": 0, "failure": 0}
 
         buckets = (
-            response.get("aggregations", {})
-            .get("by_status", {})
-            .get("buckets", [])
+            response.get("aggregations", {}).get("by_status", {}).get("buckets", [])
         )
 
         # "rejected"/"blocked"는 실제로 실행된 적이 없으니 성공/실패
@@ -368,7 +353,6 @@ class ElasticLogRepository(LogRepository):
 
 
 class ElasticCaseSearcher(CaseSearcher):
-
     def __init__(self) -> None:
         self.client = get_client()
 
@@ -381,17 +365,9 @@ class ElasticCaseSearcher(CaseSearcher):
         query = {
             "bool": {
                 "should": [
-                    {
-                        "term": {
-                            "error_code": error_code
-                        }
-                    },
+                    {"term": {"error_code": error_code}},
                     {"match": {"summary": message}},
-                    {
-                        "match": {
-                            "root_cause": message
-                        }
-                    },
+                    {"match": {"root_cause": message}},
                 ],
                 "minimum_should_match": 1,
             }

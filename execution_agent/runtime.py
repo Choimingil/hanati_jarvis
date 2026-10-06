@@ -49,9 +49,20 @@ class AgentRuntime:
         if action["kind"] == "remediation" and (
             action["operation"] != "restart"
             or action.get("rollback") != "restore_runtime_state"
-            or action.get("business_probe") != "jarvis_pipeline"
+            or action.get("business_probe") not in {"jarvis_pipeline", "http_kpi"}
         ):
             raise ValueError("registered rollback and business verification required")
+        if action.get("business_probe") == "http_kpi":
+            from operations.business_probe import validate_probe
+
+            policy = validate_probe(action.get("business_recovery"))
+            if (
+                policy["expected_service"] != self.manifest["service"]
+                or policy["expected_environment"] != self.manifest["environment"]
+            ):
+                raise ValueError(
+                    "business probe identity differs from execution target"
+                )
         return action
 
     def preflight(self, body):
@@ -180,7 +191,9 @@ class AgentRuntime:
                         ),
                     )
                 )
-            samples.append(self.backend.verify(action))
+            samples.append(
+                self.backend.verify(action, execution_started_at=result["finished_at"])
+            )
         checks = [
             {
                 "name": c["name"],

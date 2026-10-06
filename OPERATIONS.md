@@ -60,3 +60,56 @@ Redis는 데이터 최대 메모리 128MiB와 `noeviction`을 사용합니다. �
 배포 서버에서 새 구성을 적용하려면 `git pull origin mingil` 후 `docker compose up -d --build`를 실행합니다. Agent를 사용하는 경우 `docker compose --profile execution up -d --build`를 사용합니다. 데이터 volume은 삭제하지 않습니다. 런타임 제한은 이미지 빌드에는 적용되지 않으며 빌드·모델 다운로드는 별도의 CPU·메모리·네트워크 부하를 만들 수 있습니다.
 
 적용 확인은 `docker stats --no-stream`으로 하고, `docker inspect hanati-aiops --format '{{.HostConfig.Memory}} {{.HostConfig.MemorySwap}} {{.HostConfig.NanoCpus}}'`로 실제 한도를 확인합니다. 서버의 `free -h`, 컨테이너 OOM 상태, 수집 신선도와 분석 대기열을 함께 관찰합니다. 이 설정은 측정 전 시작값으로, 실제 트래픽을 처리할 수 있다는 성능 보장은 아닙니다.
+
+## 업무 영향 우선순위와 반복 장애
+
+`business-services.example.json`을 `business-services.json`으로 복사하고 실제 환경·서비스명, 중요도(`tier1` 등), 긴급 기준을 설정합니다. 현재 예제는 설명용이며 자동으로 운영 정책에 적용되지 않습니다. 로그에는 선택적으로 다음 보고 정보를 포함할 수 있습니다.
+
+```json
+{"business_impact":{"failed_transactions":100,"affected_customers":20,"failure_rate":0.12,"p95_latency_ms":6000,"service_available":false}}
+```
+
+실패율은 0~1, 응답 시간은 ms입니다. 입력값은 확인된 사실이 아닌 보고 근거로 표시합니다. 기본적으로 핵심 업무 또는 거래/고객 피해는 P2, 업무 중단 또는 긴급 기준 초과는 P1, 영향 미확인은 P3입니다. 횟수만으로 업무 중단을 확정하지 않습니다. 현재 우선순위는 분석 큐의 순서를 재배치하지 않고 운영 화면과 추천에 표시합니다. 조직별 기준은 운영자가 검토해야 합니다.
+
+같은 환경·서비스·정규화 메시지·오류 코드의 로그는 기존 사건에 집계합니다. 최근 300초 내 분석이고 추천이 아직 유효하면 신규 분석/추천을 생략합니다. 발생 수와 마지막 발생·업무 영향은 갱신하며 단순 반복으로 승인 버전을 무효화하지 않습니다. 새 호스트, 우선순위 상승, 추천 만료, 분석 재검토 주기 경과 또는 해결 후 재발은 다시 분석합니다. 조치·복구 관찰 중에는 새 추천을 만들지 않습니다. 원문 로그와 개별 작업 접수증은 보존하므로 큐/저장 비용까지 없어지는 것은 아닙니다. 별도 외부 알림 발송은 이번 변경에 없습니다.
+
+## 읽기 전용 업무 복구 검사
+
+Agent 작업에 `business_probe: "http_kpi"`와 `business_recovery`를 설정하면 업무 상태 API를 GET으로 조회합니다. manifest의 `business_recovery_example`은 참고용이며 활성 정책이 아닙니다. 실제 연동 시 해당 내용을 `business_recovery`로 옮기고 실제 URL·허용 호스트·환경·서비스·지표 기준·비밀 환경변수를 설정해야 합니다. 예제 도메인은 호출 가능한 업무 API가 아닙니다. Agent 대상의 service/environment와 검사 정책의 expected_service/expected_environment가 일치해야 합니다.
+
+API 응답 예시는 다음과 같습니다.
+
+```json
+{
+  "service":"payment-api",
+  "environment":"production",
+  "sampled_at":"2026-10-06T07:10:30Z",
+  "window_started_at":"2026-10-06T07:10:00Z",
+  "success_rate":0.999,
+  "failure_rate":0.001,
+  "p95_latency_ms":100,
+  "transactions":100
+}
+```
+
+`window_started_at`부터 `sampled_at`까지 집계된 실제 거래 지표를 제공해야 합니다. 집계 구간은 조치 **완료 후** 시작하고, 표본은 기본 120초 이내여야 합니다. 타임존 없는 시간, 미래·과거 표본, 미달 거래 수, 잘못된 업무 식별자, 미달 성공률 또는 초과 실패율/응답 시간은 복구 실패로 처리합니다. 동일 조건을 두 차례 확인하고 Docker running/health도 함께 통과해야 incident를 해결합니다. URL은 관리자 허용 목록과 일치해야 하고 리다이렉트는 따라가지 않습니다. HTTPS를 기본으로 하며 내부 HTTP가 필요할 때만 `allow_internal_http: true`를 명시합니다. 토큰은 `.env`의 지정 환경변수로 전달합니다.
+
+업무 정책 누락 또는 API 조회 실패는 복구 확인 실패입니다. 현재 기본 `jarvis_pipeline`은 Jarvis 자체 처리 경로만 검증합니다. 금융 서비스에 해당 모드를 사용해 거래 복구를 확인했다고 판단하면 안 됩니다. 실제 거래 API, 계정, 조직 임계값은 제공되지 않았으므로 이번 변경에는 읽기 전용 연동 기능과 예제만 포함합니다. 일시 중단 허용 정책은 이번 1~4번 범위에 없으므로 단일 인스턴스 재시작 제한은 유지됩니다.
+
+## 짧은 배포·부하 확인
+
+검증도 기존 `hanati-aiops:local` 이미지의 `verification` profile로 실행합니다. 별도 호스트 실행 스크립트나 신규 이미지는 필요하지 않습니다. 실제 Docker socket을 조회하므로 신뢰할 수 있는 관리자만 실행하며, read-only mount가 Docker API 권한을 제한해 주는 것은 아닙니다. 검사 모듈은 Docker 변경 API를 호출하지 않습니다.
+
+```sh
+# 기동·초기화 종료 코드·OOM·실제 CPU/메모리 제한·API/worker readiness 확인
+# 최대 대기 구간 30초, 조회 실패 시 종료 코드 1
+docker compose --profile verification run --rm deployment-check
+# 실행 Agent까지 점검할 때
+docker compose --profile execution --profile verification run --rm deployment-check python -m operations.deployment_check --include-agent
+# 명시적으로 실행하는 10/50/100건 반복 오류 검사: 단계별 60초 제한
+docker compose --profile verification run --rm deployment-check python -m operations.load_check --counts 10 50 100 --deadline-seconds 60
+```
+
+부하 검사는 `validation` 환경·`jarvis-load-validation` 서비스의 합성 ERROR 로그를 전송합니다. 같은 오류 집계와 접수/완료 시간을 확인하는 검사이며 서로 다른 100개 장애의 LLM 처리량 측정은 아닙니다. 운영 대상과 동일한 검증용 서비스명을 등록하지 마세요. 실제 조치를 승인하지 않지만 ERROR 분석에 따른 외부 LLM 호출 비용이 발생할 수 있습니다. 타임아웃 시 다음 단계로 진행하지 않으며 이미 접수한 작업은 Worker가 계속 처리합니다. 결과와 `docker stats`, 저장소 여유, 대기열을 함께 확인하세요. 검사용 컨테이너는 실행 중에만 추가 128MiB 상한을 사용합니다.
+
+기동 검사 통과 후 별도의 점검 시간에 `docker compose restart aiops analysis-worker`로 재기동하고 같은 기동 검사를 반복해 확인할 수 있습니다. 이 명령은 서비스 중단을 수반하므로 실제 서버에서 자동으로 실행하지 않습니다. 현재 작업 환경에는 Docker 실행 환경이 없어 실 서버 기동·부하 수치는 측정하지 않았습니다.

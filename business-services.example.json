@@ -1,0 +1,15 @@
+{
+  "services": [
+    {
+      "environment": "production",
+      "service": "payment-api",
+      "criticality": "tier1",
+      "priority_thresholds": {
+        "failed_transactions": 100,
+        "affected_customers": 100,
+        "failure_rate": 0.1,
+        "p95_latency_ms": 5000
+      }
+    }
+  ]
+}

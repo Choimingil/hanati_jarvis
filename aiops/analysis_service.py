@@ -35,8 +35,7 @@ class MetricAnalysisService:
         host = snapshot.get("host", {}).get("hostname", "unknown")
         snapshots = self.repository.recent_metrics(host, minutes=15)
         if not any(
-            item.get("timestamp") == snapshot.get("timestamp")
-            for item in snapshots
+            item.get("timestamp") == snapshot.get("timestamp") for item in snapshots
         ):
             snapshots.append(snapshot)
         features = self.feature_extractor.extract(snapshots)
@@ -49,17 +48,53 @@ class MetricAnalysisService:
                 event["detection_code"],
                 INCIDENT_COOLDOWN_MINUTES,
             ):
-                results.append({
-                    "status": "cooldown",
-                    "detection_code": event["detection_code"],
-                })
+                results.append(
+                    {
+                        "status": "cooldown",
+                        "detection_code": event["detection_code"],
+                    }
+                )
                 continue
 
             logs = self.repository.recent_error_logs(host, minutes=10)
             correlation = self.correlator.correlate(event, logs)
-            context = self.context_builder.build(
-                event, features, correlation
-            )
+            context = self.context_builder.build(event, features, correlation)
+            operational = None
+            if self.incident_service is not None:
+                operational = self.incident_service.start(
+                    {
+                        "host": host,
+                        "environment": snapshot.get("environment", "unknown"),
+                        "service": snapshot.get("service", "unknown"),
+                        "message": context["message"],
+                    },
+                    event["error_code"],
+                    ingestion_id=(
+                        snapshot.get("ingestion_id", "") + ":" + event["detection_code"]
+                    )
+                    if snapshot.get("ingestion_id")
+                    else None,
+                )
+                if operational.get("status") in {"REMEDIATING", "MONITORING"}:
+                    results.append(
+                        {
+                            "status": "observation_in_progress",
+                            "incident_id": operational["incident_id"],
+                        }
+                    )
+                    continue
+            if operational and operational.get("analysis_suppressed"):
+                persisted = getattr(
+                    self.repository, "get_recommendation", lambda _: True
+                )(operational.get("latest_recommendation_id"))
+                if persisted:
+                    results.append(
+                        {
+                            "status": "aggregated",
+                            "incident_id": operational["incident_id"],
+                        }
+                    )
+                    continue
             try:
                 past_cases = self.case_searcher.search(
                     error_code=event["error_code"],
@@ -69,15 +104,6 @@ class MetricAnalysisService:
             except Exception:
                 past_cases = []
 
-            operational = None
-            if self.incident_service is not None:
-                operational = self.incident_service.start({
-                    "host": host, "environment": snapshot.get("environment", "unknown"),
-                    "service": snapshot.get("service", "unknown"), "message": context["message"],
-                }, event["error_code"], ingestion_id=(snapshot.get("ingestion_id", "")+":"+event["detection_code"]) if snapshot.get("ingestion_id") else None)
-                if operational.get("status") in {"REMEDIATING", "MONITORING"}:
-                    results.append({"status":"observation_in_progress","incident_id":operational["incident_id"]})
-                    continue
             rule = ERROR_RULES[event["error_code"]]
             recommendation = self.recommendation_generator.generate(
                 error_code=event["error_code"],
@@ -87,7 +113,9 @@ class MetricAnalysisService:
                 remediation_candidates=rule["remediation_candidates"],
             )
             if operational is not None:
-                recommendation, operational = self.incident_service.complete_analysis(operational, recommendation)
+                recommendation, operational = self.incident_service.complete_analysis(
+                    operational, recommendation
+                )
             incident = self.case_builder.build(
                 host,
                 event,
@@ -96,24 +124,32 @@ class MetricAnalysisService:
                 recommendation,
             )
             self.repository.save_incident(incident)
-            self.repository.save_recommendation({
-                "timestamp": now_iso(),
-                "source": "metric_anomaly",
-                "incident_id": operational["incident_id"] if operational else incident["incident_id"],
-                "recommendation": recommendation,
-            })
+            self.repository.save_recommendation(
+                {
+                    "timestamp": now_iso(),
+                    "source": "metric_anomaly",
+                    "incident_id": operational["incident_id"]
+                    if operational
+                    else incident["incident_id"],
+                    "recommendation": recommendation,
+                }
+            )
             try:
                 self.incident_indexer.index(incident)
                 indexed = True
             except Exception:
                 indexed = False
-            results.append({
-                "status": "recommended",
-                "incident_id": operational["incident_id"] if operational else incident["incident_id"],
-                "error_code": event["error_code"],
-                "detection_code": event["detection_code"],
-                "qdrant_indexed": indexed,
-                "recommendation": recommendation,
-            })
+            results.append(
+                {
+                    "status": "recommended",
+                    "incident_id": operational["incident_id"]
+                    if operational
+                    else incident["incident_id"],
+                    "error_code": event["error_code"],
+                    "detection_code": event["detection_code"],
+                    "qdrant_indexed": indexed,
+                    "recommendation": recommendation,
+                }
+            )
 
         return results

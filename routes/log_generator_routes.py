@@ -218,7 +218,7 @@ def recent_incidents():
                     }
                 }
             },
-            sort=[{"last_seen": "desc"}],
+            sort=[{"priority_rank":{"order":"asc","missing":"_last","unmapped_type":"long"}},{"last_seen":"desc"}],
             size=200,
             ignore_unavailable=True,
         )
@@ -242,6 +242,7 @@ def recent_incidents():
         ) or {}
         incidents.append(incident)
 
+    incidents.sort(key=lambda i: (i.get("status")=="RESOLVED", i.get("priority_rank",3)))
     return jsonify({
         "status": "ready",
         "incidents": incidents,
