@@ -18,6 +18,7 @@ class MetricAnalysisService:
         case_builder,
         incident_indexer,
         context_builder,
+        incident_service=None,
     ) -> None:
         self.repository = repository
         self.case_searcher = case_searcher
@@ -28,6 +29,7 @@ class MetricAnalysisService:
         self.case_builder = case_builder
         self.incident_indexer = incident_indexer
         self.context_builder = context_builder
+        self.incident_service = incident_service
 
     def analyze(self, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         host = snapshot.get("host", {}).get("hostname", "unknown")
@@ -67,6 +69,15 @@ class MetricAnalysisService:
             except Exception:
                 past_cases = []
 
+            operational = None
+            if self.incident_service is not None:
+                operational = self.incident_service.start({
+                    "host": host, "environment": snapshot.get("environment", "unknown"),
+                    "service": snapshot.get("service", "unknown"), "message": context["message"],
+                }, event["error_code"], ingestion_id=(snapshot.get("ingestion_id", "")+":"+event["detection_code"]) if snapshot.get("ingestion_id") else None)
+                if operational.get("status") in {"REMEDIATING", "MONITORING"}:
+                    results.append({"status":"observation_in_progress","incident_id":operational["incident_id"]})
+                    continue
             rule = ERROR_RULES[event["error_code"]]
             recommendation = self.recommendation_generator.generate(
                 error_code=event["error_code"],
@@ -75,6 +86,8 @@ class MetricAnalysisService:
                 past_cases=past_cases,
                 remediation_candidates=rule["remediation_candidates"],
             )
+            if operational is not None:
+                recommendation, operational = self.incident_service.complete_analysis(operational, recommendation)
             incident = self.case_builder.build(
                 host,
                 event,
@@ -86,7 +99,7 @@ class MetricAnalysisService:
             self.repository.save_recommendation({
                 "timestamp": now_iso(),
                 "source": "metric_anomaly",
-                "incident_id": incident["incident_id"],
+                "incident_id": operational["incident_id"] if operational else incident["incident_id"],
                 "recommendation": recommendation,
             })
             try:
@@ -96,7 +109,7 @@ class MetricAnalysisService:
                 indexed = False
             results.append({
                 "status": "recommended",
-                "incident_id": incident["incident_id"],
+                "incident_id": operational["incident_id"] if operational else incident["incident_id"],
                 "error_code": event["error_code"],
                 "detection_code": event["detection_code"],
                 "qdrant_indexed": indexed,

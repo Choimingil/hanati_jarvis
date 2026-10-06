@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 from config import SCRIPT_DESCRIPTIONS
+from operations.privacy import redact
 from llm_agent.services.llm_service import LLMService
 from ports.log_repository import LogRepository
 from ports.recommendation_generator import (
@@ -137,6 +138,8 @@ class LLMRecommendationGenerator(RecommendationGenerator):
         past_cases: list[dict[str, Any]],
         remediation_candidates: list[str],
     ) -> str:
+        message = redact(message)
+        past_cases = redact(past_cases)
         candidate_lines = "\n".join(
             f"- {script_id}: "
             f"{SCRIPT_DESCRIPTIONS.get(script_id, script_id)}"

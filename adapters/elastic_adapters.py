@@ -13,6 +13,7 @@ from config import (
     ELASTIC_REMEDIATION_INDEX,
 )
 from elastic.client import get_client
+from operations.privacy import redact
 from ports.case_searcher import CaseSearcher
 from ports.log_repository import LogRepository
 
@@ -29,14 +30,18 @@ class ElasticLogRepository(LogRepository):
     ) -> None:
         self.client.index(
             index=index,
-            document=document,
+            document=redact(document),
         )
 
     def save_log(
         self,
         document: dict[str, Any],
     ) -> None:
-        self._index(ELASTIC_LOG_INDEX, document)
+        ingestion_id = document.get("ingestion_id")
+        if ingestion_id:
+            self.client.index(index=ELASTIC_LOG_INDEX, id=ingestion_id, document=redact(document))
+        else:
+            self._index(ELASTIC_LOG_INDEX, document)
 
     def save_diagnosis(
         self,
@@ -60,7 +65,7 @@ class ElasticLogRepository(LogRepository):
             self.client.index(
                 index=ELASTIC_RECOMMENDATION_INDEX,
                 id=recommendation_id,
-                document=document,
+                document=redact(document),
             )
         else:
             self._index(
@@ -77,7 +82,11 @@ class ElasticLogRepository(LogRepository):
         self,
         document: dict[str, Any],
     ) -> None:
-        self._index(ELASTIC_METRICS_INDEX, document)
+        ingestion_id = document.get("ingestion_id")
+        if ingestion_id:
+            self.client.index(index=ELASTIC_METRICS_INDEX, id=ingestion_id, document=redact(document))
+        else:
+            self._index(ELASTIC_METRICS_INDEX, document)
 
     def recent_metrics(
         self, host: str, minutes: int
@@ -114,7 +123,7 @@ class ElasticLogRepository(LogRepository):
         self.client.index(
             index=ELASTIC_INCIDENT_CASES_INDEX,
             id=document["incident_id"],
-            document=document,
+            document=redact(document),
             refresh="wait_for",
         )
 
@@ -160,7 +169,7 @@ class ElasticLogRepository(LogRepository):
         self.client.index(
             index=ELASTIC_INCIDENT_INDEX,
             id=document["incident_id"],
-            document=document,
+            document=redact(document),
             op_type="create",
             refresh="wait_for",
         )
@@ -184,7 +193,7 @@ class ElasticLogRepository(LogRepository):
                 ),
                 "params": {
                     "expected": expected_version,
-                    "changes": changes,
+                    "changes": redact(changes),
                 },
             },
             refresh="wait_for",
@@ -277,7 +286,7 @@ class ElasticLogRepository(LogRepository):
         self.client.index(
             index=ELASTIC_REMEDIATION_INDEX,
             id=document["execution_id"],
-            document=document,
+            document=redact(document),
             op_type="create",
             refresh="wait_for",
         )
@@ -293,7 +302,7 @@ class ElasticLogRepository(LogRepository):
         self.client.index(
             index=ELASTIC_RESOURCE_GUIDANCE_INDEX,
             id=document["guidance_id"],
-            document=document,
+            document=redact(document),
             refresh="wait_for",
         )
 

@@ -1,7 +1,7 @@
 """추천 조치를 스크립트 하나(script_id)가 아니라 Runbook 단위로 다루기
 위한 운영 메타데이터.
 
-config.REMEDIATION_SCRIPTS의 각 조치 스크립트에 대해, 운영자가 승인
+config.ERROR_RULES의 각 조치 ID에 대해, 운영자가 승인
 여부를 판단하는 데 필요한 정보(장애 설명/조치 내용/예상 영향/실패 시
 대응)를 붙인다. "과거 실행 성공/실패 횟수"는 여기 없다 - 정적으로
 박아두면 바로 거짓말이 되므로, application-remediations 인덱스에서

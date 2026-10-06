@@ -1,7 +1,6 @@
 from functools import lru_cache
 
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
 
 from config import (
     EMBEDDING_MODEL_NAME,
@@ -20,7 +19,8 @@ def get_client() -> QdrantClient:
 
 
 @lru_cache(maxsize=1)
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
+    from sentence_transformers import SentenceTransformer
     return SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 

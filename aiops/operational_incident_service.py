@@ -8,6 +8,7 @@ from typing import Any
 
 from config import RECOMMENDATION_TTL_MINUTES
 from utils.time_utils import now_iso
+from operations.settings import targets_for
 
 
 OPEN_STATUSES = {
@@ -61,6 +62,7 @@ class OperationalIncidentService:
         self,
         log: dict[str, Any],
         error_code: str | None,
+        ingestion_id: str | None = None,
     ) -> dict[str, Any]:
         fingerprint = build_fingerprint(log, error_code)
         incident_id = build_incident_id(fingerprint)
@@ -94,6 +96,7 @@ class OperationalIncidentService:
                 "latest_recommendation_id": None,
                 "latest_recommendation": None,
                 "version": 1,
+                "ingestion_ids": [ingestion_id] if ingestion_id else [],
             }
             try:
                 self.repository.create_operational_incident(incident)
@@ -107,6 +110,8 @@ class OperationalIncidentService:
                 if existing is None:
                     raise
 
+        if ingestion_id and ingestion_id in existing.get("ingestion_ids", []):
+            return existing
         hosts = set(existing.get("affected_hosts") or [])
         hosts.add(host)
         count = int(existing.get("occurrence_count", 0)) + 1
@@ -126,6 +131,7 @@ class OperationalIncidentService:
                 "last_seen": timestamp,
                 "occurrence_count": count,
                 "affected_hosts": sorted(hosts),
+                "ingestion_ids": (existing.get("ingestion_ids", []) + ([ingestion_id] if ingestion_id else []))[-1000:],
                 "version": int(existing.get("version", 1)) + 1,
             },
             expected_version=int(existing.get("version", 1)),
@@ -167,6 +173,7 @@ class OperationalIncidentService:
                 + timedelta(minutes=RECOMMENDATION_TTL_MINUTES)
             ).isoformat(),
             "actions": actions,
+            "targets": targets_for(incident),
         }
         updated = self.repository.update_operational_incident(
             incident["incident_id"],

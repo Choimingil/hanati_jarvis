@@ -1,7 +1,6 @@
 from typing import Any
 
 from config import (
-    DIAGNOSTIC_SCRIPTS,
     ERROR_RULES,
 )
 from error_detector import detect_error_code
@@ -11,7 +10,6 @@ from ports.log_repository import LogRepository
 from ports.recommendation_generator import (
     RecommendationGenerator,
 )
-from script_runner import run_script
 from utils.time_utils import now_iso
 
 
@@ -43,6 +41,7 @@ class LogProcessor:
     def process(
         self,
         raw_log: dict[str, Any],
+        ingestion_id: str | None = None,
     ) -> dict[str, Any]:
         log = normalize_log(raw_log)
 
@@ -60,11 +59,12 @@ class LogProcessor:
             log["message"]
         )
         incident = (
-            self.incident_service.start(log, error_code)
+            self.incident_service.start(log, error_code, ingestion_id=ingestion_id)
             if self.incident_service is not None
             else None
         )
         self.repository.save_log({
+            "ingestion_id": ingestion_id,
             "received_at": now_iso(),
             "incident_id": (
                 incident.get("incident_id")
@@ -72,6 +72,9 @@ class LogProcessor:
             ),
             **log,
         })
+
+        if incident and incident.get("status") in {"REMEDIATING", "MONITORING"}:
+            return {"status": "stored", "reason": "execution or recovery observation in progress"}
 
         if error_code is None:
             return self._resource_fallback(
@@ -243,10 +246,11 @@ class LogProcessor:
         results: list[dict[str, Any]] = []
 
         for script_id in script_ids:
-            result = run_script(
-                script_id,
-                DIAGNOSTIC_SCRIPTS,
-            )
+            result = {
+                "script_id": script_id,
+                "status": "not_run",
+                "reason": "select a registered target and request agent diagnosis",
+            }
 
             results.append(result)
 

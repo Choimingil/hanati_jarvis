@@ -1,0 +1,32 @@
+{
+  "host": "jarvis-compose-node",
+  "environment": "development",
+  "service": "aiops",
+  "instance": "hanati-aiops",
+  "compose_project": "hanati-jarvis",
+  "recovery_interval_seconds": 5,
+  "actions": {
+    "restart_application": {
+      "enabled": false,
+      "kind": "remediation",
+      "operation": "restart",
+      "container": "hanati-aiops",
+      "compose_service": "aiops",
+      "approved_image": "hanati-aiops:local",
+      "redundancy_peers": [],
+      "rollback": "restore_runtime_state",
+      "business_probe": "jarvis_pipeline",
+      "probe_url": "http://aiops:8080",
+      "expected_impact": "aiops 컨테이너 재시작 중 요청 처리 중단",
+      "rollback_description": "동일 이미지·컨테이너의 실행 상태 복원; 이미지 버전 변경은 수행하지 않음"
+    },
+    "check_memory_usage": {
+      "enabled": false,
+      "kind": "diagnostic",
+      "operation": "inspect",
+      "container": "hanati-aiops",
+      "compose_service": "aiops",
+      "approved_image": "hanati-aiops:local"
+    }
+  }
+}

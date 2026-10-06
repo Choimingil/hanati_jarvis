@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, UTC
 
 from aiops.fallback_guidance_generator import FallbackGuidanceGenerator
 from aiops.feature_extractor import MetricFeatureExtractor
@@ -11,7 +12,7 @@ from log_processor import LogProcessor
 
 def metric(memory=92, close_wait=0):
     return {
-        "timestamp": "2026-08-07T12:00:00+09:00",
+        "timestamp": datetime.now(UTC).isoformat(),
         "host": {"hostname": "server01"},
         "cpu": {"percent": 30},
         "memory": {

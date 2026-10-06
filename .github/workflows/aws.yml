@@ -32,7 +32,8 @@ jobs:
             echo "Deployed commit:"
             git -c safe.directory=/opt/jarvis log -1 --oneline
 
-            docker compose up -d --build --no-deps --force-recreate aiops
+            docker compose up -d redis
+            docker compose up -d --build --no-deps --force-recreate aiops analysis-worker
 
             docker compose ps aiops
 

@@ -1,62 +1,60 @@
+name: hanati-jarvis
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
     container_name: hanati-es
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    - discovery.type=single-node
+    - xpack.security.enabled=false
+    - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+    - 127.0.0.1:9200:9200
     volumes:
-      - elastic-data:/usr/share/elasticsearch/data
+    - elastic-data:/usr/share/elasticsearch/data
     healthcheck:
       test:
-        ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      - CMD-SHELL
+      - curl -fsS http://localhost:9200 >/dev/null || exit 1
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 20s
-
   elastic-init:
     image: python:3.11-slim
     container_name: hanati-elastic-init
     working_dir: /workspace
     volumes:
-      - .:/workspace
+    - .:/workspace
     environment:
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - ELASTICSEARCH_USER=elastic
-      - ELASTICSEARCH_PASSWORD=
-      - ELASTICSEARCH_VERIFY_CERTS=false
+    - ELASTICSEARCH_URL=http://elasticsearch:9200
+    - ELASTICSEARCH_USER=elastic
+    - ELASTICSEARCH_PASSWORD=
+    - ELASTICSEARCH_VERIFY_CERTS=false
     depends_on:
       elasticsearch:
         condition: service_healthy
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/elastic/requirements.txt && \
-      python -m elastic.main && \
-      python -m elastic.mapping && \
-      python -m elastic.seed_cases"
-    restart: "no"
-
+    command:
+    - sh
+    - -c
+    - pip install --no-cache-dir -r /workspace/elastic/requirements.txt && python
+      -m elastic.main && python -m elastic.mapping && python -m elastic.seed_cases
+    restart: 'no'
   qdrant:
     image: qdrant/qdrant:latest
     container_name: hanati-qdrant
     ports:
-      - "6333:6333"
+    - 127.0.0.1:6333:6333
     volumes:
-      - qdrant-data:/qdrant/storage
+    - qdrant-data:/qdrant/storage
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 && printf \"GET /healthz HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q \"200 OK\" <&3'",
-        ]
+      - CMD-SHELL
+      - bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 && printf "GET /healthz HTTP/1.0\r\n\r\n"
+        >&3 && grep -q "200 OK" <&3'
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 10s
-
   qdrant-init:
     image: hanati-qdrant-init:local
     build:
@@ -65,20 +63,22 @@ services:
     container_name: hanati-qdrant-init
     working_dir: /workspace
     volumes:
-      - .:/workspace
-      - embedding-cache:/models
+    - .:/workspace
+    - embedding-cache:/models
     environment:
-      - QDRANT_URL=http://qdrant:6333
-      - QDRANT_COLLECTION=incident_cases
-      - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - EMBEDDING_VECTOR_SIZE=384
-      - HF_HOME=/models
+    - QDRANT_URL=http://qdrant:6333
+    - QDRANT_COLLECTION=incident_cases
+    - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    - EMBEDDING_VECTOR_SIZE=384
+    - HF_HOME=/models
     depends_on:
       qdrant:
         condition: service_healthy
-    command: ["python", "-m", "qdrant.seed"]
-    restart: "no"
-
+    command:
+    - python
+    - -m
+    - qdrant.seed
+    restart: 'no'
   log-generator:
     image: hanati-log-generator:local
     build:
@@ -87,44 +87,47 @@ services:
     container_name: hanati-log-generator
     working_dir: /workspace
     volumes:
-      - .:/workspace
-      - log-volume:/workspace/fluentbit
+    - .:/workspace
+    - log-volume:/workspace/fluentbit
     environment:
-      - PYTHONPATH=/workspace/log_generator:/workspace
-    command: ["python", "/workspace/log_generator/main.py"]
-    restart: "no"
-
+    - PYTHONPATH=/workspace/log_generator:/workspace
+    command:
+    - python
+    - /workspace/log_generator/main.py
+    restart: 'no'
   fluent-bit:
     image: fluent/fluent-bit:latest
     container_name: hanati-fluent-bit
     volumes:
-      - ./fluentbit:/fluent-bit/etc
-      - log-volume:/var/log/app
-    command: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+    - ./fluentbit:/fluent-bit/etc
+    - log-volume:/var/log/app
+    command:
+    - -c
+    - /fluent-bit/etc/fluent-bit.conf
     depends_on:
-      - log-generator
-      - aiops
+    - log-generator
+    - aiops
     ports:
-      - "9880:9880"
-
+    - 9880:9880
   collector:
     image: python:3.11-slim
     container_name: hanati-collector
     working_dir: /workspace
     volumes:
-      - .:/workspace
+    - .:/workspace
     environment:
-      - PYTHONPATH=/workspace
-      - METRICS_API_URL=http://aiops:8080/api/v1/metrics
-      - METRICS_COLLECT_INTERVAL_SECONDS=30
-      - METRICS_PROCESS_LIMIT=20
+    - PYTHONPATH=/workspace
+    - METRICS_API_URL=http://aiops:8080/api/v1/metrics
+    - METRICS_COLLECT_INTERVAL_SECONDS=30
+    - METRICS_PROCESS_LIMIT=20
     depends_on:
-      - aiops
-    command: >
-      sh -c "pip install --no-cache-dir -r /workspace/collector/requirements.txt && \
-      python -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30"
-    restart: "no"
-
+    - aiops
+    command:
+    - sh
+    - -c
+    - pip install --no-cache-dir -r /workspace/collector/requirements.txt && python
+      -m collector.agent --url http://aiops:8080/api/v1/metrics --interval 30
+    restart: unless-stopped
   llm-agent:
     image: hanati-llm-agent:local
     build:
@@ -133,20 +136,25 @@ services:
     container_name: hanati-llm-agent
     working_dir: /workspace
     volumes:
-      - .:/workspace
+    - .:/workspace
     environment:
-      - PYTHONPATH=/workspace
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
-      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    - PYTHONPATH=/workspace
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+    - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+    - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
     ports:
-      - "8000:8000"
+    - 127.0.0.1:8000:8000
     command:
-      ["uvicorn", "llm_agent.app:app", "--host", "0.0.0.0", "--port", "8000"]
-    restart: "no"
-
+    - uvicorn
+    - llm_agent.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    restart: 'no'
   aiops:
     image: hanati-aiops:local
     build:
@@ -155,27 +163,30 @@ services:
     container_name: hanati-aiops
     working_dir: /workspace
     volumes:
-      - .:/workspace
-      - log-volume:/workspace/fluentbit
-      - embedding-cache:/models
+    - .:/workspace
+    - log-volume:/workspace/fluentbit
+    - embedding-cache:/models
     environment:
-      - PYTHONPATH=/workspace
-      - API_HOST=0.0.0.0
-      - API_PORT=8080
-      - LOG_REPOSITORY_BACKEND=elastic
-      - CASE_SEARCHER_BACKEND=hybrid
-      - RECOMMENDATION_BACKEND=llm
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
-      - QDRANT_URL=http://qdrant:6333
-      - QDRANT_COLLECTION=incident_cases
-      - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - EMBEDDING_VECTOR_SIZE=384
-      - HF_HOME=/models
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
-      - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    - PYTHONPATH=/workspace
+    - API_HOST=0.0.0.0
+    - API_PORT=8080
+    - LOG_REPOSITORY_BACKEND=elastic
+    - CASE_SEARCHER_BACKEND=hybrid
+    - RECOMMENDATION_BACKEND=llm
+    - ELASTICSEARCH_URL=http://elasticsearch:9200
+    - QDRANT_URL=http://qdrant:6333
+    - QDRANT_COLLECTION=incident_cases
+    - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    - EMBEDDING_VECTOR_SIZE=384
+    - HF_HOME=/models
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+    - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+    - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    - REDIS_URL=redis://redis:6379/0
+    - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
+    - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -185,13 +196,135 @@ services:
         condition: service_completed_successfully
       llm-agent:
         condition: service_started
+      redis:
+        condition: service_healthy
     ports:
-      - "8080:8080"
-    command: ["python", "/workspace/app.py"]
-    restart: "no"
-
+    - 8080:8080
+    command:
+    - python
+    - /workspace/app.py
+    restart: unless-stopped
+    env_file:
+    - path: .env
+      required: false
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',
+        timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  redis:
+    image: redis:7.4-alpine
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    - --appendfsync
+    - always
+    - --maxmemory-policy
+    - noeviction
+    ports:
+    - 127.0.0.1:6379:6379
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  analysis-worker:
+    image: hanati-aiops:local
+    build:
+      context: .
+      dockerfile: aiops/Dockerfile
+    working_dir: /workspace
+    volumes:
+    - .:/workspace
+    - log-volume:/workspace/fluentbit
+    - embedding-cache:/models
+    environment:
+    - PYTHONPATH=/workspace
+    - API_HOST=0.0.0.0
+    - API_PORT=8080
+    - LOG_REPOSITORY_BACKEND=elastic
+    - CASE_SEARCHER_BACKEND=hybrid
+    - RECOMMENDATION_BACKEND=llm
+    - ELASTICSEARCH_URL=http://elasticsearch:9200
+    - QDRANT_URL=http://qdrant:6333
+    - QDRANT_COLLECTION=incident_cases
+    - EMBEDDING_MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    - EMBEDDING_VECTOR_SIZE=384
+    - HF_HOME=/models
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+    - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.2}
+    - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
+    - REDIS_URL=redis://redis:6379/0
+    - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
+    - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      qdrant-init:
+        condition: service_completed_successfully
+      llm-agent:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    env_file:
+    - path: .env
+      required: false
+    command:
+    - python
+    - -m
+    - operations.worker
+    container_name: hanati-analysis-worker
+  execution-agent:
+    image: hanati-aiops:local
+    build:
+      context: .
+      dockerfile: aiops/Dockerfile
+    profiles:
+    - execution
+    hostname: jarvis-compose-node
+    container_name: hanati-execution-agent
+    working_dir: /workspace
+    volumes:
+    - ./agent-manifest.json:/config/manifest.json:ro
+    - execution-agent-state:/state
+    - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+    - path: .env
+      required: false
+    environment:
+    - EXECUTION_AGENT_MANIFEST=/config/manifest.json
+    - EXECUTION_AGENT_JOURNAL=/state/executions.sqlite
+    - EXECUTION_AGENT_BIND=0.0.0.0
+    - EXECUTION_AGENT_PORT=8090
+    ports:
+    - 127.0.0.1:8090:8090
+    command:
+    - python
+    - -m
+    - execution_agent.app
+    restart: unless-stopped
 volumes:
-  elastic-data:
-  qdrant-data:
-  log-volume:
-  embedding-cache:
+  elastic-data: null
+  qdrant-data: null
+  log-volume: null
+  embedding-cache: null
+  redis-data: null
+  execution-agent-state: null

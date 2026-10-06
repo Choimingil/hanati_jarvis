@@ -14,3 +14,8 @@ fluentbit/application.log
 qdrant/storage
 node_modules
 .DS_Store
+
+.env
+execution-targets.json
+agent-manifest.json
+agent-state

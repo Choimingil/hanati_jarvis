@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv(override=False)
 
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
@@ -48,16 +51,7 @@ RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD = float(
     os.getenv("RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD", "60")
 )
 
-SCRIPT_TIMEOUT_SECONDS = int(
-    os.getenv("SCRIPT_TIMEOUT_SECONDS", "30")
-)
 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-def _runbook(name: str) -> str:
-    return os.path.join(BASE_DIR, "test-runbooks", f"{name}.sh")
 
 
 # log_generator가 발생시키는 각 장애 시나리오(+ 기존 ORA-28040)에 대한
@@ -366,20 +360,7 @@ SCRIPT_DESCRIPTIONS = {
 
 
 # ERROR_RULES에 등장하는 모든 스크립트 id를 실제 파일 경로로 매핑.
-# run_script()의 allowlist 역할을 한다 (여기 없는 id는 실행 불가).
-DIAGNOSTIC_SCRIPTS = {
-    script_id: _runbook(script_id)
-    for rule in ERROR_RULES.values()
-    for script_id in rule["diagnostic_scripts"]
-}
-
-# 운영자가 추천안 중 하나를 승인했을 때 실행되는 원격조치 스크립트.
-REMEDIATION_SCRIPTS = {
-    script_id: _runbook(script_id)
-    for rule in ERROR_RULES.values()
-    for script_id in rule["remediation_candidates"]
-}
-
+# 실행 명령 allowlist는 대상 Agent의 manifest에서 관리한다.
 
 # "qdrant" / "elastic" / "hybrid" (기본값) 중 선택. mock 없음 - Qdrant/
 # Elasticsearch가 꺼져 있으면 case_searcher 요청은 그대로 실패한다.
@@ -390,7 +371,7 @@ CASE_SEARCHER_BACKEND = os.getenv(
     "CASE_SEARCHER_BACKEND", "hybrid"
 )
 
-# scripts/dev_infra.sh가 띄우는 Qdrant 컨테이너 기본 주소.
+# Docker Compose Qdrant 서비스 주소는 환경변수로 주입한다.
 # 반드시 실제 Qdrant 서버를 가리켜야 한다 (로컬 파일 fallback 없음).
 QDRANT_URL = os.getenv(
     "QDRANT_URL", "http://localhost:6333"
@@ -420,7 +401,7 @@ RECOMMENDATION_BACKEND = "llm"
 # 꺼져 있으면 로그/진단/추천 저장 요청이 그대로 실패한다.
 LOG_REPOSITORY_BACKEND = "elastic"
 
-# scripts/dev_infra.sh가 띄우는 Elasticsearch 컨테이너는 개발용으로
+# Docker Compose Elasticsearch 서비스는 개발용으로
 # xpack.security.enabled=false, 즉 http/무인증이라 기본값도 맞춰둔다.
 ELASTICSEARCH_URL = os.getenv(
     "ELASTICSEARCH_URL", "http://localhost:9200"

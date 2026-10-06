@@ -84,6 +84,8 @@ class SystemCollector:
 
         return {
             "timestamp": now_iso(),
+            "environment": os.getenv("METRICS_ENVIRONMENT", "unknown"),
+            "service": os.getenv("METRICS_SERVICE", "unknown"),
             "host": {
                 "hostname": socket.gethostname(),
                 "os": platform.system(),

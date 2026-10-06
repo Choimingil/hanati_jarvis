@@ -1,0 +1,11 @@
+[
+  {
+    "host": "jarvis-compose-node",
+    "environment": "development",
+    "service": "aiops",
+    "instance": "hanati-aiops",
+    "url": "http://execution-agent:8090",
+    "scope": "compose",
+    "token_env": "EXECUTION_AGENT_TOKEN"
+  }
+]

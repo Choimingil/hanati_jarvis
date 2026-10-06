@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
 from typing import Any
+from operations.privacy import redact
 
 
 def normalize_log(
     raw_log: dict[str, Any],
 ) -> dict[str, Any]:
+    raw_log = redact(raw_log)
     level = str(
         raw_log.get("level", "")
     ).upper()

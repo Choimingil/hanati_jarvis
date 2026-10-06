@@ -14,6 +14,8 @@ class RecoveryVerifier:
         incident: dict[str, Any],
         after_snapshots: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        if not after_snapshots:
+            return {"incident_id": incident.get("incident_id"), "recovered": False, "status": "insufficient_data", "checks": []}
         before = incident.get("metric_features", {})
         after = self.extractor.extract(after_snapshots)
         code = incident.get("error_code")
@@ -52,12 +54,8 @@ class RecoveryVerifier:
                 after.get("close_wait_latest"),
             )
         else:
-            check(
-                "network_errors_stable",
-                after.get("network_error_growth", 1) <= 0,
-                before.get("network_error_growth"),
-                after.get("network_error_growth"),
-            )
+            return {"incident_id": incident.get("incident_id"), "recovered": False, "status": "business_check_required", "checks": []}
+
 
         return {
             "incident_id": incident.get("incident_id"),

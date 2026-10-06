@@ -71,6 +71,7 @@ metric_analysis_service = MetricAnalysisService(
     case_builder=IncidentCaseBuilder(),
     incident_indexer=QdrantIncidentIndexer(),
     context_builder=ContextBuilder(),
+    incident_service=operational_incident_service,
 )
 
 operator_feedback_service = OperatorFeedbackService(

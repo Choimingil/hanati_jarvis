@@ -6,6 +6,7 @@ from typing import Any
 
 from llm_agent.services.llm_service import LLMService
 from utils.time_utils import now_iso
+from operations.privacy import redact
 
 
 class FallbackGuidanceGenerator:
@@ -57,6 +58,9 @@ class FallbackGuidanceGenerator:
 
     @staticmethod
     def _prompt(log, hypotheses, past_cases) -> str:
+        log = redact({k: log.get(k) for k in ("message", "service", "host", "level")})
+        hypotheses = redact(hypotheses)
+        past_cases = redact(past_cases)
         return f"""당신은 AIOps 분석가입니다. 확정되지 않은 원인을 만들지 마십시오.
 다음 후보 중 가장 근거가 강한 problem_code 하나를 고르고 수치 근거를 포함한
 짧은 한국어 summary를 작성하십시오.

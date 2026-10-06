@@ -220,6 +220,7 @@ _PAGE = """<!doctype html>
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
     <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
+  <div class="card"><strong>수집·분석 상태</strong><div id="operations-status">상태 확인 중…</div><div id="collection-hosts"></div></div>
   <div class="incident-stats">
     <div class="incident-stat"><span>진행 중</span><strong id="stat-open">0건</strong></div>
     <div class="incident-stat"><span>긴급</span><strong id="stat-critical">0건</strong></div>
@@ -345,6 +346,8 @@ _PAGE = """<!doctype html>
     <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
     <div id="exec-status"></div>
     <pre id="exec-output"></pre>
+    <button id="refresh-execution" class="secondary hidden">실행 결과 다시 확인</button>
+    <button id="verify-execution" class="secondary hidden">업무 복구 확인</button>
   </div>
 </div>
 
@@ -358,6 +361,39 @@ let currentRecommendation = null;
 let currentGuidance = null;
 let selectedVerdict = null;
 let incidentItems = [];
+let lastExecutionId = null;
+function actionBody(action, el) {
+  const selected = el.querySelector(".target-select").value;
+  return {
+    incident_id: currentRecommendation.incident_id,
+    recommendation_id: currentRecommendation.recommendation_id,
+    action_id: action.action_id,
+    incident_version: currentRecommendation.incident_version,
+    approved_by: "web-ui",
+    target: selected === "" ? null : el.targets[Number(selected)],
+    preflight_id: el.preflightId || null,
+  };
+}
+async function loadOperationsStatus() {
+  try {
+    const data = await getJSON("/api/v1/operations/status");
+    $("operations-status").textContent = `${data.status} / 확인 시각: ${data.checked_at} / 대기 ${data.queue?.stream_length || 0}건 / 실패 보관 ${data.queue?.dead_letters || 0}건`;
+    $("collection-hosts").textContent = (data.hosts || []).map(h => `${h.host}: ${h.status} (마지막 수집 ${h.last_sample_at || "없음"})${h.connections_access_denied ? " / 연결 조회 권한 부족" : ""}`).join(" · ");
+  } catch (error) { $("operations-status").textContent = "상태 조회 실패 — 현재 표시된 데이터가 최신인지 확인하세요."; }
+}
+loadOperationsStatus(); setInterval(loadOperationsStatus,15000);
+$("refresh-execution").addEventListener("click", async () => {
+  if (!lastExecutionId) return;
+  const data = await getJSON("/api/v1/remediations/executions/" + encodeURIComponent(lastExecutionId));
+  showExecResult("실행 결과", {...data.result,execution_id:lastExecutionId},200);
+});
+$("verify-execution").addEventListener("click", async () => {
+  if (!lastExecutionId) return;
+  const {data} = await postJSON("/api/v1/remediations/verify", {execution_id:lastExecutionId});
+  $("exec-output").textContent = JSON.stringify(data,null,2);
+  $("exec-status").textContent = data.recovered ? "업무 복구 확인 완료" : "업무 복구 미확인";
+  await loadIncidents();
+});
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -384,7 +420,7 @@ async function loadIncidents() {
     $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
     $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
   } catch (error) {
-    /* stats stay at last known values */
+    $("operations-status").textContent = "사건 조회 실패 — 표시된 사건 수는 마지막 조회 결과입니다.";
   }
 }
 function showLogSource(panelId) {
@@ -417,7 +453,9 @@ setInterval(loadIncidents, 15000);
 
 async function getJSON(url) {
   const res = await fetch(url);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.reason || data.status || "조회 실패");
+  return data;
 }
 
 async function postJSON(url, body) {
@@ -508,7 +546,7 @@ async function pollActivity() {
       (data.elasticsearch_log || []).join("\\n");
     $("es-output").scrollTop = $("es-output").scrollHeight;
   } catch (e) {
-    // 폴링 실패는 조용히 무시하고 다음 주기에 재시도
+    $("wait-status").textContent = "로그 조회 지연 — 마지막 표시 데이터 이후 상태를 확인 중입니다.";
   }
 }
 
@@ -597,25 +635,29 @@ function renderRecommendation(errorCode, rec, decisions = []) {
   box.innerHTML = "";
 
   runbooks.forEach((rb) => {
-    const pct = Math.max(0, Math.min(100, rb.confidence));
+    const pct = Number.isFinite(Number(rb.confidence)) ? Math.max(0, Math.min(100, Number(rb.confidence))) : 0;
     const el = document.createElement("div");
     el.className = "runbook";
     el.innerHTML = `
       <div class="runbook-tag">조치 제안</div>
       <dl>
-        <dt>장애</dt><dd>${rb.incident}</dd>
-        <dt>추정 원인</dt><dd>${rb.estimated_cause}</dd>
+        <dt>장애</dt><dd>${esc(rb.incident)}</dd>
+        <dt>추정 원인</dt><dd>${esc(rb.estimated_cause)}</dd>
         <dt>신뢰도</dt><dd>${pct}%
           <div class="confidence-bar"><span style="width:${pct}%"></span></div>
         </dd>
-        <dt>조치</dt><dd>${rb.action}</dd>
-        <dt>예상 영향</dt><dd>${rb.expected_impact}</dd>
-        <dt>과거 실행</dt><dd>성공 ${rb.history.success}회 / 실패 ${rb.history.failure}회</dd>
-        <dt>실패 시</dt><dd class="rollback">${rb.rollback}</dd>
+        <dt>조치</dt><dd>${esc(rb.action)}</dd>
+        <dt>예상 영향</dt><dd>${esc(rb.expected_impact)}</dd>
+        <dt>과거 실행</dt><dd>성공 ${Number(rb.history?.success || 0)}회 / 실패 ${Number(rb.history?.failure || 0)}회</dd>
+        <dt>실패 시</dt><dd class="rollback">${esc(rb.rollback)}</dd>
       </dl>
+      <label>조치 대상 (환경 / 서비스 / 호스트 / 인스턴스)</label>
+      <select class="target-select"></select>
+      <pre class="preflight-output"></pre>
       <div class="decision"></div>
       <div class="buttons">
-        <button class="approve">승인</button>
+        <button class="preflight">실행 전 검사</button>
+        <button class="approve" disabled>검사 결과 확인 후 승인</button>
         <button class="reject">거부</button>
         <button class="diagnose">진단 요청</button>
       </div>`;
@@ -624,6 +666,32 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       (candidate) => candidate.script_id === rb.script_id
     );
     if (action) el.dataset.actionId = action.action_id;
+    const targetSelect = el.querySelector(".target-select");
+    const targets = rec.targets || [];
+    el.targets = targets;
+    const empty = document.createElement("option");
+    empty.value = ""; empty.textContent = targets.length ? "대상을 선택하세요" : "이 사건에 등록된 실행 대상이 없습니다";
+    targetSelect.appendChild(empty);
+    targets.forEach((target, index) => {
+      const option = document.createElement("option"); option.value = String(index);
+      option.textContent = [target.environment, target.service, target.host, target.instance].join(" / ");
+      targetSelect.appendChild(option);
+    });
+    targetSelect.addEventListener("change", () => {
+      el.preflightId = null; el.querySelector(".approve").disabled = true;
+      el.querySelector(".preflight-output").textContent = "";
+    });
+    el.querySelector(".preflight").addEventListener("click", async () => {
+      try {
+        const {data} = await postJSON("/api/v1/remediations/preflight", actionBody(action,el));
+        el.querySelector(".preflight-output").textContent = JSON.stringify(data,null,2);
+        el.preflightId = data.status === "ready" ? data.preflight_id : null;
+        el.querySelector(".approve").disabled = !el.preflightId;
+      } catch (error) {
+        el.preflightId = null; el.querySelector(".approve").disabled = true;
+        el.querySelector(".preflight-output").textContent = "검사 실패: " + error;
+      }
+    });
     el.querySelector(".approve").addEventListener(
       "click", () => decideRunbook(rb.script_id, action, el, "approve")
     );
@@ -631,7 +699,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       "click", () => decideRunbook(rb.script_id, action, el, "reject")
     );
     el.querySelector(".diagnose").addEventListener(
-      "click", () => requestDiagnosis(errorCode, el)
+      "click", () => requestDiagnosis(action, el)
     );
 
     // 이미 승인/거부한 Runbook은 새로고침해도 처리된 상태로 보여준다.
@@ -652,14 +720,14 @@ function renderRecommendation(errorCode, rec, decisions = []) {
   }
   setClientStatus(decisions.some(
     (d) => d.decision === "approve" && d.result?.status === "success"
-  ) ? "조치 완료" : "분석 완료");
+  ) ? "명령 실행 완료 — 업무 복구 확인 필요" : "분석 완료");
 }
 
 const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 없습니다.";
 
 function setDecisionButtonsDisabled(el, disabled) {
   el.querySelectorAll(".approve, .reject").forEach((b) => {
-    b.disabled = disabled;
+    b.disabled = disabled || (b.classList.contains("approve") && !el.preflightId);
   });
 }
 
@@ -691,6 +759,9 @@ function markDecided(el, decision) {
 function showExecResult(scriptId, data, status) {
   $("exec").classList.remove("hidden");
   $("exec-title").textContent = scriptId;
+  lastExecutionId = data.execution_id || null;
+  $("refresh-execution").classList.toggle("hidden", !lastExecutionId);
+  $("verify-execution").classList.toggle("hidden", !lastExecutionId || data.status !== "success");
   const ok = ["success", "rejected", "already_processed"].includes(data.status);
   const s = $("exec-status");
   s.className = ok ? "status-ok" : "status-err";
@@ -734,9 +805,8 @@ function renderResourceGuidance(guidance) {
   const box = $("hypotheses");
   box.innerHTML = "";
   (guidance.hypotheses || []).forEach((hypothesis, index) => {
-    const pct = Math.round(
-      Math.max(0, Math.min(1, Number(hypothesis.confidence || 0))) * 100
-    );
+    const value = Number(hypothesis.confidence || 0);
+    const pct = Number.isFinite(value) ? Math.round(Math.max(0,Math.min(1,value))*100) : 0;
     const card = document.createElement("div");
     card.className = "hypothesis" + (index === 0 ? " primary" : "");
 
@@ -829,7 +899,7 @@ $("feedback-submit").addEventListener("click", async () => {
 
 function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {
-    b.disabled = disabled;
+    b.disabled = disabled || (b.classList.contains("approve") && !el.preflightId);
   });
 }
 
@@ -853,18 +923,12 @@ async function decideRunbook(scriptId, action, el, decision) {
   $("exec-output").textContent = "";
 
   try {
-    const { status, data } = await postJSON(endpoint, {
-      incident_id: currentRecommendation.incident_id,
-      recommendation_id: currentRecommendation.recommendation_id,
-      action_id: action.action_id,
-      incident_version: currentRecommendation.incident_version,
-      approved_by: "web-ui",
-    });
+    const { status, data } = await postJSON(endpoint, actionBody(action,el));
     showExecResult(scriptId, data, status);
     if (data.status === "blocked" && data.approved_action_id) {
       // 다른 화면/사용자가 먼저 다른 조치를 승인한 경우
       const approvedEl = document.querySelector(
-        `#actions .runbook[data-action-id="${data.approved_action_id}"]`
+        `#actions .runbook[data-action-id="${CSS.escape(data.approved_action_id)}"]`
       );
       if (approvedEl) markDecided(approvedEl, "approve");
       el.classList.add("locked");
@@ -883,7 +947,7 @@ async function decideRunbook(scriptId, action, el, decision) {
     }
     markDecided(el, decision);
     if (decision === "approve" && data.status === "success") {
-      setClientStatus("조치 완료");
+      setClientStatus("명령 실행 완료 — 업무 복구 확인 필요");
     }
     await loadIncidents();
   } catch (e) {
@@ -894,32 +958,16 @@ async function decideRunbook(scriptId, action, el, decision) {
   }
 }
 
-async function requestDiagnosis(errorCode, el) {
-  setRunbookButtonsDisabled(el, true);
-
-  const exec = $("exec");
-  exec.classList.remove("hidden");
-  $("exec-title").textContent = "진단 요청 — " + errorCode;
-  $("exec-status").textContent = "";
-  $("exec-output").textContent = "";
-
+async function requestDiagnosis(action, el) {
+  if (!action) return;
   try {
-    const { data } = await postJSON("/api/v1/remediations/diagnose", {
-      error_code: errorCode,
-    });
-    const s = $("exec-status");
-    s.className = data.status === "ok" ? "status-ok" : "status-err";
-    s.textContent = data.status;
-    $("exec-output").textContent = JSON.stringify(
-      data.diagnosis_results || data, null, 2
-    );
-  } catch (e) {
-    $("exec-status").className = "status-err";
-    $("exec-status").textContent = "진단 요청 실패: " + e;
-  } finally {
-    setRunbookButtonsDisabled(el, false);
-  }
+    const {data} = await postJSON("/api/v1/remediations/diagnose", actionBody(action,el));
+    $("exec").classList.remove("hidden");
+    $("exec-output").textContent = JSON.stringify(data,null,2);
+    $("exec-status").textContent = data.status;
+  } catch (error) { el.querySelector(".decision").textContent = "진단 실패: " + error; }
 }
+
 </script>
 </body>
 </html>

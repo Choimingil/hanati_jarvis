@@ -6,10 +6,12 @@ from qdrant_client.models import PointStruct
 
 from config import QDRANT_COLLECTION
 from qdrant.client import encode, get_client
+from operations.privacy import redact
 
 
 class QdrantIncidentIndexer:
     def index(self, incident: dict[str, Any]) -> None:
+        incident = redact(incident)
         text = " ".join([
             incident.get("error_code", ""),
             incident.get("summary", ""),

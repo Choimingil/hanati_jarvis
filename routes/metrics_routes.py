@@ -1,7 +1,9 @@
+from datetime import datetime, UTC
+import json
 from flask import Blueprint, jsonify, request
-
-from dependencies import metric_analysis_service, repository
-
+from operations.queue import AnalysisQueue
+from operations.redis_store import client
+from operations.settings import FRESHNESS_SECONDS
 
 metrics_blueprint = Blueprint("metrics", __name__)
 
@@ -9,40 +11,51 @@ metrics_blueprint = Blueprint("metrics", __name__)
 @metrics_blueprint.post("/api/v1/metrics")
 def ingest_metrics():
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({
-            "status": "invalid_request",
-            "message": "JSON object is required",
-        }), 400
-
     required = {"timestamp", "host", "cpu", "memory", "disk", "network"}
-    missing = sorted(required.difference(payload))
-    if missing:
-        return jsonify({
-            "status": "invalid_request",
-            "message": "required fields are missing",
-            "missing": missing,
-        }), 400
-
+    if (
+        not isinstance(payload, dict)
+        or not required.issubset(payload)
+        or not isinstance(payload.get("host"), dict)
+        or not payload["host"].get("hostname")
+    ):
+        return jsonify(
+            status="invalid_request",
+            reason="required metric fields and hostname missing",
+            missing=sorted(
+                required.difference(payload if isinstance(payload, dict) else {})
+            ),
+        ), 400
     try:
-        repository.save_metric(payload)
-    except Exception as exc:
-        return jsonify({
-            "status": "storage_failed",
-            "message": str(exc),
-        }), 503
-
+        stamp = datetime.fromisoformat(payload["timestamp"].replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            raise ValueError()
+        age = (datetime.now(UTC) - stamp).total_seconds()
+        if age < -30:
+            raise ValueError()
+    except (ValueError, TypeError, AttributeError):
+        return jsonify(
+            status="invalid_request",
+            reason="timezone-aware metric timestamp required; future data rejected",
+        ), 400
     try:
-        analysis = metric_analysis_service.analyze(payload)
+        redis = client()
+        job_id = AnalysisQueue(redis).enqueue("metrics", payload)
+        redis.hset(
+            "jarvis:metric-hosts",
+            payload["host"]["hostname"],
+            json.dumps(
+                {
+                    "timestamp": stamp.isoformat(),
+                    "connections_access_denied": bool(
+                        payload.get("network", {})
+                        .get("connections", {})
+                        .get("access_denied")
+                    ),
+                }
+            ),
+        )
+        return jsonify(
+            status="accepted", job_id=job_id, data_stale=age > FRESHNESS_SECONDS
+        ), 202
     except Exception as exc:
-        return jsonify({
-            "status": "stored",
-            "analysis_status": "failed",
-            "analysis_error": str(exc),
-        }), 201
-
-    return jsonify({
-        "status": "stored",
-        "analysis_status": "completed",
-        "detections": analysis,
-    }), 201
+        return jsonify(status="queue_unavailable", error=type(exc).__name__), 503

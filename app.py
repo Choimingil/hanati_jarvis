@@ -3,9 +3,6 @@ from flask import Flask, jsonify
 from config import (
     API_HOST,
     API_PORT,
-    CASE_SEARCHER_BACKEND,
-    LOG_REPOSITORY_BACKEND,
-    RECOMMENDATION_BACKEND,
 )
 # NOTE: mock 백엔드 없음. LOG_REPOSITORY_BACKEND="elastic",
 # RECOMMENDATION_BACKEND="llm" 고정값 (config.py 참고).
@@ -19,10 +16,15 @@ from routes.remediation_routes import (
     remediation_blueprint,
 )
 from routes.web_routes import web_blueprint
+from routes.operations_routes import operations_blueprint
+from operations.health import service_status
+from operations.privacy import redact
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+    app.register_blueprint(operations_blueprint)
 
     app.register_blueprint(log_blueprint)
     app.register_blueprint(guidance_blueprint)
@@ -31,14 +33,16 @@ def create_app() -> Flask:
     app.register_blueprint(log_generator_blueprint)
     app.register_blueprint(web_blueprint)
 
+    @app.after_request
+    def redact_json_output(response):
+        if response.is_json:
+            response.set_data(app.json.dumps(redact(response.get_json())))
+        return response
+
     @app.get("/health")
     def health():
-        return jsonify({
-            "status": "healthy",
-            "storage": LOG_REPOSITORY_BACKEND,
-            "case_search": CASE_SEARCHER_BACKEND,
-            "recommendation": RECOMMENDATION_BACKEND,
-        })
+        result = service_status()
+        return jsonify(result), 200 if result["ready"] else 503
 
     return app
 
