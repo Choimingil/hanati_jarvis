@@ -44,6 +44,7 @@ class LogProcessor:
         if log["level"] != "ERROR":
             self.repository.save_log(
                 {
+                    "ingestion_id": ingestion_id,
                     "received_at": now_iso(),
                     **log,
                 }

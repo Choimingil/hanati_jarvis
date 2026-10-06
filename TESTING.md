@@ -27,3 +27,5 @@ docker compose --profile verification run --rm deployment-check python -m operat
 
 
 정리·최적화 검사는 `tests/test_cleanup_optimizations.py`에 추가했습니다. 기존 데이터 보존, 검색원 장애 격리, ES 연결 실패 전파, 큐 분리와 backoff, 아카이빙 저장 실패 시 원본 보존, 원자 갱신의 중복 GET 제거를 확인합니다. Admin·Client DOM 초기화, 사건 선택과 출력 이스케이프는 jsdom에서 모의 API 응답으로 확인했습니다. 실제 배포 브라우저·Docker 연동·외부 LLM 생성은 이 검사로 보장하지 않습니다.
+
+최신 연동 검사 범위·실제/모의 구분·발견 사항은 [INTEGRATION_RESULTS.md](INTEGRATION_RESULTS.md)에 기록했습니다. `tests/test_component_contracts.py`는 실제 formatter/Collector/Worker, 실제 로컬 Qdrant 엔진, 실제 ES 클라이언트 HTTP 직렬화를 함께 검사하되 Redis·ES 서버·Fluent Bit 프로세스는 대체합니다.
