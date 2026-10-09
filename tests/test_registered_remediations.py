@@ -94,6 +94,30 @@ class RegisteredScriptTests(unittest.TestCase):
         self.assertEqual(rec["targets"], [])
         self.assertTrue(manual_action_available(incident))
 
+    def test_separate_api_sessions_share_execution_and_verified_completion(self):
+        incident, rec = self.incident()
+        self.repo.recent_incident_logs = lambda *args, **kwargs: []
+        app = Flask(__name__)
+        app.register_blueprint(log_generator_routes.log_generator_blueprint)
+        app.register_blueprint(remediation_routes.remediation_blueprint)
+        observer = app.test_client()
+        path = "/api/v1/log-generator/incidents/" + incident["incident_id"]
+        with patch.object(log_generator_routes, "repository", self.repo):
+            self.assertEqual(observer.get(path).get_json()["processing"]["state"], "open")
+            executed = self.api.post("/api/v1/remediations/approve", json=self.approval(incident, rec)).get_json()
+            self.assertEqual(executed["status"], "success")
+            pending = observer.get(path).get_json()
+            self.assertEqual(pending["processing"]["state"], "action_completed")
+            self.assertEqual(pending["execution"]["execution_id"], executed["execution_id"])
+            verified = observer.post("/api/v1/remediations/verify", json={"execution_id": executed["execution_id"]}).get_json()
+            self.assertTrue(verified["recovered"])
+            self.assertEqual(verified["processing"]["state"], "completed")
+            # A newly opened session reads the same durable record and history.
+            completed = app.test_client().get(path).get_json()
+            self.assertEqual(completed["processing"]["state"], "completed")
+            self.assertEqual(completed["incident"]["recovered_at"], verified["incident"]["recovered_at"])
+            self.assertEqual(completed["decisions"][0]["execution_id"], executed["execution_id"])
+
     def test_real_and_unbound_simulation_targets_never_use_test_scripts(self):
         for extra in ({"synthetic": False}, {"environment": "prod"}, {"service": "payment-api"}):
             incident, rec = self.incident(**extra)

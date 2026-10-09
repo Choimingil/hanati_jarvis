@@ -40,6 +40,16 @@ from trigger import run_scenario  # noqa: E402
 
 log_generator_blueprint = Blueprint("log_generator", __name__)
 
+
+@log_generator_blueprint.after_request
+def prevent_state_response_caching(response):
+    if request.endpoint in {
+        "log_generator.recent_incidents", "log_generator.incident_detail",
+        "log_generator.latest_run", "log_generator.latest_recommendation",
+    }:
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 # Publish before generation so clients can follow logs while the request is running.
 # Redis shares this state across API processes; expire it with the 10-minute view.
 LATEST_RUN_KEY = "jarvis:log-generator:latest-run"

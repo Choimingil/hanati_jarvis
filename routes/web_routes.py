@@ -430,6 +430,7 @@ let currentDetailedIncident = null;
 let currentProcessing = null;
 let verificationPending = false;
 let incidentDetailRequest = 0;
+let incidentDetailInFlight = null;
 let detailRecommendationKey = null;
 let incidentClockOffset = 0;
 let incidentLoadInFlight = null;
@@ -487,8 +488,9 @@ async function loadOperationsStatus() {
 schedulePoll(loadOperationsStatus,15000);
 $("refresh-execution").addEventListener("click", async () => {
   if (!lastExecutionId) return;
-  const data = await getJSON("/api/v1/remediations/executions/" + encodeURIComponent(lastExecutionId));
-  showExecResult("실행 결과", {...data.result,execution_id:lastExecutionId},200,currentProcessing);
+  const executionId = lastExecutionId;
+  const data = await getJSON("/api/v1/remediations/executions/" + encodeURIComponent(executionId));
+  if (lastExecutionId === executionId) showExecResult("실행 결과", {...data.result,execution_id:executionId},200,currentProcessing);
 });
 $("verify-execution").addEventListener("click", async () => {
   if (!lastExecutionId || verificationPending) return;
@@ -564,7 +566,13 @@ function renderIncidentProcessing(incident, processing = null) {
   if (confirmations[state.confirmation]) meta.push("확인 방식: " + confirmations[state.confirmation]);
   $("incident-processing-meta").textContent = meta.join(" · ");
 }
+function isOlderIncident(incident) {
+  return currentDetailedIncident?.incident_id === incident.incident_id
+    && Number.isFinite(incident.version) && Number.isFinite(currentDetailedIncident.version)
+    && incident.version < currentDetailedIncident.version;
+}
 function renderIncidentDetails(incident, processing = null) {
+  if (isOlderIncident(incident)) return;
   currentDetailedIncident = incident;
   currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
   const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발"};
@@ -593,7 +601,9 @@ function closeIncidentDetails() {
   selectedIncidentId = null;
   currentDetailedIncident = null;
   currentProcessing = null;
+  lastExecutionId = null;
   incidentDetailRequest += 1;
+  incidentDetailInFlight = null;
   $("incident-detail-panel").classList.add("hidden");
   $("result").classList.add("hidden");
   $("guidance-result").classList.add("hidden");
@@ -657,7 +667,7 @@ $("manual-form").addEventListener("submit", async event => {
     if (currentManualIncident?.incident_id === incident.incident_id) {
       $("manual-register-status").className = ok ? "status-ok" : "status-err";
       $("manual-register-status").textContent = ok ? "조치 방법이 등록되었습니다." : (data.reason === "incident changed; reload details before registering" ? "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요." : "등록 실패: " + (data.reason || data.status));
-      if (ok) {
+      if (ok && !isOlderIncident(data.incident)) {
         $("manual-method").value = "";
         $("manual-performed").checked = false;
         $("manual-recovered").checked = false;
@@ -677,7 +687,20 @@ $("manual-form").addEventListener("submit", async event => {
     updateManualRegisterButton();
   }
 });
-async function loadIncidentDetails(incident, scroll = false, refresh = false) {
+function refreshSelectedIncident() {
+  if (!selectedIncidentId) return Promise.resolve(true);
+  return loadIncidentDetails({incident_id: selectedIncidentId}, false, true);
+}
+function loadIncidentDetails(incident, scroll = false, refresh = false) {
+  if (refresh && incidentDetailInFlight?.incidentId === incident.incident_id) return incidentDetailInFlight.promise;
+  const request = {incidentId: incident.incident_id, promise: null};
+  incidentDetailInFlight = request;
+  request.promise = fetchIncidentDetails(incident, scroll, refresh).finally(() => {
+    if (incidentDetailInFlight === request) incidentDetailInFlight = null;
+  });
+  return request.promise;
+}
+async function fetchIncidentDetails(incident, scroll, refresh) {
   const requestId = ++incidentDetailRequest;
   selectedIncidentId = incident.incident_id;
   $("incident-detail-panel").classList.remove("hidden");
@@ -687,13 +710,14 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     $("exec").classList.add("hidden");
     currentRecommendation = null;
     currentGuidance = null;
+    lastExecutionId = null;
     detailRecommendationKey = null;
     $("manual-remediation").classList.add("hidden");
+    renderIncidentDetails(incident);
+    $("incident-detail-load-status").textContent = "최신 장애 정보를 확인하는 중…";
+    $("incident-detail-logs-status").textContent = "";
+    $("incident-detail-logs").textContent = "";
   }
-  renderIncidentDetails(incident);
-  $("incident-detail-load-status").textContent = "최신 장애 정보를 확인하는 중…";
-  $("incident-detail-logs-status").textContent = "";
-  $("incident-detail-logs").textContent = "";
   if (scroll) {
     $("incident-detail-panel").scrollIntoView({behavior: "smooth", block: "start"});
     $("incident-detail-panel").focus({preventScroll: true});
@@ -702,6 +726,8 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     const data = await getJSON("/api/v1/log-generator/incidents/" + encodeURIComponent(incident.incident_id));
     if (requestId !== incidentDetailRequest) return;
     const latest = data.incident;
+    // A read started before local completion must not undo the newer state.
+    if (isOlderIncident(latest)) return true;
     renderIncidentDetails(latest, data.processing);
     renderManualRemediation(latest, data.manual_action_available === true);
     $("incident-detail-load-status").textContent = "";
@@ -734,9 +760,11 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     if (data.executions_status === "unavailable") $("incident-detail-load-status").textContent = "조치 이력 조회 지연 — 저장된 장애 상태를 표시합니다.";
     else if (!rec && latest.status !== "RESOLVED" && latest.status !== "MONITORING") $("incident-detail-load-status").textContent = "분석 중이거나 조치 추천이 아직 없습니다.";
     setClientStatus(latest.status === "RESOLVED" ? "처리 완료" : latest.status === "MONITORING" ? "조치 완료 — 복구 확인 대기" : "장애 상세 조회: " + latest.status);
+    return true;
   } catch (error) {
     if (requestId !== incidentDetailRequest) return;
-    $("incident-detail-load-status").textContent = "최신 상세 조회 실패 — 목록에 있던 정보를 표시합니다. 장애 항목을 다시 눌러 재조회하세요.";
+    $("incident-detail-load-status").textContent = "최신 상세 조회 실패 — 마지막 조회 결과를 유지하고 자동으로 다시 확인합니다.";
+    return false;
   }
 }
 $("incident-detail-close").addEventListener("click", () => {
@@ -828,12 +856,7 @@ async function fetchIncidents() {
     });
     $("incident-list-status").textContent = "";
     renderIncidentList();
-    if (selectedIncidentId) {
-      const selected = incidentItems.find(item => item.incident_id === selectedIncidentId)
-        || (currentDetailedIncident?.status === "RESOLVED" ? currentDetailedIncident : null);
-      if (selected) await loadIncidentDetails(selected, false, true);
-      else closeIncidentDetails();
-    }
+    await refreshSelectedIncident();
   } catch (error) {
     $("incident-list-status").textContent = incidentsLoaded
       ? "장애 목록 조회 실패 — 마지막 조회 결과를 표시하고 있습니다."
@@ -868,13 +891,15 @@ document.querySelectorAll(".log-tab").forEach((button) => {
   });
 });
 schedulePoll(loadIncidents, IS_CLIENT ? 5000 : 2000);
+// Track the opened incident even when the recent list expires or is unavailable.
+schedulePoll(refreshSelectedIncident,2000,5000);
 schedulePoll(refreshRecentIncidents,1000);
 schedulePoll(() => {
   if (!IS_CLIENT && !$("log-tabs-panel").classList.contains("hidden")) return pollActivity();
 },2000);
 
 async function getJSON(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, {cache: "no-store"});
   const data = await res.json();
   if (!res.ok) throw new Error(data.reason || data.status || "조회 실패");
   return data;
@@ -992,6 +1017,7 @@ async function fetchActivity() {
 const statusEl = () => $(IS_CLIENT ? "incident-sync-status" : "wait-status");
 
 async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
+  const selectionVersion = manualSelectionVersion;
   if (!IS_CLIENT) {
     statusEl().textContent =
       "fluent-bit가 로그를 전달하는 중… 추천 결과를 기다리는 중";
@@ -1007,7 +1033,12 @@ async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
     if (!isCurrent()) return;
     if (data.status === "ready") {
       if (!IS_CLIENT) statusEl().textContent = "";
-      renderRecommendation(errorCode, data.recommendation, data.decisions || [], data.processing);
+      if (selectionVersion !== manualSelectionVersion) return;
+      const incidentId = data.recommendation?.incident_id;
+      if (incidentId) {
+        await loadIncidentDetails(incidentItems.find(item => item.incident_id === incidentId)
+          || {incident_id:incidentId, error_code:errorCode});
+      } else renderRecommendation(errorCode, data.recommendation, data.decisions || [], data.processing);
       await loadIncidents();
       return;
     }
@@ -1084,6 +1115,7 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     refreshRecentIncidents();
     loadIncidents();
+    refreshSelectedIncident();
     if (IS_CLIENT) syncClientRun();
   }
 });
@@ -1425,6 +1457,7 @@ async function decideRunbook(scriptId, action, el, decision) {
     el.querySelector(".decision").textContent = "최신 Incident 추천을 다시 불러오세요.";
     return;
   }
+  const incidentId = currentRecommendation.incident_id;
   el.executionPending = true;
   setRunbookButtonsDisabled(el, true);
   el.querySelector(".approval-status").className = "approval-status status-pending";
@@ -1444,6 +1477,10 @@ async function decideRunbook(scriptId, action, el, decision) {
 
   try {
     const { status, data } = await postJSON(endpoint, actionBody(action,el));
+    if (!el.isConnected || (selectedIncidentId && selectedIncidentId !== incidentId)) {
+      await refreshSelectedIncident();
+      return;
+    }
     showExecResult(scriptId, data, status);
     if (decision === "approve" && !data.execution_id) {
       el.querySelector(".approval-status").className = "approval-status status-err";
@@ -1480,6 +1517,7 @@ async function decideRunbook(scriptId, action, el, decision) {
     }
     await loadIncidents();
   } catch (e) {
+    if (!el.isConnected || (selectedIncidentId && selectedIncidentId !== incidentId)) return;
     el.querySelector(".approval-status").className = "approval-status status-err";
     el.querySelector(".approval-status").textContent = "승인·조치 요청 실패 — 연결 상태와 실행 결과를 확인하세요.";
     $("exec-status").className = "status-err";

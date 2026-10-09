@@ -196,7 +196,8 @@ class ElasticLogRepository(LogRepository):
                     "changes": redact(changes),
                 },
             },
-            refresh=False,
+            # State transitions must also be visible to other sessions' searches.
+            refresh="wait_for",
             source=True,
         )
         if response.get("result") == "noop":
