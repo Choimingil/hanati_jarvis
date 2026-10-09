@@ -12,6 +12,24 @@ Compose는 `.env` 또는 셸 환경변수의 설정값을 읽으며, 값이 없�
 
 Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수집 API는 HTTP 202와 작업 ID를 반환하며 `/api/v1/analysis/jobs/{job_id}`에서 완료 여부를 확인합니다. 초기 이미지 빌드와 임베딩 모델 다운로드에는 시간이 필요합니다.
 
+장애 목록은 최근 10분에 발생·갱신된 장애를 표시합니다. 진행중·긴급·미확인·분석중 탭으로 조건을 선택하고, 장애명을 누르면 단위시스템·환경·호스트·발생 구간·원문·발생 시각과 해당 장애의 최근 로그를 확인할 수 있습니다. 분석이 완료되지 않은 장애도 상세 정보는 조회할 수 있습니다.
+
+`log-generator`는 기본 `LOG_GENERATOR_MODE=manual`로 공유 로그 파일만 준비하고 대기합니다. 기본 기동만으로 모의 장애를 생성하지 않습니다. 관리자 화면에서 시나리오를 실행하면 기존과 같이 한 번만 발생시킵니다. 연속 무작위 장애 데모가 필요할 때만 `.env`에 `LOG_GENERATOR_MODE=random`을 지정합니다. 생성된 로그는 `environment=simulation`, `synthetic=true`로 표시하여 실제 수집 로그와 구별합니다.
+
+이전 구성에서 기본 기동만으로 DNS·Redis·디스크 등의 장애가 계속 보였던 주된 코드 원인은 무작위 시나리오 생성기입니다. 기동 순서도 Fluent Bit·Collector가 AIOps의 준비 상태를 기다리도록 수정했습니다. Worker의 생존 신호는 분석 처리와 별도로 갱신하므로 긴 임베딩·LLM 처리 중 연결이 끊긴 것으로 표시되는 것을 방지합니다. Collector의 단위시스템은 `hanati-collector`, 환경은 `compose`이며, 수집 범위는 해당 컨테이너에서 보이는 자원입니다.
+
+기존 실행 환경 반영과 실제 컨테이너 오류 확인:
+
+```sh
+git pull origin mingil
+docker compose stop log-generator
+docker compose up -d --build
+docker compose --profile verification run --rm deployment-check
+docker compose --profile verification run --rm deployment-check python -m operations.integration_check --wait-seconds 20
+```
+
+`.env`에 `LOG_GENERATOR_MODE=random`이 있으면 먼저 `manual`로 변경합니다. 초기화 컨테이너의 정상 상태는 `Exited (0)`이며 반복 실행되는 서비스가 아닙니다. 첫 검사는 기동·readiness 및 실패한 컨테이너의 최근 로그를, 두 번째 검사는 INFO 표식의 실제 전달·저장을 확인합니다. 기존 장애 데이터는 삭제하지 않으며 마지막 발생 이후 10분이 지나면 목록에서 제외됩니다.
+
 ## Compose 컨테이너 진단·조치
 
 `execution-targets.example.json`을 `execution-targets.json`으로, `execution_agent/manifest.example.json`을 `agent-manifest.json`으로 복사합니다. `.env`의 `EXECUTION_AGENT_TOKEN`에 32자 이상의 무작위 값을 설정한 뒤 `docker compose --profile execution up -d --build`를 실행합니다. Agent도 기존 `hanati-aiops:local` 이미지를 사용합니다.

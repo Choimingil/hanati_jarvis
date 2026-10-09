@@ -29,3 +29,5 @@ docker compose --profile verification run --rm deployment-check python -m operat
 정리·최적화 검사는 `tests/test_cleanup_optimizations.py`에 추가했습니다. 기존 데이터 보존, 검색원 장애 격리, ES 연결 실패 전파, 큐 분리와 backoff, 아카이빙 저장 실패 시 원본 보존, 원자 갱신의 중복 GET 제거를 확인합니다. Admin·Client DOM 초기화, 사건 선택과 출력 이스케이프는 jsdom에서 모의 API 응답으로 확인했습니다. 실제 배포 브라우저·Docker 연동·외부 LLM 생성은 이 검사로 보장하지 않습니다.
 
 최신 연동 검사 범위·실제/모의 구분·발견 사항은 [INTEGRATION_RESULTS.md](INTEGRATION_RESULTS.md)에 기록했습니다. `tests/test_component_contracts.py`는 실제 formatter/Collector/Worker, 실제 로컬 Qdrant 엔진, 실제 ES 클라이언트 HTTP 직렬화를 함께 검사하되 Redis·ES 서버·Fluent Bit 프로세스는 대체합니다.
+
+2026-10-10 변경 검증: `tests/test_generator_startup.py`는 기본 기동 시 로그·오류 미생성, 명시적 random 모드, 수동 시나리오 전달과 simulation 표시, 반복 장애의 최신 내용·출처 보존, 분석과 독립적인 Worker heartbeat 갱신 및 Redis 오류 후 재개를 검사합니다. `tests/test_incident_detail.py`는 기본 10분 조회, 분석 전 상세 조회, 장애 ID에 연결된 최근 로그 조회와 ES HTTP 직렬화, 민감 정보 마스킹, 부분 조회 실패와 404/503 구분을 검사합니다. Compose 계약은 Collector·Fluent Bit의 API readiness 대기 및 manual 기본 모드를 확인합니다. Docker CLI가 없으면 실제 Compose config 검사는 건너뛰며, 코드·모의 검사를 실제 컨테이너 연동 성공으로 간주하지 않습니다.

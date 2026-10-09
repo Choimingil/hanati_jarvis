@@ -24,6 +24,7 @@ from config import (
 from dependencies import repository
 from elastic.client import get_client
 from utils.time_utils import now_iso
+from operations.privacy import redact
 
 LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
@@ -189,8 +190,8 @@ def _safe_decisions(recommendation_id: str | None) -> list[dict]:
 @log_generator_blueprint.get("/api/v1/log-generator/incidents")
 def recent_incidents():
     """영속화된 운영 Incident를 최근 갱신 순으로 반환한다."""
-    minutes = request.args.get("minutes", default=60, type=int)
-    minutes = max(1, min(minutes or 60, 1440))
+    minutes = request.args.get("minutes", default=10, type=int)
+    minutes = max(1, min(minutes or 10, 1440))
     try:
         documents = repository.list_operational_incidents(minutes)
     except Exception as exc:
@@ -217,6 +218,27 @@ def recent_incidents():
             "incidents": incidents,
         }
     )
+
+
+@log_generator_blueprint.get("/api/v1/log-generator/incidents/<incident_id>")
+def incident_detail(incident_id):
+    """선택한 장애의 최신 상태와 해당 장애에 속하는 최근 로그를 반환한다."""
+    try:
+        incident = repository.get_operational_incident(incident_id)
+        if incident is None:
+            return jsonify(status="not_found"), 404
+    except Exception as exc:
+        return jsonify(status="unavailable", error=type(exc).__name__), 503
+
+    try:
+        logs = repository.recent_incident_logs(incident_id, minutes=10)
+        logs_status = "ready"
+    except Exception:
+        logs, logs_status = [], "unavailable"
+    return jsonify(redact({
+        "status": "ready", "incident": incident,
+        "logs": logs, "logs_status": logs_status,
+    }))
 
 
 def _format_time(value: str | None) -> str:

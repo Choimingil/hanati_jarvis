@@ -1,5 +1,8 @@
-# Entry point for running the log generation workflow.
+# Manual mode prepares the shared log file without injecting failures.
+import argparse
+import os
 from pathlib import Path
+import threading
 
 from logger.file_writer import FileWriter
 from logger.json_formatter import JsonFormatter
@@ -35,7 +38,7 @@ system = SystemInfo(
     web_server="nginx",
     application="order-api",
     node_name="worker-3",
-    cluster="prod",
+    cluster="simulation",
     normal_log_pattern=NormalLogPattern(
         delay=0.5,
         messages=[
@@ -78,4 +81,24 @@ runner = ScenarioRunner(
     system
 )
 
-runner.run()
+def main():
+    parser = argparse.ArgumentParser(description="Synthetic log generator")
+    parser.add_argument(
+        "--mode", choices=("manual", "random"),
+        default=os.getenv("LOG_GENERATOR_MODE", "manual"),
+    )
+    args = parser.parse_args()
+    if args.mode not in {"manual", "random"}:
+        parser.error("LOG_GENERATOR_MODE must be manual or random")
+    FLUENTBIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    FLUENTBIT_LOG_PATH.touch(exist_ok=True)
+    if args.mode == "random":
+        print("Random synthetic failures enabled", flush=True)
+        runner.run()
+    else:
+        print("Manual mode: waiting for scenarios triggered from the console; no automatic failures", flush=True)
+        threading.Event().wait()
+
+
+if __name__ == "__main__":
+    main()

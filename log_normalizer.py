@@ -42,6 +42,9 @@ def normalize_log(
         "message": str(message),
         "host": str(host),
         "service": str(service),
+        "source": raw_log.get("source"),
+        "synthetic": raw_log.get("synthetic") is True,
+        "source_type": "scenario" if raw_log.get("synthetic") is True else "log",
         "environment": raw_log.get(
             "environment",
             "unknown",

@@ -67,6 +67,7 @@ class MetricAnalysisService:
                         "environment": snapshot.get("environment", "unknown"),
                         "service": snapshot.get("service", "unknown"),
                         "message": context["message"],
+                        "source_type": "metric",
                     },
                     event["error_code"],
                     ingestion_id=(

@@ -80,6 +80,10 @@ class OperationalIncidentService:
                 "error_code": error_code or "UNKNOWN_ERROR",
                 "normalized_message": normalize_message(str(log.get("message") or "")),
                 "representative_message": str(log.get("message") or ""),
+                "latest_message": str(log.get("message") or ""),
+                "sources": [str(log["source"])] if log.get("source") else [],
+                "synthetic": log.get("synthetic") is True,
+                "source_type": log.get("source_type", "log"),
                 "status": "ANALYZING",
                 "severity": "MEDIUM",
                 **business_priority(log),
@@ -106,6 +110,9 @@ class OperationalIncidentService:
             return existing
         hosts = set(existing.get("affected_hosts") or [])
         hosts.add(host)
+        sources = set(existing.get("sources") or [])
+        if log.get("source"):
+            sources.add(str(log["source"]))
         count = int(existing.get("occurrence_count", 0)) + 1
         status = existing.get("status", "ANALYZING")
         if status == "RESOLVED":
@@ -146,6 +153,10 @@ class OperationalIncidentService:
                 "last_seen": timestamp,
                 "occurrence_count": count,
                 "affected_hosts": sorted(hosts),
+                "latest_message": str(log.get("message") or ""),
+                "sources": sorted(sources),
+                "synthetic": log.get("synthetic") is True,
+                "source_type": log.get("source_type", "log"),
                 "ingestion_ids": (
                     existing.get("ingestion_ids", [])
                     + ([ingestion_id] if ingestion_id else [])

@@ -1,6 +1,6 @@
 """웹 콘솔의 "분석" 버튼이 호출하는 진입점.
 
-main.py는 무한 루프로 시나리오를 랜덤 발생시키지만, 여기서는 지정된
+main.py의 random 모드는 시나리오를 랜덤 발생시키지만, 여기서는 지정된
 시나리오 하나만 확정적으로(probability=1.0) 즉시 1회 실행해서 main.py와
 동일한 방식으로 fluentbit가 tail하는 파일에 쓴다. 이후 흐름(탐지/진단/
 추천)은 main.py를 직접 실행했을 때와 완전히 동일하다 — fluent-bit가
@@ -47,7 +47,7 @@ def run_scenario(key: str) -> dict:
         web_server="nginx",
         application="order-api",
         node_name="worker-3",
-        cluster="prod",
+        cluster="simulation",
         normal_log_pattern=NormalLogPattern(
             delay=0,
             messages=[normal_message],

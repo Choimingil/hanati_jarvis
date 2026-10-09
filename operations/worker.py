@@ -1,6 +1,7 @@
 import os
 import socket
 import time
+import threading
 from operations.redis_store import client
 from operations.queue import AnalysisQueue, STREAM, METRIC_STREAM, GROUP
 
@@ -28,6 +29,24 @@ def handle(kind, payload, job_id):
     raise ValueError("unknown job kind")
 
 
+def start_heartbeat(redis, consumer, interval=10, ttl=30):
+    """Keep worker liveness fresh while embedding or LLM analysis is blocking."""
+    stopped = threading.Event()
+    key = "jarvis:worker:" + consumer
+
+    def beat():
+        while not stopped.is_set():
+            try:
+                redis.set(key, str(time.time()), ex=ttl)
+            except Exception as exc:
+                print("worker heartbeat error: " + type(exc).__name__, flush=True)
+            stopped.wait(interval)
+
+    thread = threading.Thread(target=beat, name="worker-heartbeat", daemon=True)
+    thread.start()
+    return stopped, thread
+
+
 def main():
     redis = client()
     queue = AnalysisQueue(redis)
@@ -36,9 +55,9 @@ def main():
 
     start_maintenance(redis)
     consumer = socket.gethostname() + "-" + str(os.getpid())
+    start_heartbeat(redis, consumer)
     while True:
         try:
-            redis.set("jarvis:worker:" + consumer, str(time.time()), ex=30)
             # At most one metric and one log per cycle; legacy mixed jobs remain consumable.
             work = []
             for stream in (METRIC_STREAM, STREAM):

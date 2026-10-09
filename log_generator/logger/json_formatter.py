@@ -23,6 +23,8 @@ class JsonFormatter(LogFormatter):
             "message": message,
             "host": system.hostname,
             "service": system.application,
+            "environment": getattr(system, "cluster", "simulation"),
+            "synthetic": True,
             "status": status,
             "source": source,
         }, ensure_ascii=False)

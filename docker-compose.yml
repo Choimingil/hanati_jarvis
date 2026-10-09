@@ -113,6 +113,7 @@ services:
     - log-volume:/workspace/fluentbit
     environment:
     - PYTHONPATH=/workspace/log_generator:/workspace
+    - LOG_GENERATOR_MODE=${LOG_GENERATOR_MODE:-manual}
     command:
     - python
     - /workspace/log_generator/main.py
@@ -130,8 +131,10 @@ services:
     - -c
     - /fluent-bit/etc/fluent-bit.conf
     depends_on:
-    - log-generator
-    - aiops
+      log-generator:
+        condition: service_started
+      aiops:
+        condition: service_healthy
     ports:
     - 9880:9880
     mem_limit: 128m
@@ -148,8 +151,11 @@ services:
     - METRICS_API_URL=http://aiops:8080/api/v1/metrics
     - METRICS_COLLECT_INTERVAL_SECONDS=30
     - METRICS_PROCESS_LIMIT=20
+    - METRICS_ENVIRONMENT=compose
+    - METRICS_SERVICE=hanati-collector
     depends_on:
-    - aiops
+      aiops:
+        condition: service_healthy
     command:
     - python
     - -m

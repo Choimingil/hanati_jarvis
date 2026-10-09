@@ -4,6 +4,7 @@ import argparse
 import json
 import time
 import httpx
+from operations.privacy import redact
 
 EXPECTED = {
     "elasticsearch": 1536,
@@ -22,12 +23,15 @@ def inspect_container(container, memory_mib):
     state = attrs.get("State", {})
     config = attrs.get("HostConfig", {})
     health = state.get("Health", {}).get("Status")
+    health_logs = state.get("Health", {}).get("Log", [])
     return {
         "name": container.name,
         "running": state.get("Running") is True,
         "health": health,
         "oom_killed": state.get("OOMKilled", False),
         "restart_count": attrs.get("RestartCount", 0),
+        "state_error": redact(state.get("Error", "")),
+        "last_health_output": redact(health_logs[-1].get("Output", "")) if health_logs else "",
         "memory_limit_bytes": config.get("Memory"),
         "cpu_limit_nanocpus": config.get("NanoCpus"),
         "passed": state.get("Running") is True
@@ -64,15 +68,20 @@ def main():
                         ]
                     },
                 )
-                checks.append(
-                    inspect_container(containers[0], memory)
-                    if len(containers) == 1
-                    else {
+                if len(containers) == 1:
+                    result = inspect_container(containers[0], memory)
+                    if not result["passed"]:
+                        try:
+                            result["recent_logs"] = redact(containers[0].logs(tail=20).decode("utf-8", errors="replace"))
+                        except Exception as exc:
+                            result["logs_error"] = type(exc).__name__
+                    checks.append(result)
+                else:
+                    checks.append({
                         "name": service,
                         "passed": False,
                         "reason": "expected one container",
-                    }
-                )
+                    })
             except Exception as exc:
                 checks.append(
                     {"name": service, "passed": False, "reason": type(exc).__name__}
@@ -94,6 +103,10 @@ def main():
                         "name": service,
                         "passed": state.get("Status") == "exited"
                         and state.get("ExitCode") == 0,
+                        "state": state.get("Status"),
+                        "exit_code": state.get("ExitCode"),
+                        "recent_logs": redact(containers[0].logs(tail=20).decode("utf-8", errors="replace"))
+                        if len(containers) == 1 and state.get("ExitCode") != 0 else "",
                     }
                 )
             except Exception as exc:
@@ -108,6 +121,7 @@ def main():
                     "name": "api_and_worker_readiness",
                     "passed": response.status_code == 200 and body.get("ready") is True,
                     "collection_status": body.get("status"),
+                    "components": body.get("components"),
                 }
             )
         except Exception as exc:

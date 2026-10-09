@@ -178,6 +178,13 @@ class ComposeContracts(unittest.TestCase):
                 {"condition": "service_completed_successfully"},
             )
 
+    def test_collection_waits_for_api_readiness_and_generator_defaults_to_manual(self):
+        services = yaml.safe_load(Path("docker-compose.yml").read_text())["services"]
+        for name in ["fluent-bit", "collector"]:
+            self.assertEqual(services[name]["depends_on"]["aiops"], {"condition": "service_healthy"})
+        self.assertIn("LOG_GENERATOR_MODE=${LOG_GENERATOR_MODE:-manual}", services["log-generator"]["environment"])
+        self.assertIn("METRICS_SERVICE=hanati-collector", services["collector"]["environment"])
+
 
 if __name__ == "__main__":
     unittest.main()

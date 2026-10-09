@@ -38,6 +38,7 @@ class ComposeConfigurationTests(unittest.TestCase):
                 if name.startswith(("COMPOSE_", "OPENAI_")) or name in {
                     "EXECUTION_AGENT_TOKEN", "COLLECTION_FRESHNESS_SECONDS",
                     "JOB_RETENTION_SECONDS", "LLM_EXTERNAL_ENABLED",
+                    "LOG_GENERATOR_MODE",
                 }:
                     environment.pop(name)
             environment.update(shell or {})
@@ -57,6 +58,13 @@ class ComposeConfigurationTests(unittest.TestCase):
             self.assertEqual(environment["JOB_RETENTION_SECONDS"], "604800")
             self.assertEqual(environment["REDIS_URL"], "redis://redis:6379/0")
         self.assertEqual(services["execution-agent"]["environment"]["EXECUTION_AGENT_TOKEN"], "")
+        self.assertEqual(services["log-generator"]["environment"]["LOG_GENERATOR_MODE"], "manual")
+
+    def test_random_mode_is_explicit_and_collection_waits_for_healthy_api(self):
+        services = self.config("LOG_GENERATOR_MODE=random\n")
+        self.assertEqual(services["log-generator"]["environment"]["LOG_GENERATOR_MODE"], "random")
+        for name in ("fluent-bit", "collector"):
+            self.assertEqual(services[name]["depends_on"]["aiops"]["condition"], "service_healthy")
 
     def test_dotenv_values_reach_all_intended_services(self):
         token = "test-token-" + "x" * 32

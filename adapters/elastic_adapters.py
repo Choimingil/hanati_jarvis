@@ -233,7 +233,7 @@ class ElasticLogRepository(LogRepository):
             return response["get"]["_source"]
         return self.client.get(index=ELASTIC_INCIDENT_INDEX, id=incident_id)["_source"]
 
-    def list_operational_incidents(self, minutes: int = 60) -> list[dict[str, Any]]:
+    def list_operational_incidents(self, minutes: int = 10) -> list[dict[str, Any]]:
         response = self.client.search(
             index=ELASTIC_INCIDENT_INDEX,
             query={
@@ -254,6 +254,30 @@ class ElasticLogRepository(LogRepository):
                 {"last_seen": "desc"},
             ],
             size=200,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])]
+
+    def recent_incident_logs(self, incident_id: str, minutes: int = 10):
+        response = self.client.search(
+            index=ELASTIC_LOG_INDEX,
+            query={
+                "bool": {
+                    "filter": [
+                        {"bool": {
+                            "should": [
+                                {"term": {"incident_id": incident_id}},
+                                {"term": {"incident_id.keyword": incident_id}},
+                            ],
+                            "minimum_should_match": 1,
+                        }},
+                        {"range": {"received_at": {"gte": f"now-{minutes}m"}}},
+                    ],
+                }
+            },
+            sort=[{"received_at": {"order": "desc", "unmapped_type": "date"}}],
+            size=20,
+            source=["timestamp", "received_at", "message", "host", "service", "environment", "level", "source", "synthetic", "raw.source", "raw.synthetic"],
             ignore_unavailable=True,
         )
         return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])]
