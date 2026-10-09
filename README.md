@@ -4,9 +4,11 @@
 
 ## 시작
 
-1. `.env.example`을 `.env`로 복사하고 필요한 값을 설정합니다.
+1. 외부 LLM이나 실행 Agent를 사용할 경우 `.env.example`을 `.env`로 복사하고 필요한 값을 설정합니다. 기본 실행에는 `.env`가 없어도 됩니다.
 2. `docker compose up -d --build`로 서비스를 시작합니다.
 3. `http://localhost:8080`에서 분석·진단·조치 화면을 확인합니다.
+
+Compose는 `.env` 또는 셸 환경변수의 설정값을 읽으며, 값이 없으면 `docker-compose.yml`의 기본값을 사용합니다. `.env` 파일을 필수로 요구하는 `env_file` 설정은 사용하지 않아 구버전 Compose에서도 검증이 가능합니다. 외부 LLM을 쓰려면 실제 `OPENAI_API_KEY`를 설정하고, 사용하지 않으려면 `LLM_EXTERNAL_ENABLED=false`를 설정합니다. 예제 API 키는 실제 키가 아닙니다.
 
 Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수집 API는 HTTP 202와 작업 ID를 반환하며 `/api/v1/analysis/jobs/{job_id}`에서 완료 여부를 확인합니다. 초기 이미지 빌드와 임베딩 모델 다운로드에는 시간이 필요합니다.
 
@@ -36,3 +38,4 @@ Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수�
 
 
 미사용 예제와 독립 LLM HTTP 서버 코드는 [보관 설명](old/unused-2026-10-06/README.md)에 보존하고 활성 경로에서 제거했습니다. LLM은 Worker가 직접 호출합니다. Collector와 ES 초기화는 Compose에 정의된 전용 이미지에서 의존성을 빌드 시 설치합니다. 상시 메모리 상한은 Agent 포함 5632MiB(5.5GiB)입니다.
+

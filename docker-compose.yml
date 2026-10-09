@@ -1,5 +1,7 @@
 # 8 GiB / 2 vCPU: per-container ceilings, not reservations.
 # Steady-state RAM ceilings: 5632 MiB including optional execution Agent.
+# .env is optional: Compose interpolates configured values below when present.
+# Avoid service env_file so older Compose versions do not require .env.
 name: hanati-jarvis
 services:
   elasticsearch:
@@ -195,6 +197,9 @@ services:
     - BUSINESS_SERVICES_FILE=/workspace/business-services.json
     - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
+    - COLLECTION_FRESHNESS_SECONDS=${COLLECTION_FRESHNESS_SECONDS:-120}
+    - JOB_RETENTION_SECONDS=${JOB_RETENTION_SECONDS:-604800}
+    - EXECUTION_AGENT_TOKEN=${EXECUTION_AGENT_TOKEN:-}
     - OMP_NUM_THREADS=1
     - MKL_NUM_THREADS=1
     - OPENBLAS_NUM_THREADS=1
@@ -216,8 +221,6 @@ services:
     - python
     - /workspace/app.py
     restart: unless-stopped
-    env_file:
-    - .env
     healthcheck:
       test:
       - CMD
@@ -291,6 +294,9 @@ services:
     - BUSINESS_SERVICES_FILE=/workspace/business-services.json
     - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
+    - COLLECTION_FRESHNESS_SECONDS=${COLLECTION_FRESHNESS_SECONDS:-120}
+    - JOB_RETENTION_SECONDS=${JOB_RETENTION_SECONDS:-604800}
+    - EXECUTION_AGENT_TOKEN=${EXECUTION_AGENT_TOKEN:-}
     - OMP_NUM_THREADS=1
     - MKL_NUM_THREADS=1
     - OPENBLAS_NUM_THREADS=1
@@ -307,8 +313,6 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    env_file:
-    - .env
     command:
     - python
     - -m
@@ -331,9 +335,8 @@ services:
     - ./agent-manifest.json:/config/manifest.json:ro
     - execution-agent-state:/state
     - /var/run/docker.sock:/var/run/docker.sock
-    env_file:
-    - .env
     environment:
+    - EXECUTION_AGENT_TOKEN=${EXECUTION_AGENT_TOKEN:-}
     - EXECUTION_AGENT_MANIFEST=/config/manifest.json
     - EXECUTION_AGENT_JOURNAL=/state/executions.sqlite
     - EXECUTION_AGENT_BIND=0.0.0.0
@@ -371,3 +374,4 @@ volumes:
   embedding-cache: null
   redis-data: null
   execution-agent-state: null
+
