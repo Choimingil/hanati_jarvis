@@ -8,6 +8,7 @@ from operations.execution import ExecutionCoordinator, TERMINAL
 from operations.redis_store import client
 from operations.privacy import redact
 from operations.settings import bind_recommendation
+from operations.incident_presentation import execution_summary, processing_summary
 from utils.time_utils import now_iso
 
 remediation_blueprint = Blueprint("remediation", __name__)
@@ -155,7 +156,7 @@ def _persist_result(manager, record):
             "MONITORING"
             if record["result"]["status"] == "success"
             else "ACTION_REQUIRED",
-            {"last_execution_id": record["execution_id"], "active_execution_id": None, "recovery_confirmation": "pending_execution"},
+            {"last_execution_id": record["execution_id"], "last_execution": execution_summary(record), "active_execution_id": None, "recovery_confirmation": "pending_execution"},
         )
     manager.release_host(record)
 
@@ -301,9 +302,12 @@ def verify_remediation():
             and incident.get("status") == "MONITORING"
             and incident.get("last_execution_id") == record["execution_id"]
         ):
-            operational_incident_service.transition(
+            incident = operational_incident_service.transition(
                 incident, "RESOLVED", {"recovered_at": now_iso(), "recovery_confirmation": result.get("execution_mode", "business_probe")}
             )
-        return jsonify(result)
+        if incident:
+            result["incident"] = incident
+            result["processing"] = processing_summary(incident)
+        return jsonify(redact(result))
     except Exception as exc:
         return _error(exc)

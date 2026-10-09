@@ -221,5 +221,5 @@ class AgentRuntime:
             "samples": samples,
             "recovered": bool(checks) and all(c["passed"] for c in checks),
             "verified_at": time.time(),
-            **({"execution_mode": "simulation", "message": "모의 복구 확인: 테스트 스크립트 정상 종료와 등록 파일만 확인했습니다."} if simulation else {}),
+            **({"execution_mode": "simulation", "message": "등록 스크립트의 정상 종료와 등록 파일 상태를 확인했습니다. 서비스 복구 검사는 별도 확인이 필요합니다."} if simulation else {}),
         }

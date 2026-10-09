@@ -90,6 +90,11 @@ _PAGE = """<!doctype html>
   }
   button:disabled { opacity: .55; cursor: default; }
   .hidden { display: none; }
+  .incident-processing { border-left: 4px solid var(--accent); padding: 12px 16px; margin: 12px 0; background: var(--bar); border-radius: 8px; }
+  .incident-processing.completed { border-color: var(--ok); }
+  .incident-processing strong { display: block; }
+  .completed-incident-detail { display: block; width: 100%; text-align: left; margin-top: 8px; white-space: normal; }
+  .completed-incident-detail span { display: block; font-weight: 400; }
   .cause {
     border-left: 3px solid var(--accent); padding: 4px 0 4px 14px;
     margin: 6px 0 4px; font-size: 15px;
@@ -260,10 +265,12 @@ _PAGE = """<!doctype html>
     <div id="incident-list-status" class="muted" role="status">장애 목록을 불러오는 중…</div>
     <div id="incident-sync-status" class="muted client-only" role="status"></div>
     <div id="incident-list" class="incident-table-wrap"></div>
+    <details id="completed-incidents" class="hidden"><summary id="completed-incidents-title">처리 완료 이력</summary><div id="completed-incidents-list"></div></details>
   </div>
   <div id="incident-detail-panel" class="card hidden" aria-labelledby="incident-detail-title" tabindex="-1">
     <div class="card-head"><strong id="incident-detail-title">장애 상세</strong><button id="incident-detail-close" class="secondary" type="button">닫기</button></div>
     <div id="incident-detail-load-status" class="muted" role="status"></div>
+    <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
     <dl id="incident-detail-fields" class="incident-fields"></dl>
     <strong>발생 내용</strong><pre id="incident-detail-message"></pre>
     <div class="guidance-section"><strong>해당 장애의 최근 10분 로그 (최대 20건)</strong></div>
@@ -419,6 +426,9 @@ let incidentItems = [];
 let selectedIncidentFilter = "open";
 let incidentsLoaded = false;
 let selectedIncidentId = null;
+let currentDetailedIncident = null;
+let currentProcessing = null;
+let verificationPending = false;
 let incidentDetailRequest = 0;
 let detailRecommendationKey = null;
 let incidentClockOffset = 0;
@@ -478,14 +488,27 @@ schedulePoll(loadOperationsStatus,15000);
 $("refresh-execution").addEventListener("click", async () => {
   if (!lastExecutionId) return;
   const data = await getJSON("/api/v1/remediations/executions/" + encodeURIComponent(lastExecutionId));
-  showExecResult("실행 결과", {...data.result,execution_id:lastExecutionId},200);
+  showExecResult("실행 결과", {...data.result,execution_id:lastExecutionId},200,currentProcessing);
 });
 $("verify-execution").addEventListener("click", async () => {
-  if (!lastExecutionId) return;
-  const {data} = await postJSON("/api/v1/remediations/verify", {execution_id:lastExecutionId});
-  $("exec-output").textContent = JSON.stringify(data,null,2);
-  $("exec-status").textContent = data.execution_mode === "simulation" ? (data.recovered ? "모의 복구 확인 완료 · 실제 서비스 복구 측정 없음" : "모의 복구 미확인") : (data.recovered ? "업무 복구 확인 완료" : "업무 복구 미확인");
-  await loadIncidents();
+  if (!lastExecutionId || verificationPending) return;
+  const executionId = lastExecutionId;
+  verificationPending = true;
+  $("verify-execution").disabled = true;
+  try {
+    const {data} = await postJSON("/api/v1/remediations/verify", {execution_id:executionId});
+    if (lastExecutionId === executionId) {
+      $("exec-output").textContent = JSON.stringify(data,null,2);
+      $("exec-status").textContent = data.execution_mode === "simulation" ? (data.recovered ? "스크립트 결과 확인 완료" : "스크립트 결과 미확인") : (data.recovered ? "업무 복구 확인 완료" : "업무 복구 미확인");
+      if (data.incident?.incident_id === selectedIncidentId) renderIncidentDetails(data.incident, data.processing);
+    }
+    await loadIncidents();
+  } catch (error) {
+    if (lastExecutionId === executionId) $("exec-status").textContent = "복구 확인 요청 실패 — 연결 상태를 확인하고 다시 시도하세요.";
+  } finally {
+    verificationPending = false;
+    $("verify-execution").disabled = false;
+  }
 });
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
@@ -522,12 +545,33 @@ function refreshRecentIncidents() {
   });
   $("incident-detail-panel").classList.toggle("recent-incident", isRecentIncident($("incident-detail-panel").dataset.lastSeen));
 }
-function renderIncidentDetails(incident) {
-  const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "복구 확인중", RESOLVED: "해결됨", REOPENED: "재발"};
-  const origin = incident.synthetic === true ? "모의 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
+function environmentLabel(value) {
+  return value === "simulation" ? "시나리오" : (value || "unknown");
+}
+function renderIncidentProcessing(incident, processing = null) {
+  const completed = incident.status === "RESOLVED";
+  const actionCompleted = incident.status === "MONITORING";
+  const state = processing || incident.processing || {};
+  $("incident-processing").classList.toggle("hidden", !completed && !actionCompleted);
+  $("incident-processing").classList.toggle("completed", completed);
+  $("incident-processing-title").textContent = completed ? "처리 완료" : "조치 완료 · 복구 확인 대기";
+  $("incident-processing-message").textContent = state.message || (completed ? "처리가 완료된 장애입니다." : "조치가 완료되었습니다. 서비스 복구 확인 후 처리가 완료됩니다.");
+  const meta = [];
+  if (state.completed_at || incident.recovered_at) meta.push((completed ? "완료 시각: " : "조치 시각: ") + formatDateTime(state.completed_at || incident.recovered_at));
+  if (state.operator) meta.push("처리 운영자: " + state.operator);
+  if (state.method) meta.push("조치 내용: " + state.method);
+  const confirmations = {operator_report:"운영자 확인",business_probe:"서비스 복구 검사",simulation:"등록 스크립트 결과 확인"};
+  if (confirmations[state.confirmation]) meta.push("확인 방식: " + confirmations[state.confirmation]);
+  $("incident-processing-meta").textContent = meta.join(" · ");
+}
+function renderIncidentDetails(incident, processing = null) {
+  currentDetailedIncident = incident;
+  currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
+  const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발"};
+  const origin = incident.synthetic === true ? "장애 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
   const fields = [
     ["단위시스템", incident.service || "unknown"],
-    ["환경", incident.environment || "unknown"],
+    ["환경", environmentLabel(incident.environment)],
     ["영향 호스트", (incident.affected_hosts || incident.hosts || []).join(", ") || "-"],
     ["발생 구간", (incident.sources || []).join(", ") || "-"],
     ["감지 유형", origin],
@@ -542,10 +586,13 @@ function renderIncidentDetails(incident) {
   $("incident-detail-fields").innerHTML = fields.map(([label, value]) => '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd>').join("");
   $("incident-detail-message").textContent = incident.latest_message || incident.representative_message || incident.normalized_message || "발생 내용 없음";
   $("incident-detail-panel").dataset.lastSeen = incident.last_seen || "";
+  renderIncidentProcessing(incident, processing);
   refreshRecentIncidents();
 }
 function closeIncidentDetails() {
   selectedIncidentId = null;
+  currentDetailedIncident = null;
+  currentProcessing = null;
   incidentDetailRequest += 1;
   $("incident-detail-panel").classList.add("hidden");
   $("result").classList.add("hidden");
@@ -579,7 +626,7 @@ function renderManualRemediation(incident, available) {
   $("manual-remediation").classList.toggle("hidden", !available && !history.length);
   $("manual-form").classList.toggle("hidden", !available);
   $("manual-flow").textContent = available ? "자동 실행 대상이 없습니다. 수동으로 별도 조치 → 서비스에 조치 방법 기입 → 등록 순서로 진행하세요." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
-  $("manual-target").textContent = [incident.environment, incident.service, ...(incident.affected_hosts || [])].join(" / ");
+  $("manual-target").textContent = [environmentLabel(incident.environment), incident.service, ...(incident.affected_hosts || [])].join(" / ");
   $("manual-history").innerHTML = history.length
     ? '<strong>등록된 수동 조치 이력</strong>' + history.slice().reverse().map(item =>
       '<details><summary>' + esc(formatDateTime(item.registered_at)) + ' · ' + esc(item.operator)
@@ -655,7 +702,7 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     const data = await getJSON("/api/v1/log-generator/incidents/" + encodeURIComponent(incident.incident_id));
     if (requestId !== incidentDetailRequest) return;
     const latest = data.incident;
-    renderIncidentDetails(latest);
+    renderIncidentDetails(latest, data.processing);
     renderManualRemediation(latest, data.manual_action_available === true);
     $("incident-detail-load-status").textContent = "";
     $("incident-detail-logs-status").textContent = data.logs_status === "unavailable"
@@ -666,14 +713,14 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     ).join("\\n\\n");
     clientRunPrefix = latest.service + " / " + latest.incident_id;
     const rec = latest.latest_recommendation;
-    const recommendationKey = JSON.stringify([latest.incident_id, latest.status, latest.version, rec?.recommendation_id]);
+    const recommendationKey = JSON.stringify([latest.incident_id, latest.status, latest.version, rec?.recommendation_id, (data.decisions || []).map(d => [d.execution_id, d.result?.status])]);
     if (detailRecommendationKey !== recommendationKey) {
       $("result").classList.add("hidden");
       $("guidance-result").classList.add("hidden");
       currentRecommendation = null;
       currentGuidance = null;
       if (rec) {
-        renderRecommendation(latest.error_code, rec);
+        renderRecommendation(latest.error_code, rec, data.decisions || [], data.processing);
         if (latest.status !== "ACTION_REQUIRED" && !(latest.status === "INVESTIGATING" && latest.synthetic === true && latest.environment === "simulation" && rec.targets?.length)) {
           document.querySelectorAll("#actions .runbook").forEach(el => {
             el.actionable = false;
@@ -683,8 +730,10 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
       }
       detailRecommendationKey = recommendationKey;
     }
-    if (!rec) $("incident-detail-load-status").textContent = "분석 중이거나 조치 추천이 아직 없습니다.";
-    setClientStatus("장애 상세 조회: " + latest.status);
+    if (data.execution) showExecResult(data.execution.script_id || "실행 결과", {...data.execution.result,execution_id:data.execution.execution_id}, 200, data.processing);
+    if (data.executions_status === "unavailable") $("incident-detail-load-status").textContent = "조치 이력 조회 지연 — 저장된 장애 상태를 표시합니다.";
+    else if (!rec && latest.status !== "RESOLVED" && latest.status !== "MONITORING") $("incident-detail-load-status").textContent = "분석 중이거나 조치 추천이 아직 없습니다.";
+    setClientStatus(latest.status === "RESOLVED" ? "처리 완료" : latest.status === "MONITORING" ? "조치 완료 — 복구 확인 대기" : "장애 상세 조회: " + latest.status);
   } catch (error) {
     if (requestId !== incidentDetailRequest) return;
     $("incident-detail-load-status").textContent = "최신 상세 조회 실패 — 목록에 있던 정보를 표시합니다. 장애 항목을 다시 눌러 재조회하세요.";
@@ -696,6 +745,7 @@ $("incident-detail-close").addEventListener("click", () => {
   closeIncidentDetails();
 });
 function renderIncidentList() {
+  renderCompletedIncidents();
   const filter = incidentFilters[selectedIncidentFilter];
   const items = incidentItems.filter(filter.matches);
   $("incident-list-title").textContent = filter.label + " 장애" + (incidentsLoaded ? " · " + items.length + "건" : "");
@@ -715,6 +765,20 @@ function renderIncidentList() {
   }));
   $("incident-list").querySelectorAll("tbody tr").forEach((row, index) => row.dataset.lastSeen = items[index].last_seen || "");
   refreshRecentIncidents();
+}
+function renderCompletedIncidents() {
+  const completed = incidentItems.filter(item => item.status === "RESOLVED");
+  $("completed-incidents").classList.toggle("hidden", !completed.length);
+  $("completed-incidents-title").textContent = "처리 완료 이력 · 최근 10분 · " + completed.length + "건";
+  $("completed-incidents-list").innerHTML = completed.map((item, index) =>
+    '<button type="button" class="completed-incident-detail secondary" data-index="' + index + '"><strong>' + esc(item.error_code || "UNKNOWN_ERROR")
+    + '</strong><span>' + esc(item.service || "unknown") + ' · 처리 완료 · ' + esc(formatDateTime(item.processing?.completed_at || item.recovered_at)) + '</span></button>'
+  ).join("");
+  $("completed-incidents-list").querySelectorAll(".completed-incident-detail").forEach(button => button.addEventListener("click", () => {
+    manualSelectionVersion += 1;
+    autoSelectedIncidentId = null;
+    loadIncidentDetails(completed[Number(button.dataset.index)], true);
+  }));
 }
 function selectIncidentFilter(key) {
   if (!incidentFilters[key]) return;
@@ -765,7 +829,8 @@ async function fetchIncidents() {
     $("incident-list-status").textContent = "";
     renderIncidentList();
     if (selectedIncidentId) {
-      const selected = incidentItems.find(item => item.incident_id === selectedIncidentId && (incidentFilters[selectedIncidentFilter].matches(item) || currentManualIncident?.manual_actions?.length));
+      const selected = incidentItems.find(item => item.incident_id === selectedIncidentId)
+        || (currentDetailedIncident?.status === "RESOLVED" ? currentDetailedIncident : null);
       if (selected) await loadIncidentDetails(selected, false, true);
       else closeIncidentDetails();
     }
@@ -942,7 +1007,7 @@ async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
     if (!isCurrent()) return;
     if (data.status === "ready") {
       if (!IS_CLIENT) statusEl().textContent = "";
-      renderRecommendation(errorCode, data.recommendation, data.decisions || []);
+      renderRecommendation(errorCode, data.recommendation, data.decisions || [], data.processing);
       await loadIncidents();
       return;
     }
@@ -1022,7 +1087,7 @@ document.addEventListener("visibilitychange", () => {
     if (IS_CLIENT) syncClientRun();
   }
 });
-function renderRecommendation(errorCode, rec, decisions = []) {
+function renderRecommendation(errorCode, rec, decisions = [], processing = null) {
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);
     setClientStatus("분석 완료");
@@ -1073,9 +1138,9 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     );
     if (action) el.dataset.actionId = action.action_id;
     el.action = action;
-    el.actionable = true;
+    el.actionable = !["completed", "action_completed"].includes(processing?.state);
     if (action?.execution_mode === "simulation") {
-      el.querySelector(".runbook-tag").textContent = "기존 등록 스크립트 · 모의 실행";
+      el.querySelector(".runbook-tag").textContent = "등록 스크립트 실행";
       const note = document.createElement("p");
       note.className = "muted";
       note.textContent = action.script_path + " — 작업 메시지를 출력하는 테스트 스크립트입니다.";
@@ -1090,7 +1155,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     targetSelect.disabled = !targets.length;
     targets.forEach((target, index) => {
       const option = document.createElement("option"); option.value = String(index);
-      option.textContent = [target.environment, target.service, target.host, target.instance].join(" / ") + (target.instance === "log-generator-scripts" ? " (기존 셸 스크립트 · 모의)" : "");
+      option.textContent = [environmentLabel(target.environment), target.service, target.host, target.instance].join(" / ") + (target.instance === "log-generator-scripts" ? " (등록 셸 스크립트)" : "");
       targetSelect.appendChild(option);
     });
     targetSelect.addEventListener("change", () => {
@@ -1112,10 +1177,12 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     const decided = action && decisions.find(
       (d) => d.action_id === action.action_id
     );
-    if (decided) markDecided(el, decided.decision);
+    if (decided) markDecided(el, decided.decision, decided.result?.status, processing);
 
     box.appendChild(el);
-    el.querySelector(".approval-status").textContent = approvalHint(el);
+    el.querySelector(".approval-status").textContent = processing?.state === "completed" ? "이 장애는 처리가 완료되었습니다."
+      : decided?.result?.status === "success" ? "조치가 완료되었습니다. 서비스 복구 상태를 확인하세요."
+      : decided?.decision === "reject" ? "거부한 조치입니다." : approvalHint(el);
     setRunbookButtonsDisabled(el, el.classList.contains("decided"));
   });
 
@@ -1124,9 +1191,9 @@ function renderRecommendation(errorCode, rec, decisions = []) {
 
   if (decisions.length) {
     const last = decisions[decisions.length - 1];
-    showExecResult(last.script_id, last.result || {}, 200);
+    showExecResult(last.script_id, {...last.result,execution_id:last.execution_id || last.result?.execution_id}, 200, processing);
   }
-  setClientStatus(decisions.some(
+  setClientStatus(processing?.state === "completed" ? "처리 완료" : decisions.some(
     (d) => d.decision === "approve" && d.result?.status === "success"
   ) ? "명령 실행 완료 — 업무 복구 확인 필요" : "분석 완료");
 }
@@ -1191,24 +1258,25 @@ function unlockOtherRunbooks() {
   });
 }
 
-function markDecided(el, decision) {
+function markDecided(el, decision, resultStatus = null, processing = null) {
   el.classList.add("decided");
   el.querySelector(".decision").textContent =
-    decision === "approve" ? "✓ 승인됨" : "✗ 거부됨";
+    decision === "approve" ? (processing?.state === "completed" ? "✓ 처리 완료" : resultStatus === "success" ? "✓ 조치 완료 · 복구 확인 대기" : "✓ 승인됨") : "✗ 거부됨";
   setRunbookButtonsDisabled(el, true);
 }
 
-function showExecResult(scriptId, data, status) {
+function showExecResult(scriptId, data, status, processing = null) {
   $("exec").classList.remove("hidden");
   $("exec-title").textContent = scriptId;
   lastExecutionId = data.execution_id || null;
   $("refresh-execution").classList.toggle("hidden", !lastExecutionId);
-  $("verify-execution").classList.toggle("hidden", !lastExecutionId || data.status !== "success");
-  $("verify-execution").textContent = data.execution_mode === "simulation" ? "모의 복구 확인" : "업무 복구 확인";
+  $("verify-execution").classList.toggle("hidden", !lastExecutionId || data.status !== "success" || (processing && (processing.state !== "action_completed" || processing.confirmation !== "pending_execution")));
+  $("verify-execution").textContent = data.execution_mode === "simulation" ? "스크립트 결과 확인" : "업무 복구 확인";
   const ok = ["success", "rejected", "already_processed"].includes(data.status);
   const s = $("exec-status");
   s.className = ok ? "status-ok" : "status-err";
-  s.textContent = (data.execution_mode === "simulation" ? "모의 스크립트 실행 · " : "") + `${data.status}` + (data.returncode !== undefined
+  const labels = {success:"명령 실행 완료",rejected:"거부됨",failed:"실행 실패",timeout:"실행 시간 초과",blocked:"실행 차단",unknown:"실행 결과 확인 필요",running:"실행중",reserved:"실행 대기"};
+  s.textContent = (processing?.state === "completed" ? "처리 완료 · " : "") + (labels[data.status] || data.status) + (data.returncode !== undefined
     ? ` (exit ${data.returncode})` : ` (HTTP ${status})`);
   $("exec-output").textContent =
     (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :
@@ -1406,7 +1474,7 @@ async function decideRunbook(scriptId, action, el, decision) {
       unlockOtherRunbooks();
       return;
     }
-    markDecided(el, decision);
+    markDecided(el, decision, data.status);
     if (decision === "approve" && data.status === "success") {
       setClientStatus("명령 실행 완료 — 업무 복구 확인 필요");
     }

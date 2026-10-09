@@ -551,6 +551,9 @@ class RemediationApiTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200, response.get_json())
         self.assertTrue(response.get_json()["recovered"])
+        self.assertEqual(response.get_json()["incident"]["status"], "RESOLVED")
+        self.assertEqual(response.get_json()["processing"]["state"], "completed")
+        self.assertEqual(response.get_json()["processing"]["method"], "restart_application")
         self.assertEqual(self.repo.incidents["INC-1"]["status"], "RESOLVED")
         self.assertIsNone(self.redis.get(self.manager.get(identifier)["locks"][1]))
 

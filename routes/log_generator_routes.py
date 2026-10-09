@@ -28,6 +28,7 @@ from operations.redis_store import client as redis_client
 from operations.activity import redis_activity, worker_activity
 from error_detector import is_context_only_incident
 from operations.settings import with_execution_targets, bind_recommendation, manual_action_available
+from operations.incident_presentation import processing_summary, execution_summary
 
 LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
@@ -188,6 +189,7 @@ def latest_recommendation():
 
     latest = max(fresh, key=lambda doc: doc["timestamp"])
     recommendation = latest.get("recommendation") or latest.get("guidance")
+    incident = None
     if isinstance(recommendation, dict) and recommendation.get("incident_id"):
         incident = repository.get_operational_incident(recommendation["incident_id"])
         if incident:
@@ -197,6 +199,7 @@ def latest_recommendation():
         {
             "status": "ready",
             "recommendation": recommendation,
+            "processing": processing_summary(incident) if incident else None,
             "decisions": _safe_decisions(
                 (recommendation or {}).get("recommendation_id")
             ),
@@ -213,18 +216,22 @@ def _safe_decisions(recommendation_id: str | None) -> list[dict]:
         return []
 
     decisions = []
-    for doc in repository.find_remediation_executions(recommendation_id):
+    documents = repository.find_remediation_executions(recommendation_id)
+    if not isinstance(documents, list):
+        return []
+    for doc in documents:
         result = doc.get("result") or {}
         decisions.append(
             {
                 "action_id": doc.get("action_id"),
+                "execution_id": doc.get("execution_id"),
                 "script_id": doc.get("script_id"),
                 "decision": (
                     "reject" if result.get("status") == "rejected" else "approve"
                 ),
                 "approved_by": doc.get("approved_by"),
                 "approved_at": doc.get("approved_at"),
-                "result": result,
+                "result": {**result, "execution_id": doc.get("execution_id")},
             }
         )
     return decisions
@@ -252,6 +259,7 @@ def recent_incidents():
         incident["host_count"] = len(hosts)
         incident["count"] = incident.get("occurrence_count", 0)
         incident["recommendation"] = incident.get("latest_recommendation") or {}
+        incident["processing"] = processing_summary(incident)
         incidents.append(incident)
 
     incidents.sort(
@@ -282,10 +290,22 @@ def incident_detail(incident_id):
         logs_status = "ready"
     except Exception:
         logs, logs_status = [], "unavailable"
+    try:
+        decisions = _safe_decisions(incident.get("latest_recommendation_id"))
+        execution_id = incident.get("last_execution_id")
+        execution = repository.get_remediation_execution(execution_id) if execution_id else None
+        if not isinstance(execution, dict) or execution.get("incident_id") != incident_id:
+            execution = None
+        executions_status = "ready"
+    except Exception:
+        decisions, execution, executions_status = [], None, "unavailable"
     return jsonify(redact({
         "status": "ready", "incident": incident,
         "logs": logs, "logs_status": logs_status,
         "manual_action_available": manual_action_available(incident),
+        "processing": processing_summary(incident, execution_summary(execution)),
+        "decisions": decisions, "execution": execution,
+        "executions_status": executions_status,
     }))
 
 

@@ -28,6 +28,9 @@ class MemoryRepository:
     def get_remediation_execution(self, identifier):
         return copy.deepcopy(self.executions.get(identifier))
 
+    def find_remediation_executions(self, recommendation_id):
+        return [copy.deepcopy(record) for record in self.executions.values() if record.get("recommendation_id") == recommendation_id]
+
     def save_remediation_execution(self, document):
         if document["execution_id"] in self.executions:
             raise RuntimeError("duplicate")
