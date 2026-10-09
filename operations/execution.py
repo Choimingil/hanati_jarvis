@@ -53,6 +53,12 @@ class ExecutionCoordinator:
             json=body,
             headers=headers,
         )
+        if response.status_code in {401, 403}:
+            raise ValueError("agent machine credential rejected")
+        if path == "/preflight" and response.status_code == 409:
+            blocked = response.json()
+            if isinstance(blocked, dict) and blocked.get("status") == "blocked":
+                raise ValueError(redact(blocked.get("reason") or "agent preflight blocked"))
         response.raise_for_status()
         result = response.json()
         if not isinstance(result, dict):

@@ -276,6 +276,8 @@ _PAGE = """<!doctype html>
       <button class="log-tab selected" data-panel="log">log_generator</button>
       <button class="log-tab" data-panel="fluentbit-panel">Fluent Bit</button>
       <button class="log-tab" data-panel="internal-panel">Elasticsearch/Qdrant</button>
+      <button class="log-tab" data-panel="redis-panel">Redis</button>
+      <button class="log-tab" data-panel="worker-panel">Worker</button>
     </div>
   </div>
   <div id="log" class="card hidden logs-section admin-only">
@@ -313,6 +315,15 @@ _PAGE = """<!doctype html>
       <div class="sub-label">Elasticsearch (진단·추천)</div>
       <pre id="es-output" class="src-elasticsearch"></pre>
     </div>
+  </div>
+
+  <div id="redis-panel" class="card hidden logs-section admin-only">
+    <div class="card-head"><strong>Redis 큐 로그</strong><button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button></div>
+    <div class="panel-body"><p class="muted">현재 큐 상태와 조회 구간의 접수·재시도·실패 보관 기록</p><pre id="redis-output"></pre></div>
+  </div>
+  <div id="worker-panel" class="card hidden logs-section admin-only">
+    <div class="card-head"><strong>Worker 처리 로그</strong><button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button></div>
+    <div class="panel-body"><p class="muted">현재 생존 신호와 조회 구간의 작업별 분석 시작·완료·오류 기록</p><pre id="worker-output"></pre></div>
   </div>
 
   <div id="result" class="card hidden">
@@ -405,6 +416,7 @@ let clientSyncDelayed = false;
 let clientRunSelectionVersion = 0;
 let autoSelectedIncidentId = null;
 let manualSelectionVersion = 0;
+let activityLoadInFlight = null;
 const incidentFilters = {
   open: {label: "진행중", matches: (item) => item.status !== "RESOLVED"},
   critical: {label: "긴급", matches: (item) => item.severity === "CRITICAL"},
@@ -570,7 +582,10 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
       if (rec) {
         renderRecommendation(latest.error_code, rec);
         if (latest.status !== "ACTION_REQUIRED") {
-          document.querySelectorAll("#actions .buttons button").forEach(button => button.disabled = true);
+          document.querySelectorAll("#actions .runbook").forEach(el => {
+            el.actionable = false;
+            setRunbookButtonsDisabled(el, true);
+          });
         }
       }
       detailRecommendationKey = recommendationKey;
@@ -691,10 +706,14 @@ document.querySelectorAll(".log-tab").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".log-tab").forEach((candidate) => candidate.classList.toggle("selected", candidate === button));
     showLogSource(button.dataset.panel);
+    pollActivity();
   });
 });
 schedulePoll(loadIncidents, IS_CLIENT ? 5000 : 2000);
 schedulePoll(refreshRecentIncidents,1000);
+schedulePoll(() => {
+  if (!IS_CLIENT && !$("log-tabs-panel").classList.contains("hidden")) return pollActivity();
+},2000);
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -739,6 +758,8 @@ $("analyze").addEventListener("click", async () => {
   $("fluentbit-output").textContent = "";
   $("qdrant-output").textContent = "";
   $("es-output").textContent = "";
+  $("redis-output").textContent = "";
+  $("worker-output").textContent = "";
   $("wait-status").textContent = "";
   currentSince = null;
   currentGuidance = null;
@@ -775,13 +796,21 @@ $("analyze").addEventListener("click", async () => {
   }
 });
 
-async function pollActivity() {
+function pollActivity() {
+  if (!activityLoadInFlight) {
+    activityLoadInFlight = fetchActivity().finally(() => { activityLoadInFlight = null; });
+  }
+  return activityLoadInFlight;
+}
+async function fetchActivity() {
   try {
+    const since = currentSince;
     const params = new URLSearchParams();
-    if (currentSince) params.set("since", currentSince);
+    if (since) params.set("since", since);
     const data = await getJSON(
       `/api/v1/log-generator/activity?${params}`
     );
+    if (since !== currentSince) return;
     $("fluentbit-output").textContent =
       (data.fluentbit_log || []).join("\\n");
     $("fluentbit-output").scrollTop = $("fluentbit-output").scrollHeight;
@@ -791,8 +820,13 @@ async function pollActivity() {
     $("es-output").textContent =
       (data.elasticsearch_log || []).join("\\n");
     $("es-output").scrollTop = $("es-output").scrollHeight;
+    $("redis-output").textContent = (data.redis_log || []).join("\\n");
+    $("worker-output").textContent = (data.worker_log || []).join("\\n");
+    $("redis-output").scrollTop = $("redis-output").scrollHeight;
+    $("worker-output").scrollTop = $("worker-output").scrollHeight;
   } catch (e) {
     $("wait-status").textContent = "로그 조회 지연 — 마지막 표시 데이터 이후 상태를 확인 중입니다.";
+    return false;
   }
 }
 
@@ -932,7 +966,9 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       </dl>
       <label>조치 대상 (환경 / 서비스 / 호스트 / 인스턴스)</label>
       <select class="target-select"></select>
-      <pre class="preflight-output"></pre>
+      <p class="muted">실행 전 검사는 대상과 실행 조건을 확인합니다. 검사 통과 후 별도 승인을 눌러야 실제 조치가 실행됩니다.</p>
+      <div class="preflight-status muted" role="status"></div>
+      <details><summary>검사 응답 상세</summary><pre class="preflight-output"></pre></details>
       <div class="decision"></div>
       <div class="buttons">
         <button class="preflight">실행 전 검사</button>
@@ -945,30 +981,64 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       (candidate) => candidate.script_id === rb.script_id
     );
     if (action) el.dataset.actionId = action.action_id;
+    el.action = action;
+    el.actionable = true;
+    el.preflightRequest = 0;
     const targetSelect = el.querySelector(".target-select");
     const targets = rec.targets || [];
     el.targets = targets;
     const empty = document.createElement("option");
     empty.value = ""; empty.textContent = targets.length ? "대상을 선택하세요" : "이 사건에 등록된 실행 대상이 없습니다";
     targetSelect.appendChild(empty);
+    targetSelect.disabled = !targets.length;
     targets.forEach((target, index) => {
       const option = document.createElement("option"); option.value = String(index);
       option.textContent = [target.environment, target.service, target.host, target.instance].join(" / ");
       targetSelect.appendChild(option);
     });
     targetSelect.addEventListener("change", () => {
+      el.preflightRequest += 1;
+      el.preflightPending = false;
       el.preflightId = null; el.querySelector(".approve").disabled = true;
       el.querySelector(".preflight-output").textContent = "";
+      el.querySelector(".preflight-status").className = "preflight-status muted";
+      el.querySelector(".preflight-status").textContent = preflightHint(el);
+      setRunbookButtonsDisabled(el, false);
     });
     el.querySelector(".preflight").addEventListener("click", async () => {
+      const requestId = ++el.preflightRequest;
+      el.preflightPending = true;
+      el.preflightId = null;
+      setRunbookButtonsDisabled(el, true);
+      el.querySelector(".preflight-status").className = "preflight-status status-pending";
+      el.querySelector(".preflight-status").textContent = "실행 조건을 확인하는 중…";
       try {
-        const {data} = await postJSON("/api/v1/remediations/preflight", actionBody(action,el));
+        const {ok, data} = await postJSON("/api/v1/remediations/preflight", actionBody(action,el));
+        if (requestId !== el.preflightRequest || !el.isConnected) return;
         el.querySelector(".preflight-output").textContent = JSON.stringify(data,null,2);
-        el.preflightId = data.status === "ready" ? data.preflight_id : null;
-        el.querySelector(".approve").disabled = !el.preflightId;
+        el.preflightId = ok && data.status === "ready" ? data.preflight_id : null;
+        renderPreflightStatus(el, data);
+        if (el.preflightId) {
+          const proofId = el.preflightId;
+          setTimeout(() => {
+            if (el.preflightId !== proofId || !el.isConnected) return;
+            el.preflightId = null;
+            el.querySelector(".preflight-status").className = "preflight-status status-pending";
+            el.querySelector(".preflight-status").textContent = "검사 유효 시간이 지났습니다. 실행 전 검사를 다시 수행하세요.";
+            setRunbookButtonsDisabled(el, false);
+          }, (Number(data.expires_in_seconds) || 120) * 1000);
+        }
       } catch (error) {
-        el.preflightId = null; el.querySelector(".approve").disabled = true;
+        if (requestId !== el.preflightRequest || !el.isConnected) return;
+        el.preflightId = null;
+        el.querySelector(".preflight-status").className = "preflight-status status-err";
+        el.querySelector(".preflight-status").textContent = "검사 요청 실패 — 연결 상태를 확인하고 다시 검사하세요.";
         el.querySelector(".preflight-output").textContent = "검사 실패: " + error;
+      } finally {
+        if (requestId === el.preflightRequest) {
+          el.preflightPending = false;
+          setRunbookButtonsDisabled(el, false);
+        }
       }
     });
     el.querySelector(".approve").addEventListener(
@@ -988,6 +1058,8 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     if (decided) markDecided(el, decided.decision);
 
     box.appendChild(el);
+    el.querySelector(".preflight-status").textContent = preflightHint(el);
+    setRunbookButtonsDisabled(el, el.classList.contains("decided"));
   });
 
   // 한 추천에서는 조치 하나만 실행한다 - 이미 승인된 게 있으면 나머지를 잠근다.
@@ -1004,8 +1076,45 @@ function renderRecommendation(errorCode, rec, decisions = []) {
 
 const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 없습니다.";
 
+function preflightHint(el) {
+  if (!el.action) return "이 추천에는 자동 실행 가능한 조치가 없습니다. 분석 내용과 진단 항목을 확인하세요.";
+  if (!el.targets.length) return "이 장애의 환경·서비스·호스트와 일치하는 실행 대상이 등록되지 않았습니다. 모의 장애는 실제 컨테이너에 자동 연결되지 않습니다.";
+  return el.querySelector(".target-select").value === ""
+    ? "조치 대상을 먼저 선택한 뒤 실행 전 검사를 누르세요."
+    : "실행 전 검사로 조건을 확인하세요. 검사만으로는 조치가 실행되지 않습니다.";
+}
+function renderPreflightStatus(el, data) {
+  const checks = {redundancy:"이중화 컨테이너 정상", maintenance:"점검 상태 아님", rollback_ready:"실행 상태 복원 가능", host_idle:"진행 중인 실행 없음"};
+  const reasons = {
+    "action not enabled in host manifest":"Agent 설정에서 이 작업이 비활성화되어 있습니다.",
+    "target not bound to recommendation":"선택한 대상이 이 장애의 추천과 연결되지 않았습니다.",
+    "agent machine credential not configured":"실행 Agent 인증 값이 설정되지 않았습니다.",
+    "agent machine credential rejected":"실행 Agent가 인증을 거절했습니다. 인증 설정을 확인하세요.",
+    "stale recommendation":"장애 또는 추천이 갱신되었습니다. 최신 장애 상세에서 다시 검사하세요.",
+    "expired recommendation":"추천 유효 시간이 지났습니다. 최신 분석 결과가 필요합니다.",
+    "incident is not actionable":"현재 장애 상태에서는 조치를 실행할 수 없습니다.",
+    "host is executing or waiting for business recovery confirmation":"대상이 다른 조치를 실행 중이거나 복구 확인을 기다리고 있습니다.",
+    "dependency unavailable; inspect service status":"실행 Agent 또는 저장소에 연결할 수 없습니다. 기동·연결 상태를 확인하세요.",
+    "container is not the registered Compose service":"등록한 Compose 프로젝트·서비스와 실제 컨테이너가 다릅니다.",
+    "container image differs from approved image":"실제 컨테이너 이미지가 승인된 이미지와 다릅니다.",
+  };
+  const failed = (data.checks || []).filter(check => !check.passed);
+  const status = el.querySelector(".preflight-status");
+  status.className = "preflight-status " + (el.preflightId ? "status-ok" : "status-err");
+  status.textContent = el.preflightId
+    ? "검사 통과 — 실제 조치는 아직 실행되지 않았습니다. " + (Number(data.expires_in_seconds) || 120) + "초 이내에 ‘검사 결과 확인 후 승인’을 누르세요."
+    : "검사 차단 — " + (failed.length
+      ? failed.map(check => (checks[check.name] || check.name) + " 조건 미충족").join(" / ")
+      : (reasons[data.reason] || data.reason || data.status || "응답 상세를 확인하세요."));
+  if (failed.some(check => check.name === "redundancy")) status.textContent += " 건강한 별도 이중화 컨테이너가 필요합니다. 기본 단일 구성에서는 재시작이 차단됩니다.";
+}
+
 function setDecisionButtonsDisabled(el, disabled) {
-  el.querySelectorAll(".approve, .reject").forEach((b) => {
+  if (!disabled) {
+    setRunbookButtonsDisabled(el, false);
+    return;
+  }
+  el.querySelectorAll(".approve, .reject, .preflight").forEach((b) => {
     b.disabled = disabled || (b.classList.contains("approve") && !el.preflightId);
   });
 }
@@ -1178,7 +1287,12 @@ $("feedback-submit").addEventListener("click", async () => {
 
 function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {
-    b.disabled = disabled || (b.classList.contains("approve") && !el.preflightId);
+    const targetRequired = b.matches(".preflight, .approve, .diagnose");
+    b.disabled = disabled || el.actionable === false || !el.action || el.preflightPending || el.executionPending
+      || el.classList.contains("decided")
+      || (el.classList.contains("locked") && b.matches(".preflight, .approve, .reject"))
+      || (targetRequired && el.querySelector(".target-select").value === "")
+      || (b.classList.contains("approve") && !el.preflightId);
   });
 }
 
@@ -1187,6 +1301,7 @@ async function decideRunbook(scriptId, action, el, decision) {
     el.querySelector(".decision").textContent = "최신 Incident 추천을 다시 불러오세요.";
     return;
   }
+  el.executionPending = true;
   setRunbookButtonsDisabled(el, true);
   // 응답을 기다리는 동안 다른 조치를 누르지 못하게 먼저 잠근다.
   if (decision === "approve") lockOtherRunbooks(el);
@@ -1234,6 +1349,9 @@ async function decideRunbook(scriptId, action, el, decision) {
     $("exec-status").textContent = "요청 실패: " + e;
     setRunbookButtonsDisabled(el, false);
     if (decision === "approve") unlockOtherRunbooks();
+  } finally {
+    el.executionPending = false;
+    setRunbookButtonsDisabled(el, false);
   }
 }
 

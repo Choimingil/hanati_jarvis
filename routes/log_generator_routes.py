@@ -25,6 +25,7 @@ from elastic.client import get_client
 from utils.time_utils import now_iso
 from operations.privacy import redact
 from operations.redis_store import client as redis_client
+from operations.activity import redis_activity, worker_activity
 
 LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
@@ -371,7 +372,7 @@ def _safe(source: str, fetch) -> list[str]:
     try:
         return fetch()
     except Exception as error:
-        return [f"{source} 조회 실패: {error}"]
+        return [f"{source} 조회 실패: {redact(str(error))}"]
 
 
 @log_generator_blueprint.get("/api/v1/log-generator/activity")
@@ -385,5 +386,7 @@ def activity():
             "elasticsearch_log": _safe(
                 "Elasticsearch", lambda: _stored_analysis(since)
             ),
+            "redis_log": _safe("Redis", lambda: redis_activity(redis_client(), since)),
+            "worker_log": _safe("Worker", lambda: worker_activity(redis_client(), since)),
         }
     )

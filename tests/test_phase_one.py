@@ -562,6 +562,38 @@ class RemediationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertFalse(list(self.redis.scan_iter("jarvis:host:*")))
 
+    def test_preflight_alone_never_executes_or_changes_incident(self):
+        self.preview()
+        self.assertEqual(self.repo.incidents["INC-1"]["status"], "ACTION_REQUIRED")
+        self.assertFalse(self.counter.exists())
+        self.assertFalse(list(self.redis.scan_iter("jarvis:host:*")))
+        self.assertFalse(list(self.redis.scan_iter("jarvis:execution:*")))
+        self.assertTrue(self.redis.exists("jarvis:preflight:" + self.body["preflight_id"]))
+
+    def test_agent_disabled_action_keeps_the_actual_block_reason(self):
+        self.agent.extensions["runtime"].manifest["actions"]["restart_application"]["enabled"] = False
+        response = self.api.post("/api/v1/remediations/preflight", json=self.body)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["reason"], "action not enabled in host manifest")
+        self.assertFalse(self.counter.exists())
+
+    def test_insufficient_redundancy_blocks_preflight_without_execution(self):
+        self.backend.ready = False
+        response = self.api.post("/api/v1/remediations/preflight", json=self.body)
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertEqual(data["status"], "blocked")
+        self.assertFalse(next(check for check in data["checks"] if check["name"] == "redundancy")["passed"])
+        self.assertNotIn("preflight_id", data)
+        self.assertFalse(self.counter.exists())
+
+    def test_agent_credential_rejection_is_reported_as_blocked(self):
+        with patch.dict(os.environ, {"TEST_AGENT_SECRET": "different-machine-credential-32-characters"}):
+            response = self.api.post("/api/v1/remediations/preflight", json=self.body)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["reason"], "agent machine credential rejected")
+        self.assertFalse(self.counter.exists())
+
     def test_rejection_blocks_same_action_even_with_existing_preflight(self):
         self.preview()
         response = self.api.post("/api/v1/remediations/reject", json=self.body)

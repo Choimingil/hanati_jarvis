@@ -8,6 +8,7 @@ import hashlib
 from redis.exceptions import ResponseError
 from operations.privacy import redact
 from operations.settings import JOB_RETENTION_SECONDS
+from operations.activity import job_fields, record, record_many
 
 STREAM = "jarvis:analysis"
 METRIC_STREAM = "jarvis:metrics-analysis"
@@ -32,6 +33,7 @@ class AnalysisQueue:
     def enqueue_many(self, kind, payloads):
         pipe = self.redis.pipeline(transaction=True)
         job_ids = []
+        events = []
         for payload in payloads:
             job_id = uuid.uuid4().hex
             job_ids.append(job_id)
@@ -43,12 +45,14 @@ class AnalysisQueue:
                 "attempts": 0,
                 "created_at": time.time(),
             }
+            events.append({"event": "queued", **job_fields(document)})
             pipe.set("jarvis:job:" + job_id, json.dumps(document))
             pipe.xadd(
                 METRIC_STREAM if kind == "metrics" else STREAM, {"job_id": job_id}
             )
         pipe.hset("jarvis:collection", mapping={"last_" + kind: str(time.time())})
         pipe.execute()
+        record_many(self.redis, "redis", events)
         return job_ids
 
     def get(self, job_id):
@@ -73,6 +77,7 @@ class AnalysisQueue:
             pipe.xack(stream, GROUP, message_id)
             pipe.xdel(stream, message_id)
             pipe.execute()
+            record(self.redis, "redis", "missing_payload", job_id=job_id, consumer=consumer)
             return
         job = json.loads(raw)
         if job["status"] in {"completed", "failed"}:
@@ -122,6 +127,8 @@ class AnalysisQueue:
         try:
             job.update(status="processing", attempts=job["attempts"] + 1)
             self.redis.set(key, json.dumps(job))
+            started = time.monotonic()
+            record(self.redis, "worker", "processing", consumer=consumer, **job_fields(job))
             try:
                 result = handler(job["kind"], job["payload"], job_id)
                 job.update(
@@ -133,11 +140,28 @@ class AnalysisQueue:
                     error=type(exc).__name__,
                     finished_at=time.time(),
                 )
+            result = job.get("result")
+            result_fields = (
+                {"incident_id": result["incident_id"]}
+                if isinstance(result, dict) and result.get("incident_id") else {}
+            )
+            result_fields["result_status"] = result.get("status") if isinstance(result, dict) else None
+            record(
+                self.redis, "worker", job["status"], consumer=consumer,
+                elapsed_ms=round((time.monotonic() - started) * 1000),
+                error=job.get("error") if job["status"] != "completed" else None,
+                **result_fields, **job_fields(job),
+            )
             if job["status"] == "retrying":
                 job["next_attempt_at"] = time.time() + min(
                     60, 5 * 2 ** (job["attempts"] - 1)
                 )
                 self.redis.set(key, json.dumps(job))
+                record(
+                    self.redis, "redis", "retry_scheduled", consumer=consumer,
+                    retry_seconds=round(job["next_attempt_at"] - time.time()),
+                    error=job.get("error"), **job_fields(job),
+                )
                 return  # pending message is reclaimed after the visibility interval
             pipe = self.redis.pipeline(transaction=True)
             # Remove payload when terminal; receipt remains available for seven days.
@@ -157,6 +181,11 @@ class AnalysisQueue:
             pipe.xack(stream, GROUP, message_id)
             pipe.xdel(stream, message_id)
             pipe.execute()
+            record(
+                self.redis, "redis", "dead_lettered" if job["status"] == "failed" else "acknowledged",
+                job_id=job_id, kind=job["kind"], attempt=job["attempts"],
+                consumer=consumer, error=job.get("error"),
+            )
         finally:
             stop.set()
             heartbeat.join(timeout=1)
