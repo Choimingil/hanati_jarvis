@@ -433,7 +433,6 @@ function actionBody(action, el) {
     incident_version: currentRecommendation.incident_version,
     approved_by: "web-ui",
     target: selected === "" ? null : el.targets[Number(selected)],
-    preflight_id: el.preflightId || null,
   };
 }
 function schedulePoll(callback, interval, maxDelay = 60000) {
@@ -966,13 +965,11 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       </dl>
       <label>조치 대상 (환경 / 서비스 / 호스트 / 인스턴스)</label>
       <select class="target-select"></select>
-      <p class="muted">실행 전 검사는 대상과 실행 조건을 확인합니다. 검사 통과 후 별도 승인을 눌러야 실제 조치가 실행됩니다.</p>
-      <div class="preflight-status muted" role="status"></div>
-      <details><summary>검사 응답 상세</summary><pre class="preflight-output"></pre></details>
+      <p class="muted">대상 선택 → 승인 → 명령 실행 → 복구 확인</p>
+      <div class="approval-status muted" role="status"></div>
       <div class="decision"></div>
       <div class="buttons">
-        <button class="preflight">실행 전 검사</button>
-        <button class="approve" disabled>검사 결과 확인 후 승인</button>
+        <button class="approve" disabled>승인 후 실행</button>
         <button class="reject">거부</button>
         <button class="diagnose">진단 요청</button>
       </div>`;
@@ -983,7 +980,6 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     if (action) el.dataset.actionId = action.action_id;
     el.action = action;
     el.actionable = true;
-    el.preflightRequest = 0;
     const targetSelect = el.querySelector(".target-select");
     const targets = rec.targets || [];
     el.targets = targets;
@@ -997,49 +993,9 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       targetSelect.appendChild(option);
     });
     targetSelect.addEventListener("change", () => {
-      el.preflightRequest += 1;
-      el.preflightPending = false;
-      el.preflightId = null; el.querySelector(".approve").disabled = true;
-      el.querySelector(".preflight-output").textContent = "";
-      el.querySelector(".preflight-status").className = "preflight-status muted";
-      el.querySelector(".preflight-status").textContent = preflightHint(el);
+      el.querySelector(".approval-status").className = "approval-status muted";
+      el.querySelector(".approval-status").textContent = approvalHint(el);
       setRunbookButtonsDisabled(el, false);
-    });
-    el.querySelector(".preflight").addEventListener("click", async () => {
-      const requestId = ++el.preflightRequest;
-      el.preflightPending = true;
-      el.preflightId = null;
-      setRunbookButtonsDisabled(el, true);
-      el.querySelector(".preflight-status").className = "preflight-status status-pending";
-      el.querySelector(".preflight-status").textContent = "실행 조건을 확인하는 중…";
-      try {
-        const {ok, data} = await postJSON("/api/v1/remediations/preflight", actionBody(action,el));
-        if (requestId !== el.preflightRequest || !el.isConnected) return;
-        el.querySelector(".preflight-output").textContent = JSON.stringify(data,null,2);
-        el.preflightId = ok && data.status === "ready" ? data.preflight_id : null;
-        renderPreflightStatus(el, data);
-        if (el.preflightId) {
-          const proofId = el.preflightId;
-          setTimeout(() => {
-            if (el.preflightId !== proofId || !el.isConnected) return;
-            el.preflightId = null;
-            el.querySelector(".preflight-status").className = "preflight-status status-pending";
-            el.querySelector(".preflight-status").textContent = "검사 유효 시간이 지났습니다. 실행 전 검사를 다시 수행하세요.";
-            setRunbookButtonsDisabled(el, false);
-          }, (Number(data.expires_in_seconds) || 120) * 1000);
-        }
-      } catch (error) {
-        if (requestId !== el.preflightRequest || !el.isConnected) return;
-        el.preflightId = null;
-        el.querySelector(".preflight-status").className = "preflight-status status-err";
-        el.querySelector(".preflight-status").textContent = "검사 요청 실패 — 연결 상태를 확인하고 다시 검사하세요.";
-        el.querySelector(".preflight-output").textContent = "검사 실패: " + error;
-      } finally {
-        if (requestId === el.preflightRequest) {
-          el.preflightPending = false;
-          setRunbookButtonsDisabled(el, false);
-        }
-      }
     });
     el.querySelector(".approve").addEventListener(
       "click", () => decideRunbook(rb.script_id, action, el, "approve")
@@ -1058,7 +1014,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     if (decided) markDecided(el, decided.decision);
 
     box.appendChild(el);
-    el.querySelector(".preflight-status").textContent = preflightHint(el);
+    el.querySelector(".approval-status").textContent = approvalHint(el);
     setRunbookButtonsDisabled(el, el.classList.contains("decided"));
   });
 
@@ -1076,21 +1032,21 @@ function renderRecommendation(errorCode, rec, decisions = []) {
 
 const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 없습니다.";
 
-function preflightHint(el) {
+function approvalHint(el) {
   if (!el.action) return "이 추천에는 자동 실행 가능한 조치가 없습니다. 분석 내용과 진단 항목을 확인하세요.";
   if (!el.targets.length) return "이 장애의 환경·서비스·호스트와 일치하는 실행 대상이 등록되지 않았습니다. 모의 장애는 실제 컨테이너에 자동 연결되지 않습니다.";
   return el.querySelector(".target-select").value === ""
-    ? "조치 대상을 먼저 선택한 뒤 실행 전 검사를 누르세요."
-    : "실행 전 검사로 조건을 확인하세요. 검사만으로는 조치가 실행되지 않습니다.";
+    ? "조치 대상을 먼저 선택한 뒤 ‘승인 후 실행’을 누르세요."
+    : "선택한 대상에 조치를 실행하려면 ‘승인 후 실행’을 누르세요.";
 }
-function renderPreflightStatus(el, data) {
+function approvalBlockReason(data) {
   const checks = {redundancy:"이중화 컨테이너 정상", maintenance:"점검 상태 아님", rollback_ready:"실행 상태 복원 가능", host_idle:"진행 중인 실행 없음"};
   const reasons = {
     "action not enabled in host manifest":"Agent 설정에서 이 작업이 비활성화되어 있습니다.",
     "target not bound to recommendation":"선택한 대상이 이 장애의 추천과 연결되지 않았습니다.",
     "agent machine credential not configured":"실행 Agent 인증 값이 설정되지 않았습니다.",
     "agent machine credential rejected":"실행 Agent가 인증을 거절했습니다. 인증 설정을 확인하세요.",
-    "stale recommendation":"장애 또는 추천이 갱신되었습니다. 최신 장애 상세에서 다시 검사하세요.",
+    "stale recommendation":"장애 또는 추천이 갱신되었습니다. 최신 장애 상세에서 다시 승인하세요.",
     "expired recommendation":"추천 유효 시간이 지났습니다. 최신 분석 결과가 필요합니다.",
     "incident is not actionable":"현재 장애 상태에서는 조치를 실행할 수 없습니다.",
     "host is executing or waiting for business recovery confirmation":"대상이 다른 조치를 실행 중이거나 복구 확인을 기다리고 있습니다.",
@@ -1099,14 +1055,11 @@ function renderPreflightStatus(el, data) {
     "container image differs from approved image":"실제 컨테이너 이미지가 승인된 이미지와 다릅니다.",
   };
   const failed = (data.checks || []).filter(check => !check.passed);
-  const status = el.querySelector(".preflight-status");
-  status.className = "preflight-status " + (el.preflightId ? "status-ok" : "status-err");
-  status.textContent = el.preflightId
-    ? "검사 통과 — 실제 조치는 아직 실행되지 않았습니다. " + (Number(data.expires_in_seconds) || 120) + "초 이내에 ‘검사 결과 확인 후 승인’을 누르세요."
-    : "검사 차단 — " + (failed.length
+  let message = "실행 차단 — " + (failed.length
       ? failed.map(check => (checks[check.name] || check.name) + " 조건 미충족").join(" / ")
       : (reasons[data.reason] || data.reason || data.status || "응답 상세를 확인하세요."));
-  if (failed.some(check => check.name === "redundancy")) status.textContent += " 건강한 별도 이중화 컨테이너가 필요합니다. 기본 단일 구성에서는 재시작이 차단됩니다.";
+  if (failed.some(check => check.name === "redundancy")) message += " 건강한 별도 이중화 컨테이너가 필요합니다. 기본 단일 구성에서는 재시작이 차단됩니다.";
+  return message;
 }
 
 function setDecisionButtonsDisabled(el, disabled) {
@@ -1114,8 +1067,8 @@ function setDecisionButtonsDisabled(el, disabled) {
     setRunbookButtonsDisabled(el, false);
     return;
   }
-  el.querySelectorAll(".approve, .reject, .preflight").forEach((b) => {
-    b.disabled = disabled || (b.classList.contains("approve") && !el.preflightId);
+  el.querySelectorAll(".approve, .reject").forEach((b) => {
+    b.disabled = disabled;
   });
 }
 
@@ -1287,13 +1240,14 @@ $("feedback-submit").addEventListener("click", async () => {
 
 function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {
-    const targetRequired = b.matches(".preflight, .approve, .diagnose");
-    b.disabled = disabled || el.actionable === false || !el.action || el.preflightPending || el.executionPending
+    const targetRequired = b.matches(".approve, .diagnose");
+    b.disabled = disabled || el.actionable === false || !el.action || el.executionPending
       || el.classList.contains("decided")
-      || (el.classList.contains("locked") && b.matches(".preflight, .approve, .reject"))
-      || (targetRequired && el.querySelector(".target-select").value === "")
-      || (b.classList.contains("approve") && !el.preflightId);
+      || (el.classList.contains("locked") && b.matches(".approve, .reject"))
+      || (targetRequired && el.querySelector(".target-select").value === "");
   });
+  el.querySelector(".target-select").disabled = Boolean(el.executionPending)
+    || el.classList.contains("decided") || el.actionable === false || !el.targets.length;
 }
 
 async function decideRunbook(scriptId, action, el, decision) {
@@ -1303,6 +1257,8 @@ async function decideRunbook(scriptId, action, el, decision) {
   }
   el.executionPending = true;
   setRunbookButtonsDisabled(el, true);
+  el.querySelector(".approval-status").className = "approval-status status-pending";
+  el.querySelector(".approval-status").textContent = decision === "approve" ? "승인한 대상에 명령을 실행하는 중…" : "거부를 처리하는 중…";
   // 응답을 기다리는 동안 다른 조치를 누르지 못하게 먼저 잠근다.
   if (decision === "approve") lockOtherRunbooks(el);
 
@@ -1319,6 +1275,15 @@ async function decideRunbook(scriptId, action, el, decision) {
   try {
     const { status, data } = await postJSON(endpoint, actionBody(action,el));
     showExecResult(scriptId, data, status);
+    if (decision === "approve" && !data.execution_id) {
+      el.querySelector(".approval-status").className = "approval-status status-err";
+      el.querySelector(".approval-status").textContent = approvalBlockReason(data);
+    } else {
+      el.querySelector(".approval-status").className = "approval-status " + (data.status === "success" ? "status-ok" : "muted");
+      el.querySelector(".approval-status").textContent = data.status === "success"
+        ? "명령 실행 완료 — 아래 ‘업무 복구 확인’을 눌러 복구 상태를 확인하세요."
+        : "요청 처리 결과: " + data.status;
+    }
     if (data.status === "blocked" && data.approved_action_id) {
       // 다른 화면/사용자가 먼저 다른 조치를 승인한 경우
       const approvedEl = document.querySelector(
@@ -1345,6 +1310,8 @@ async function decideRunbook(scriptId, action, el, decision) {
     }
     await loadIncidents();
   } catch (e) {
+    el.querySelector(".approval-status").className = "approval-status status-err";
+    el.querySelector(".approval-status").textContent = "승인·조치 요청 실패 — 연결 상태와 실행 결과를 확인하세요.";
     $("exec-status").className = "status-err";
     $("exec-status").textContent = "요청 실패: " + e;
     setRunbookButtonsDisabled(el, false);

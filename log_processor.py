@@ -3,7 +3,7 @@ from typing import Any
 from config import (
     ERROR_RULES,
 )
-from error_detector import detect_error_code
+from error_detector import detect_error_code, is_context_only_error
 from log_normalizer import normalize_log
 from ports.case_searcher import CaseSearcher
 from ports.log_repository import LogRepository
@@ -55,6 +55,12 @@ class LogProcessor:
             }
 
         error_code = detect_error_code(log["message"])
+        if is_context_only_error(log["message"], log["synthetic"]):
+            self.repository.save_log({
+                "ingestion_id": ingestion_id, "received_at": now_iso(),
+                "incident_id": None, "ignored_reason": "scenario_context", **log,
+            })
+            return {"status": "ignored", "reason": "scenario follow-up message; no separate incident"}
         incident = (
             self.incident_service.start(log, error_code, ingestion_id=ingestion_id)
             if self.incident_service is not None

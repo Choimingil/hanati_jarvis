@@ -161,7 +161,15 @@ def approve_remediation():
                 {**record["result"], "execution_id": execution_id, "duplicate": True}
             ), 200
         context = _validate_action_request(body)
-        proof = manager.validate_proof(body, context)
+        # Approval is the only user step; inspect the selected target now.
+        prepared = manager.prepare(context, body.get("target"))
+        if prepared["status"] != "ready":
+            return jsonify(prepared), 409
+        # Analysis may update while the Agent is answering; validate again before locking.
+        context = _validate_action_request(body)
+        proof = manager.validate_proof(
+            {**body, "preflight_id": prepared["preflight_id"]}, context
+        )
         record, new = manager.reserve(execution_id, body, context, proof)
         if new:
             operational_incident_service.transition(

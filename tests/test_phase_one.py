@@ -532,7 +532,6 @@ class RemediationApiTests(unittest.TestCase):
         self.body["preflight_id"] = response.get_json()["preflight_id"]
 
     def test_approval_then_business_verification_closes_incident(self):
-        self.preview()
         approved = self.api.post("/api/v1/remediations/approve", json=self.body)
         self.assertEqual(approved.status_code, 200, approved.get_json())
         identifier = approved.get_json()["execution_id"]
@@ -557,10 +556,56 @@ class RemediationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertFalse(self.counter.exists())
 
-    def test_missing_preflight_never_reserves_host(self):
+    def test_direct_approval_needs_no_manual_preflight(self):
+        response = self.api.post("/api/v1/remediations/approve", json=self.body)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["status"], "success")
+        self.assertEqual(self.counter.read_text(), "x")
+        self.assertNotIn("preflight_id", self.body)
+        duplicate = self.api.post("/api/v1/remediations/approve", json=self.body)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertTrue(duplicate.get_json()["duplicate"])
+        self.assertEqual(self.counter.read_text(), "x")
+
+    def test_direct_approval_checks_conditions_without_reserving_failed_target(self):
+        self.backend.ready = False
         response = self.api.post("/api/v1/remediations/approve", json=self.body)
         self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["status"], "blocked")
+        self.assertIn("checks", response.get_json())
         self.assertFalse(list(self.redis.scan_iter("jarvis:host:*")))
+        self.assertFalse(list(self.redis.scan_iter("jarvis:execution:*")))
+        self.assertFalse(self.counter.exists())
+
+    def test_direct_approval_rejects_unregistered_target(self):
+        response = self.api.post("/api/v1/remediations/approve", json={
+            **self.body, "target": {**TARGET, "host": "other-host"},
+        })
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["reason"], "target not bound to recommendation")
+        self.assertFalse(self.counter.exists())
+
+    def test_direct_approval_revalidates_recommendation_after_agent_reply(self):
+        original_prepare = self.manager.prepare
+
+        def changed(context, target):
+            result = original_prepare(context, target)
+            self.repo.incidents["INC-1"]["version"] = 3
+            return result
+
+        with patch.object(self.manager, "prepare", side_effect=changed):
+            response = self.api.post("/api/v1/remediations/approve", json=self.body)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["reason"], "stale recommendation")
+        self.assertFalse(list(self.redis.scan_iter("jarvis:host:*")))
+        self.assertFalse(list(self.redis.scan_iter("jarvis:execution:*")))
+        self.assertFalse(self.counter.exists())
+
+    def test_direct_approval_ignores_expired_proof_from_old_ui(self):
+        self.body["preflight_id"] = "expired-proof"
+        response = self.api.post("/api/v1/remediations/approve", json=self.body)
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(self.counter.read_text(), "x")
 
     def test_preflight_alone_never_executes_or_changes_incident(self):
         self.preview()

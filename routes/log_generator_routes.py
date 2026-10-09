@@ -26,6 +26,7 @@ from utils.time_utils import now_iso
 from operations.privacy import redact
 from operations.redis_store import client as redis_client
 from operations.activity import redis_activity, worker_activity
+from error_detector import is_context_only_incident
 
 LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
@@ -238,6 +239,8 @@ def recent_incidents():
 
     incidents = []
     for document in documents:
+        if is_context_only_incident(document):
+            continue
         incident = dict(document)
         hosts = incident.get("affected_hosts") or []
         incident["hosts"] = hosts
