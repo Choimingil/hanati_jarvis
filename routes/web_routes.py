@@ -198,9 +198,17 @@ _PAGE = """<!doctype html>
   .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
   .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
   .incident-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
-  .incident-stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:13px; }
+  .incident-stat { background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:13px; text-align:left; }
+  .incident-stat:hover { border-color:var(--accent); }
+  .incident-stat.selected { border-color:var(--accent); background:var(--bar); }
+  .incident-stat:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
   .incident-stat span { display:block; color:var(--muted); font-size:12px; }
   .incident-stat strong { display:block; margin-top:3px; }
+  .incident-table-wrap { overflow-x:auto; margin-top:12px; }
+  .incident-table { width:100%; border-collapse:collapse; font-size:14px; }
+  .incident-table th, .incident-table td { padding:10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  .incident-table th { color:var(--muted); white-space:nowrap; }
+  .incident-message { min-width:180px; overflow-wrap:anywhere; }
   .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
@@ -221,13 +229,18 @@ _PAGE = """<!doctype html>
     <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
   <div class="card"><strong>수집·분석 상태</strong><div id="operations-status">상태 확인 중…</div><div id="collection-hosts"></div></div>
-  <div class="incident-stats">
-    <div class="incident-stat"><span>진행 중</span><strong id="stat-open">0건</strong></div>
-    <div class="incident-stat"><span>긴급</span><strong id="stat-critical">0건</strong></div>
-    <div class="incident-stat"><span>미확인</span><strong id="stat-unack">0건</strong></div>
-    <div class="incident-stat"><span>분석 중</span><strong id="stat-analyzing">0건</strong></div>
+  <div class="incident-stats" role="tablist" aria-label="장애 상태">
+    <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
+    <button id="incident-tab-critical" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="critical"><span>긴급</span><strong id="stat-critical">0건</strong></button>
+    <button id="incident-tab-unack" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="unack"><span>미확인</span><strong id="stat-unack">0건</strong></button>
+    <button id="incident-tab-analyzing" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="analyzing"><span>분석중</span><strong id="stat-analyzing">0건</strong></button>
   </div>
-  <div class="card"><strong>업무 영향별 장애 우선순위</strong><div id="business-incidents"></div></div>
+  <div id="incident-list-panel" class="card" role="tabpanel" aria-labelledby="incident-tab-open" tabindex="0">
+    <div class="card-head"><strong id="incident-list-title">진행중 장애</strong><span class="muted">최근 60분</span></div>
+    <div id="incident-list-status" class="muted" role="status">장애 목록을 불러오는 중…</div>
+    <div id="incident-list" class="incident-table-wrap"></div>
+    <div id="incident-detail-status" class="muted" role="status"></div>
+  </div>
   <div id="client-status" class="card client-only">
     <strong>장애 모니터링</strong>
     <div id="client-status-text" class="muted" style="margin-top:6px">발생한 장애가 없습니다. 장애가 감지되면 이 화면에 오류 내용이 표시됩니다.</div>
@@ -362,6 +375,14 @@ let currentRecommendation = null;
 let currentGuidance = null;
 let selectedVerdict = null;
 let incidentItems = [];
+let selectedIncidentFilter = "open";
+let incidentsLoaded = false;
+const incidentFilters = {
+  open: {label: "진행중", matches: (item) => item.status !== "RESOLVED"},
+  critical: {label: "긴급", matches: (item) => item.severity === "CRITICAL"},
+  unack: {label: "미확인", matches: (item) => item.status === "ACTION_REQUIRED"},
+  analyzing: {label: "분석중", matches: (item) => item.status === "ANALYZING"},
+};
 let lastExecutionId = null;
 function actionBody(action, el) {
   const selected = el.querySelector(".target-select").value;
@@ -423,26 +444,76 @@ function formatTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString("ko-KR");
 }
+function renderIncidentList() {
+  const filter = incidentFilters[selectedIncidentFilter];
+  const items = incidentItems.filter(filter.matches);
+  $("incident-list-title").textContent = filter.label + " 장애" + (incidentsLoaded ? " · " + items.length + "건" : "");
+  $("incident-detail-status").textContent = "";
+  $("incident-list").innerHTML = items.length
+    ? '<table class="incident-table"><thead><tr><th scope="col">장애 내용</th><th scope="col">업무/환경</th><th scope="col">상태</th><th scope="col">발생 수</th><th scope="col">최근 발생</th></tr></thead><tbody>' + items.map((item, index) => `
+      <tr>
+        <td class="incident-message"><strong>${esc(item.error_code || "UNKNOWN_ERROR")}</strong><div class="muted">${esc(item.representative_message || item.normalized_message || "")}</div></td>
+        <td><button type="button" class="incident-detail secondary" data-index="${index}">${esc(item.service)}</button> / ${esc(item.environment)}</td>
+        <td>${esc(item.status)}</td><td>${esc(item.occurrence_count)}</td><td>${esc(formatTime(item.last_seen))}</td>
+      </tr>`
+    ).join("") + "</tbody></table>"
+    : (incidentsLoaded ? '<p class="muted">' + esc(filter.label) + ' 조건에 해당하는 장애가 없습니다.</p>' : "");
+  $("incident-list").querySelectorAll(".incident-detail").forEach(button => button.addEventListener("click", () => {
+    const incident = items[Number(button.dataset.index)];
+    const rec = incident.latest_recommendation;
+    $("result").classList.add("hidden");
+    $("guidance-result").classList.add("hidden");
+    $("incident-detail-status").textContent = "";
+    if (!rec) {
+      $("incident-detail-status").textContent = "선택한 장애는 분석 중이거나 추천이 없습니다.";
+      return;
+    }
+    clientRunPrefix = incident.service + " / " + incident.incident_id;
+    renderRecommendation(incident.error_code, rec);
+    setClientStatus("사건 상세 조회: " + incident.status);
+  }));
+}
+function selectIncidentFilter(key) {
+  if (!incidentFilters[key]) return;
+  selectedIncidentFilter = key;
+  document.querySelectorAll(".incident-stat").forEach(button => {
+    const selected = button.dataset.filter === key;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
+  $("incident-list-panel").setAttribute("aria-labelledby", "incident-tab-" + key);
+  renderIncidentList();
+}
+const incidentTabs = Array.from(document.querySelectorAll(".incident-stat"));
+incidentTabs.forEach((button, index) => {
+  button.addEventListener("click", () => selectIncidentFilter(button.dataset.filter));
+  button.addEventListener("keydown", event => {
+    let next;
+    if (event.key === "ArrowRight") next = (index + 1) % incidentTabs.length;
+    else if (event.key === "ArrowLeft") next = (index + incidentTabs.length - 1) % incidentTabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = incidentTabs.length - 1;
+    else return;
+    event.preventDefault();
+    incidentTabs[next].focus();
+    selectIncidentFilter(incidentTabs[next].dataset.filter);
+  });
+});
 async function loadIncidents() {
   try {
     const data = await getJSON("/api/v1/log-generator/incidents?minutes=60");
     incidentItems = data.incidents || [];
-    $("stat-open").textContent = incidentItems.filter(i => i.status !== "RESOLVED").length + "건";
-    $("business-incidents").innerHTML = incidentItems.length ? "<table><thead><tr><th>우선순위</th><th>업무/환경</th><th>상태</th><th>발생 수</th><th>판단 근거</th></tr></thead><tbody>" + incidentItems.map((i,index) => "<tr><td>"+esc(i.priority || "P3")+"</td><td>"+'<button class="incident-detail secondary" data-index="'+index+'">'+esc(i.service)+'</button> / ' +esc(i.environment)+"</td><td>"+esc(i.status)+"</td><td>"+esc(i.occurrence_count)+"</td><td>"+esc((i.priority_reasons || []).join(" · "))+"</td></tr>").join("")+"</tbody></table>" : "최근 장애 없음";
-    $("business-incidents").querySelectorAll(".incident-detail").forEach(button => button.addEventListener("click", () => {
-      const incident=incidentItems[Number(button.dataset.index)];
-      const rec=incident.latest_recommendation;
-      $("result").classList.add("hidden"); $("guidance-result").classList.add("hidden");
-      if (!rec) { $("operations-status").textContent="선택한 사건은 분석 중이거나 추천이 없습니다."; return; }
-      clientRunPrefix=incident.service+" / "+incident.incident_id;
-      renderRecommendation(incident.error_code,rec);
-      setClientStatus("사건 상세 조회: "+incident.status);
-    }));
-    $("stat-critical").textContent = incidentItems.filter((item) => item.severity === "CRITICAL").length + "건";
-    $("stat-unack").textContent = incidentItems.filter((item) => item.status === "ACTION_REQUIRED").length + "건";
-    $("stat-analyzing").textContent = incidentItems.filter((item) => item.status === "ANALYZING").length + "건";
+    incidentsLoaded = true;
+    Object.entries(incidentFilters).forEach(([key, filter]) => {
+      $("stat-" + key).textContent = incidentItems.filter(filter.matches).length + "건";
+    });
+    $("incident-list-status").textContent = "";
+    renderIncidentList();
   } catch (error) {
-    $("operations-status").textContent = "사건 조회 실패 — 표시된 사건 수는 마지막 조회 결과입니다.";
+    $("incident-list-status").textContent = incidentsLoaded
+      ? "장애 목록 조회 실패 — 마지막 조회 결과를 표시하고 있습니다."
+      : "장애 목록 조회 실패 — 새로고침으로 다시 시도하세요.";
     return false;
   }
 }
