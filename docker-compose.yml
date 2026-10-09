@@ -217,8 +217,7 @@ services:
     - /workspace/app.py
     restart: unless-stopped
     env_file:
-    - path: .env
-      required: false
+    - .env
     healthcheck:
       test:
       - CMD
@@ -309,8 +308,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     env_file:
-    - path: .env
-      required: false
+    - .env
     command:
     - python
     - -m
@@ -334,8 +332,7 @@ services:
     - execution-agent-state:/state
     - /var/run/docker.sock:/var/run/docker.sock
     env_file:
-    - path: .env
-      required: false
+    - .env
     environment:
     - EXECUTION_AGENT_MANIFEST=/config/manifest.json
     - EXECUTION_AGENT_JOURNAL=/state/executions.sqlite
