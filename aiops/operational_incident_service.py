@@ -8,7 +8,7 @@ from typing import Any
 
 from config import RECOMMENDATION_TTL_MINUTES
 from utils.time_utils import now_iso
-from operations.settings import targets_for
+from operations.settings import bind_recommendation
 from operations.business import business_priority
 import os
 
@@ -200,7 +200,7 @@ class OperationalIncidentService:
                 }
             )
 
-        enriched = {
+        enriched = bind_recommendation(incident, {
             **recommendation,
             "recommendation_id": recommendation_id,
             "incident_id": incident["incident_id"],
@@ -210,10 +210,9 @@ class OperationalIncidentService:
                 created_at + timedelta(minutes=RECOMMENDATION_TTL_MINUTES)
             ).isoformat(),
             "actions": actions,
-            "targets": targets_for(incident),
             "priority": incident.get("priority", "P3"),
             "business_impact": incident.get("business_impact", {}),
-        }
+        })
         updated = self.repository.update_operational_incident(
             incident["incident_id"],
             {

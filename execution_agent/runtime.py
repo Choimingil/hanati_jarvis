@@ -1,4 +1,4 @@
-"""Compose-only execution with a durable at-most-once journal."""
+"""Registered Compose operations and scenario scripts with a durable journal."""
 
 import hashlib
 import json
@@ -44,6 +44,15 @@ class AgentRuntime:
             raise ValueError("action not enabled in host manifest")
         if body.get("kind") != action.get("kind"):
             raise ValueError("action kind mismatch")
+        if action.get("operation") == "scenario_script":
+            from operations.scenario_scripts import is_scenario_target, script_path
+
+            if self.manifest.get("scope") != "simulation" or not is_scenario_target(self.identity()):
+                raise ValueError("scenario scripts require a simulation target")
+            if action.get("script_id") != body.get("script_id"):
+                raise ValueError("scenario script identity mismatch")
+            script_path(body["script_id"], body["kind"])
+            return action
         if action.get("operation") not in {"inspect", "restart"}:
             raise ValueError("operation not allowed")
         if action["kind"] == "remediation" and (
@@ -182,7 +191,7 @@ class AgentRuntime:
             raise ValueError("policy changed since execution")
         samples = []
         for index in range(2):
-            if index:
+            if index and action.get("operation") != "scenario_script":
                 time.sleep(
                     min(
                         30,
@@ -204,6 +213,7 @@ class AgentRuntime:
             }
             for c in samples[0]
         ]
+        simulation = action.get("operation") == "scenario_script"
         return {
             "execution_id": body["execution_id"],
             "target": self.identity(),
@@ -211,4 +221,5 @@ class AgentRuntime:
             "samples": samples,
             "recovered": bool(checks) and all(c["passed"] for c in checks),
             "verified_at": time.time(),
+            **({"execution_mode": "simulation", "message": "모의 복구 확인: 테스트 스크립트 정상 종료와 등록 파일만 확인했습니다."} if simulation else {}),
         }

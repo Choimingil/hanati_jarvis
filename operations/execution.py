@@ -46,6 +46,24 @@ class ExecutionCoordinator:
         return entry, {"Authorization": "Bearer " + token}
 
     def call(self, target, path, body=None):
+        from operations.scenario_scripts import is_scenario_target, runtime_for
+
+        if is_scenario_target(target):
+            runtime = runtime_for(target)
+            if path == "/identity":
+                return {"target": runtime.identity(), "policy_digest": runtime.digest}
+            if path == "/preflight":
+                return runtime.preflight(body)
+            if path == "/execute":
+                return runtime.execute(body)
+            if path == "/verify":
+                return runtime.verify(body)
+            if path.startswith("/executions/"):
+                result = runtime.result(path.rsplit("/", 1)[1])
+                if result is None:
+                    raise ValueError("scenario execution not found")
+                return result
+            raise ValueError("unsupported scenario execution request")
         entry, headers = self.entry(target)
         response = self.transport.request(
             "GET" if body is None else "POST",
@@ -68,7 +86,8 @@ class ExecutionCoordinator:
         return result
 
     def prepare(self, context, target):
-        if target not in context["recommendation"].get("targets", []):
+        action_targets = context.get("action", {}).get("targets", context["recommendation"].get("targets", []))
+        if target not in action_targets:
             raise ValueError("target not bound to recommendation")
         host_key = "jarvis:host:" + hashlib.sha256(target["host"].encode()).hexdigest()
         if self.redis.get(host_key):
@@ -121,9 +140,12 @@ class ExecutionCoordinator:
         }
         if any(proof.get(k) != v for k, v in expected.items()):
             raise ValueError("preflight does not match approval")
-        if proof["target"] not in context["recommendation"].get("targets", []):
+        action_targets = context.get("action", {}).get("targets", context["recommendation"].get("targets", []))
+        if proof["target"] not in action_targets:
             raise ValueError("target no longer bound to recommendation")
-        self.entry(proof["target"])
+        from operations.scenario_scripts import is_scenario_target
+        if not is_scenario_target(proof["target"]):
+            self.entry(proof["target"])
         return proof
 
     def reserve(self, execution_id, body, context, proof):

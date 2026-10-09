@@ -335,6 +335,20 @@ _PAGE = """<!doctype html>
     <div id="actions"></div>
   </div>
 
+  <div id="manual-remediation" class="card hidden">
+    <strong>수동 조치 등록</strong>
+    <p id="manual-flow" class="muted">수동으로 별도 조치 → 서비스에 조치 방법 기입 → 등록</p>
+    <p id="manual-target" class="muted"></p>
+    <form id="manual-form" class="feedback-grid hidden">
+      <div class="check-row full"><input id="manual-performed" type="checkbox" required><label for="manual-performed" style="margin:0">서비스 밖에서 수동 조치를 수행했습니다.</label></div>
+      <div class="full"><label for="manual-method">수행한 조치 방법</label><textarea id="manual-method" required maxlength="8000" placeholder="어떤 단위시스템에서 무엇을 확인하고 어떻게 조치했는지 입력하세요."></textarea></div>
+      <div><label for="manual-operator">조치 운영자</label><input id="manual-operator" required maxlength="200" value="web-ui"></div>
+      <div class="check-row"><input id="manual-recovered" type="checkbox"><label for="manual-recovered" style="margin:0">운영자가 서비스 복구를 확인했습니다.</label></div>
+      <div class="full"><p class="muted">복구 확인을 체크하면 운영자 확인으로 해결 처리됩니다. 미체크 시 복구 확인중으로 기록됩니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
+    </form>
+    <div id="manual-history"></div>
+  </div>
+
   <div id="guidance-result" class="card hidden">
     <span id="guidance-code" class="pill">RESOURCE GUIDANCE</span>
     <div><strong>리소스 기반 문제 제안</strong></div>
@@ -424,6 +438,9 @@ const incidentFilters = {
   analyzing: {label: "분석중", matches: (item) => item.status === "ANALYZING"},
 };
 let lastExecutionId = null;
+let currentManualIncident = null;
+let manualRegistrationId = null;
+let manualRegisterPending = false;
 function actionBody(action, el) {
   const selected = el.querySelector(".target-select").value;
   return {
@@ -467,7 +484,7 @@ $("verify-execution").addEventListener("click", async () => {
   if (!lastExecutionId) return;
   const {data} = await postJSON("/api/v1/remediations/verify", {execution_id:lastExecutionId});
   $("exec-output").textContent = JSON.stringify(data,null,2);
-  $("exec-status").textContent = data.recovered ? "업무 복구 확인 완료" : "업무 복구 미확인";
+  $("exec-status").textContent = data.execution_mode === "simulation" ? (data.recovered ? "모의 복구 확인 완료 · 실제 서비스 복구 측정 없음" : "모의 복구 미확인") : (data.recovered ? "업무 복구 확인 완료" : "업무 복구 미확인");
   await loadIncidents();
 });
 
@@ -534,10 +551,85 @@ function closeIncidentDetails() {
   $("result").classList.add("hidden");
   $("guidance-result").classList.add("hidden");
   $("exec").classList.add("hidden");
+  $("manual-remediation").classList.add("hidden");
+  currentManualIncident = null;
   currentRecommendation = null;
   currentGuidance = null;
   detailRecommendationKey = null;
 }
+function newManualRegistrationId() {
+  return "MANUAL-" + (globalThis.crypto?.randomUUID?.() || Date.now() + "-" + Math.random().toString(36).slice(2));
+}
+function updateManualRegisterButton() {
+  $("manual-register").disabled = manualRegisterPending || !currentManualIncident?.manualAllowed
+    || !$("manual-performed").checked || !$("manual-method").value.trim() || !$("manual-operator").value.trim();
+  $("manual-form").querySelectorAll("input, textarea").forEach(input => input.disabled = manualRegisterPending);
+}
+function renderManualRemediation(incident, available) {
+  const changed = currentManualIncident?.incident_id !== incident.incident_id;
+  currentManualIncident = {...incident, manualAllowed: available};
+  if (changed) {
+    manualRegistrationId = newManualRegistrationId();
+    $("manual-method").value = "";
+    $("manual-performed").checked = false;
+    $("manual-recovered").checked = false;
+    $("manual-register-status").textContent = "";
+  }
+  const history = incident.manual_actions || [];
+  $("manual-remediation").classList.toggle("hidden", !available && !history.length);
+  $("manual-form").classList.toggle("hidden", !available);
+  $("manual-flow").textContent = available ? "자동 실행 대상이 없습니다. 수동으로 별도 조치 → 서비스에 조치 방법 기입 → 등록 순서로 진행하세요." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
+  $("manual-target").textContent = [incident.environment, incident.service, ...(incident.affected_hosts || [])].join(" / ");
+  $("manual-history").innerHTML = history.length
+    ? '<strong>등록된 수동 조치 이력</strong>' + history.slice().reverse().map(item =>
+      '<details><summary>' + esc(formatDateTime(item.registered_at)) + ' · ' + esc(item.operator)
+      + ' · ' + (item.recovered ? '운영자 복구 확인' : '복구 확인 대기') + '</summary><pre>' + esc(item.method) + '</pre></details>'
+    ).join("") : "";
+  updateManualRegisterButton();
+}
+["manual-method", "manual-operator", "manual-performed", "manual-recovered"].forEach(id => $(id).addEventListener("input", () => {
+  manualRegistrationId = newManualRegistrationId();
+  $("manual-register-status").textContent = "";
+  updateManualRegisterButton();
+}));
+$("manual-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (manualRegisterPending || $("manual-register").disabled || !currentManualIncident) return;
+  const incident = currentManualIncident;
+  manualRegisterPending = true;
+  updateManualRegisterButton();
+  $("manual-register-status").className = "status-pending";
+  $("manual-register-status").textContent = "등록 중…";
+  try {
+    const {ok, data} = await postJSON("/api/v1/remediations/manual", {
+      incident_id: incident.incident_id, incident_version: incident.version,
+      registration_id: manualRegistrationId, operator: $("manual-operator").value.trim(),
+      method: $("manual-method").value.trim(), performed: $("manual-performed").checked,
+      recovered: $("manual-recovered").checked,
+    });
+    if (currentManualIncident?.incident_id === incident.incident_id) {
+      $("manual-register-status").className = ok ? "status-ok" : "status-err";
+      $("manual-register-status").textContent = ok ? "조치 방법이 등록되었습니다." : (data.reason === "incident changed; reload details before registering" ? "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요." : "등록 실패: " + (data.reason || data.status));
+      if (ok) {
+        $("manual-method").value = "";
+        $("manual-performed").checked = false;
+        $("manual-recovered").checked = false;
+        manualRegistrationId = newManualRegistrationId();
+        renderManualRemediation(data.incident, data.incident.status === "MONITORING");
+        renderIncidentDetails(data.incident);
+      }
+    }
+    await loadIncidents();
+  } catch (error) {
+    if (currentManualIncident?.incident_id === incident.incident_id) {
+      $("manual-register-status").className = "status-err";
+      $("manual-register-status").textContent = "등록 응답을 받지 못했습니다. 다시 등록하면 같은 요청의 중복 저장을 방지합니다.";
+    }
+  } finally {
+    manualRegisterPending = false;
+    updateManualRegisterButton();
+  }
+});
 async function loadIncidentDetails(incident, scroll = false, refresh = false) {
   const requestId = ++incidentDetailRequest;
   selectedIncidentId = incident.incident_id;
@@ -549,6 +641,7 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     currentRecommendation = null;
     currentGuidance = null;
     detailRecommendationKey = null;
+    $("manual-remediation").classList.add("hidden");
   }
   renderIncidentDetails(incident);
   $("incident-detail-load-status").textContent = "최신 장애 정보를 확인하는 중…";
@@ -563,6 +656,7 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     if (requestId !== incidentDetailRequest) return;
     const latest = data.incident;
     renderIncidentDetails(latest);
+    renderManualRemediation(latest, data.manual_action_available === true);
     $("incident-detail-load-status").textContent = "";
     $("incident-detail-logs-status").textContent = data.logs_status === "unavailable"
       ? "관련 로그 조회 실패 — 장애 정보는 조회되었습니다."
@@ -580,7 +674,7 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
       currentGuidance = null;
       if (rec) {
         renderRecommendation(latest.error_code, rec);
-        if (latest.status !== "ACTION_REQUIRED") {
+        if (latest.status !== "ACTION_REQUIRED" && !(latest.status === "INVESTIGATING" && latest.synthetic === true && latest.environment === "simulation" && rec.targets?.length)) {
           document.querySelectorAll("#actions .runbook").forEach(el => {
             el.actionable = false;
             setRunbookButtonsDisabled(el, true);
@@ -671,7 +765,7 @@ async function fetchIncidents() {
     $("incident-list-status").textContent = "";
     renderIncidentList();
     if (selectedIncidentId) {
-      const selected = incidentItems.find(item => item.incident_id === selectedIncidentId && incidentFilters[selectedIncidentFilter].matches(item));
+      const selected = incidentItems.find(item => item.incident_id === selectedIncidentId && (incidentFilters[selectedIncidentFilter].matches(item) || currentManualIncident?.manual_actions?.length));
       if (selected) await loadIncidentDetails(selected, false, true);
       else closeIncidentDetails();
     }
@@ -932,7 +1026,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);
     setClientStatus("분석 완료");
-    return;
+    if (!(rec.runbooks || []).length) return;
   }
   currentErrorCode = errorCode;
   currentRecommendation = rec;
@@ -955,7 +1049,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
       <dl>
         <dt>장애</dt><dd>${esc(rb.incident)}</dd>
         <dt>추정 원인</dt><dd>${esc(rb.estimated_cause)}</dd>
-        <dt>신뢰도</dt><dd>${pct}%
+        <dt>신뢰도</dt><dd>${rb.registered_script ? "기존 등록 스크립트 · 평가 없음" : pct + "%"}
           <div class="confidence-bar"><span style="width:${pct}%"></span></div>
         </dd>
         <dt>조치</dt><dd>${esc(rb.action)}</dd>
@@ -980,8 +1074,15 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     if (action) el.dataset.actionId = action.action_id;
     el.action = action;
     el.actionable = true;
+    if (action?.execution_mode === "simulation") {
+      el.querySelector(".runbook-tag").textContent = "기존 등록 스크립트 · 모의 실행";
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = action.script_path + " — 작업 메시지를 출력하는 테스트 스크립트입니다.";
+      el.querySelector("dl").after(note);
+    }
     const targetSelect = el.querySelector(".target-select");
-    const targets = rec.targets || [];
+    const targets = action?.targets || rec.targets || [];
     el.targets = targets;
     const empty = document.createElement("option");
     empty.value = ""; empty.textContent = targets.length ? "대상을 선택하세요" : "이 사건에 등록된 실행 대상이 없습니다";
@@ -989,7 +1090,7 @@ function renderRecommendation(errorCode, rec, decisions = []) {
     targetSelect.disabled = !targets.length;
     targets.forEach((target, index) => {
       const option = document.createElement("option"); option.value = String(index);
-      option.textContent = [target.environment, target.service, target.host, target.instance].join(" / ");
+      option.textContent = [target.environment, target.service, target.host, target.instance].join(" / ") + (target.instance === "log-generator-scripts" ? " (기존 셸 스크립트 · 모의)" : "");
       targetSelect.appendChild(option);
     });
     targetSelect.addEventListener("change", () => {
@@ -1034,7 +1135,7 @@ const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 
 
 function approvalHint(el) {
   if (!el.action) return "이 추천에는 자동 실행 가능한 조치가 없습니다. 분석 내용과 진단 항목을 확인하세요.";
-  if (!el.targets.length) return "이 장애의 환경·서비스·호스트와 일치하는 실행 대상이 등록되지 않았습니다. 모의 장애는 실제 컨테이너에 자동 연결되지 않습니다.";
+  if (!el.targets.length) return "이 조치에 등록된 실행 대상이 없습니다. 장애 상세의 수동 조치 등록에서 수행한 조치 방법을 입력하세요.";
   return el.querySelector(".target-select").value === ""
     ? "조치 대상을 먼저 선택한 뒤 ‘승인 후 실행’을 누르세요."
     : "선택한 대상에 조치를 실행하려면 ‘승인 후 실행’을 누르세요.";
@@ -1103,10 +1204,11 @@ function showExecResult(scriptId, data, status) {
   lastExecutionId = data.execution_id || null;
   $("refresh-execution").classList.toggle("hidden", !lastExecutionId);
   $("verify-execution").classList.toggle("hidden", !lastExecutionId || data.status !== "success");
+  $("verify-execution").textContent = data.execution_mode === "simulation" ? "모의 복구 확인" : "업무 복구 확인";
   const ok = ["success", "rejected", "already_processed"].includes(data.status);
   const s = $("exec-status");
   s.className = ok ? "status-ok" : "status-err";
-  s.textContent = `${data.status}` + (data.returncode !== undefined
+  s.textContent = (data.execution_mode === "simulation" ? "모의 스크립트 실행 · " : "") + `${data.status}` + (data.returncode !== undefined
     ? ` (exit ${data.returncode})` : ` (HTTP ${status})`);
   $("exec-output").textContent =
     (data.stdout || "") + (data.stderr ? "\\n[stderr]\\n" + data.stderr :

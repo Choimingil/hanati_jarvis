@@ -42,6 +42,7 @@ fluentbit/application.log
 execution-targets.json
 agent-manifest.json
 agent-state/
+scenario-script-state/
 *.sqlite
 *.sqlite-*
 

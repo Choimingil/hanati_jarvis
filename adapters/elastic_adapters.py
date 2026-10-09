@@ -365,7 +365,7 @@ class ElasticLogRepository(LogRepository):
         try:
             response = self.client.search(
                 index=ELASTIC_REMEDIATION_INDEX,
-                query={"term": {"script_id.keyword": script_id}},
+                query={"bool": {"filter": [{"term": {"script_id.keyword": script_id}}], "must_not": [{"term": {"result.execution_mode.keyword": "simulation"}}]}},
                 size=0,
                 aggs={"by_status": {"terms": {"field": "result.status.keyword"}}},
                 ignore_unavailable=True,

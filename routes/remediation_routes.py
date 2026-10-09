@@ -7,9 +7,25 @@ from dependencies import operational_incident_service, repository
 from operations.execution import ExecutionCoordinator, TERMINAL
 from operations.redis_store import client
 from operations.privacy import redact
+from operations.settings import bind_recommendation
 from utils.time_utils import now_iso
 
 remediation_blueprint = Blueprint("remediation", __name__)
+
+
+@remediation_blueprint.post("/api/v1/remediations/manual")
+def register_manual_remediation():
+    from aiops.manual_remediation_service import ManualRemediationService
+
+    try:
+        result = ManualRemediationService(repository).submit(request.get_json(silent=True))
+        return jsonify(redact(result)), 200 if result["duplicate"] else 201
+    except LookupError as exc:
+        return jsonify(status="not_found", reason=str(exc)), 404
+    except RuntimeError:
+        return jsonify(status="blocked", reason="incident changed; reload details before registering"), 409
+    except Exception as exc:
+        return _error(exc)
 
 
 def coordinator():
@@ -55,7 +71,12 @@ def _validate_action_request(body):
     recommendation = repository.get_recommendation(body["recommendation_id"])
     if not incident or not recommendation:
         raise ValueError("incident or recommendation not found")
-    if incident.get("status") != "ACTION_REQUIRED":
+    recommendation = bind_recommendation(incident, recommendation)
+    simulation_actionable = (
+        incident.get("synthetic") is True and incident.get("environment") == "simulation"
+        and incident.get("status") == "INVESTIGATING" and bool(recommendation.get("targets"))
+    )
+    if incident.get("status") != "ACTION_REQUIRED" and not simulation_actionable:
         raise ValueError("incident is not actionable")
     if (
         recommendation.get("incident_id") != body["incident_id"]
@@ -134,7 +155,7 @@ def _persist_result(manager, record):
             "MONITORING"
             if record["result"]["status"] == "success"
             else "ACTION_REQUIRED",
-            {"last_execution_id": record["execution_id"], "active_execution_id": None},
+            {"last_execution_id": record["execution_id"], "active_execution_id": None, "recovery_confirmation": "pending_execution"},
         )
     manager.release_host(record)
 
@@ -241,7 +262,7 @@ def request_diagnosis():
             raise ValueError("JSON object required")
         context = _validate_action_request(body)
         target = body.get("target")
-        if target not in context["recommendation"].get("targets", []):
+        if target not in context["action"].get("targets", []):
             raise ValueError("target not bound to recommendation")
         results = [
             coordinator().diagnose(target, script_id)
@@ -281,7 +302,7 @@ def verify_remediation():
             and incident.get("last_execution_id") == record["execution_id"]
         ):
             operational_incident_service.transition(
-                incident, "RESOLVED", {"recovered_at": now_iso()}
+                incident, "RESOLVED", {"recovered_at": now_iso(), "recovery_confirmation": result.get("execution_mode", "business_probe")}
             )
         return jsonify(result)
     except Exception as exc:

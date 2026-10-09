@@ -1,0 +1,296 @@
+{
+  "source_commit": "245c9fa4b8b9d2bc562a0023a5bc738dfac88cd9",
+  "mode": "simulation",
+  "scripts": {
+    "check_auth_service_health": {
+      "path": "test-runbooks/check_auth_service_health.sh",
+      "sha256": "ad979ef7a356b96768f1205c4759962a017bce45786df07570943c55d8a0a5d8",
+      "kind": "diagnostic"
+    },
+    "check_connection_pool": {
+      "path": "test-runbooks/check_connection_pool.sh",
+      "sha256": "9ea2ae78f4a0cde5c9dcec9baa0906805d91496712bea511c93b5958a366c2aa",
+      "kind": "diagnostic"
+    },
+    "check_container_memory_limits": {
+      "path": "test-runbooks/check_container_memory_limits.sh",
+      "sha256": "09f5c52c1f052317142c1150483413a49ec5542128e2d9e51cb586790e6b6d11",
+      "kind": "diagnostic"
+    },
+    "check_db_connection": {
+      "path": "test-runbooks/check_db_connection.sh",
+      "sha256": "7989175c11b5d59fc8fceeee0a41a9190cedfa335250e0b2c09bd882d09e23a7",
+      "kind": "diagnostic"
+    },
+    "check_db_locks": {
+      "path": "test-runbooks/check_db_locks.sh",
+      "sha256": "31886333941262173f3e6039907e3518fb037f9522a839b038fca66b9021e3e6",
+      "kind": "diagnostic"
+    },
+    "check_disk_usage": {
+      "path": "test-runbooks/check_disk_usage.sh",
+      "sha256": "bf232ce22a8ac6f5f3ce86ec0263f28ed5bf6a7d8e353e20daec2d9b7928f240",
+      "kind": "diagnostic"
+    },
+    "check_dns_resolution": {
+      "path": "test-runbooks/check_dns_resolution.sh",
+      "sha256": "8077633abfea6a56c9657a08601c55876657dfd733b2b4b0ff372eb7ae4f5a86",
+      "kind": "diagnostic"
+    },
+    "check_external_api": {
+      "path": "test-runbooks/check_external_api.sh",
+      "sha256": "3825836fac821b14f1bb35daff885661e37555bf0aa617cbdd0490fb60637997",
+      "kind": "diagnostic"
+    },
+    "check_jdbc_version": {
+      "path": "test-runbooks/check_jdbc_version.sh",
+      "sha256": "0a7336d49fa7087a2f77351eea6c644d68c84b34112bdb9127b1b8dba564e5d5",
+      "kind": "diagnostic"
+    },
+    "check_kafka_connection": {
+      "path": "test-runbooks/check_kafka_connection.sh",
+      "sha256": "d6eaf6d49e0db820ff71d0c4e0632a86d10e4742b8d80ec7758d9dd22151d13d",
+      "kind": "diagnostic"
+    },
+    "check_large_files": {
+      "path": "test-runbooks/check_large_files.sh",
+      "sha256": "dc2ba9f694cbeb1c4ae2cf11ca49423c4516ef35361158a5af203c0a6c69a867",
+      "kind": "diagnostic"
+    },
+    "check_memory_usage": {
+      "path": "test-runbooks/check_memory_usage.sh",
+      "sha256": "bdd25ecb4d00eb40d6fdd80c133603e5e3b7a54b8867da5960f33b81f174f82a",
+      "kind": "diagnostic"
+    },
+    "check_open_files": {
+      "path": "test-runbooks/check_open_files.sh",
+      "sha256": "18f8639c3755df73e854ecf483b2cfbf73200ed2545f2675897e180fcc7df7b3",
+      "kind": "diagnostic"
+    },
+    "check_payment_gateway": {
+      "path": "test-runbooks/check_payment_gateway.sh",
+      "sha256": "584178840cb0cafa57ddd11425bd7093da64565427a1ca80798107d6d62287ee",
+      "kind": "diagnostic"
+    },
+    "check_pod_status": {
+      "path": "test-runbooks/check_pod_status.sh",
+      "sha256": "3a06f578cb0aa49f1afcfac860d6323da452f6d007affb9a42fb8f400d6f3011",
+      "kind": "diagnostic"
+    },
+    "check_redis_status": {
+      "path": "test-runbooks/check_redis_status.sh",
+      "sha256": "41f8a1f14ba4cc550be233fe68c968843fd0a40993a9701ba7e9e389010761ae",
+      "kind": "diagnostic"
+    },
+    "check_replication_lag": {
+      "path": "test-runbooks/check_replication_lag.sh",
+      "sha256": "f2b017c38c849ac1ef33d4d41612632d7197ef2a9b8edf5bf1da93f72b76b784",
+      "kind": "diagnostic"
+    },
+    "check_sqlnet": {
+      "path": "test-runbooks/check_sqlnet.sh",
+      "sha256": "088c07f81154373f3af2383ab960a35cbc46f2326ae435de4891c36d7b8899cd",
+      "kind": "diagnostic"
+    },
+    "check_ssl_certificate": {
+      "path": "test-runbooks/check_ssl_certificate.sh",
+      "sha256": "e2d4ddc87d6f0bf347e47595074b2948caf97bc7f847e5088866879acf8f5990",
+      "kind": "diagnostic"
+    },
+    "check_thread_pool_usage": {
+      "path": "test-runbooks/check_thread_pool_usage.sh",
+      "sha256": "8767f47a09751989ab101debab41b3e964624c4bc3ec47786a312e12f1ec1198",
+      "kind": "diagnostic"
+    },
+    "check_time_sync": {
+      "path": "test-runbooks/check_time_sync.sh",
+      "sha256": "06aa653257712c91dff79986663013b6465338487728f5e8b72281dddaf2d5a4",
+      "kind": "diagnostic"
+    },
+    "check_upstream_health": {
+      "path": "test-runbooks/check_upstream_health.sh",
+      "sha256": "6ddba0666f83000370523c5f4dbc929ca7a63ebdb9b6635c147dfcfa0368a5f6",
+      "kind": "diagnostic"
+    },
+    "cleanup_temp_files": {
+      "path": "test-runbooks/cleanup_temp_files.sh",
+      "sha256": "f87481286bf1f624b7f360927f6880807cb6253bb563aff7705be3b296f7cabf",
+      "kind": "remediation"
+    },
+    "clear_redis_cache": {
+      "path": "test-runbooks/clear_redis_cache.sh",
+      "sha256": "18cc18a2f881ea59fa9f4ba0e78e4dadffe49a1df6e6e289844e3a3f7bca76b6",
+      "kind": "remediation"
+    },
+    "compress_old_logs": {
+      "path": "test-runbooks/compress_old_logs.sh",
+      "sha256": "5c7fd1c361f1091a72d58895aa12c5bed0461e0a01ff700c2443ac08f8e367dd",
+      "kind": "remediation"
+    },
+    "drain_unhealthy_upstream": {
+      "path": "test-runbooks/drain_unhealthy_upstream.sh",
+      "sha256": "c88c0b523e52ce21b7b1b578afdfb256cd24b5bd2b818aa3937435d386a2e35b",
+      "kind": "remediation"
+    },
+    "enable_circuit_breaker": {
+      "path": "test-runbooks/enable_circuit_breaker.sh",
+      "sha256": "bc72b796f18d9b81ce56b881ca3696e9314d233ccd3122cfede9ebc13eada1fe",
+      "kind": "remediation"
+    },
+    "enable_payment_retry_queue": {
+      "path": "test-runbooks/enable_payment_retry_queue.sh",
+      "sha256": "b66a463297f5105ea377bc21b9fe46676276e1ee982ccceba987c77afff93b97",
+      "kind": "remediation"
+    },
+    "failover_database": {
+      "path": "test-runbooks/failover_database.sh",
+      "sha256": "b8040283c93bed37e413d7de804a66425c29bb4e82594f1cae3e97abfb3f0fe4",
+      "kind": "remediation"
+    },
+    "failover_message_broker": {
+      "path": "test-runbooks/failover_message_broker.sh",
+      "sha256": "836acdbadf27aad72acd3dfeea31f2a1b8ec4a67bd5584c26d779590caa31644",
+      "kind": "remediation"
+    },
+    "flush_dns_cache": {
+      "path": "test-runbooks/flush_dns_cache.sh",
+      "sha256": "2ebb02d30af75ce4da68f21525b5224b3907fba17e517683e60ed28cfd78369e",
+      "kind": "remediation"
+    },
+    "increase_connection_pool_size": {
+      "path": "test-runbooks/increase_connection_pool_size.sh",
+      "sha256": "6b61d10ec106ba8e9da9472fc900c6314027fc3de4527c703a382aac07a231e3",
+      "kind": "remediation"
+    },
+    "increase_fd_limit": {
+      "path": "test-runbooks/increase_fd_limit.sh",
+      "sha256": "b0fc12473ad0fd5f065b32724d754a1e06ed57358c722922d655ee3dbbd94d8b",
+      "kind": "remediation"
+    },
+    "increase_heap_size": {
+      "path": "test-runbooks/increase_heap_size.sh",
+      "sha256": "7f0bc6ceb3acaf7aa7dc49f4ffc873de4dfe187f0fc1839d173c34d94a7d32d2",
+      "kind": "remediation"
+    },
+    "increase_memory_limit": {
+      "path": "test-runbooks/increase_memory_limit.sh",
+      "sha256": "ecd379fa1a538b1d1a72917cacd778bdebf1eac20e138260d717557c488a6e2a",
+      "kind": "remediation"
+    },
+    "increase_pod_resources": {
+      "path": "test-runbooks/increase_pod_resources.sh",
+      "sha256": "c5b845d01eddd6c4eaf5740ac95d5ffd107f1efaf95e5c4e86faa26e8cb0d87b",
+      "kind": "remediation"
+    },
+    "increase_proxy_timeout": {
+      "path": "test-runbooks/increase_proxy_timeout.sh",
+      "sha256": "55c91d27a872f58749ad7afb1016d4666b6146b6a1425b83905314cbea5a970d",
+      "kind": "remediation"
+    },
+    "increase_thread_pool_size": {
+      "path": "test-runbooks/increase_thread_pool_size.sh",
+      "sha256": "acbe53db94d2e6f4476027ad40caa124a1ea0d81e1a3c60a73dc8fa5e62455c3",
+      "kind": "remediation"
+    },
+    "kill_blocking_session": {
+      "path": "test-runbooks/kill_blocking_session.sh",
+      "sha256": "c971c4d79e8c7c3ec32accd6c2b696131a28cf5f3148e743f24465242864128c",
+      "kind": "remediation"
+    },
+    "modify_sqlnet": {
+      "path": "test-runbooks/modify_sqlnet.sh",
+      "sha256": "42958c53bf2cc14c528a0fcc04b0488c5202881555ae55d0b634c479f0c2a84f",
+      "kind": "remediation"
+    },
+    "reload_tls_config": {
+      "path": "test-runbooks/reload_tls_config.sh",
+      "sha256": "8d6ee570becfc4133327a62e768f3e8c7b6245b84e9842c9b9a26d543c7ae58c",
+      "kind": "remediation"
+    },
+    "renew_ssl_certificate": {
+      "path": "test-runbooks/renew_ssl_certificate.sh",
+      "sha256": "b26db02a192a1af5362e12f0c4375e4694932f24407b0e027fe0cf77be7f3fb5",
+      "kind": "remediation"
+    },
+    "restart_application": {
+      "path": "test-runbooks/restart_application.sh",
+      "sha256": "45dc93313c73a3adf1c28decdf77ec2db101c238e6d0033fadb0b7add25d32ad",
+      "kind": "remediation"
+    },
+    "restart_auth_service": {
+      "path": "test-runbooks/restart_auth_service.sh",
+      "sha256": "654d84339200d750a48cffa31f87edb1c5aef2742212f7d431b0aea18a792f32",
+      "kind": "remediation"
+    },
+    "restart_db_connection_pool": {
+      "path": "test-runbooks/restart_db_connection_pool.sh",
+      "sha256": "a396f6b9a8ffed0c17220d439e3f56bb407ee55e8b1d530a65cc7aa78318ad69",
+      "kind": "remediation"
+    },
+    "restart_dns_resolver": {
+      "path": "test-runbooks/restart_dns_resolver.sh",
+      "sha256": "fb490475382abbe7aecec4bab9b21000d8fa0907824ecc39a0e935dc36d92069",
+      "kind": "remediation"
+    },
+    "restart_kafka_consumer": {
+      "path": "test-runbooks/restart_kafka_consumer.sh",
+      "sha256": "3874c5f1d81b90a40a2d8ac31728680b4151c7080cbabd8edecebb1b699112dc",
+      "kind": "remediation"
+    },
+    "restart_redis": {
+      "path": "test-runbooks/restart_redis.sh",
+      "sha256": "9a02eb5ec539793aa5d06be0b1c6a624fe14d2098d6c80d1c4e863b4dbc4fb4f",
+      "kind": "remediation"
+    },
+    "restart_replication": {
+      "path": "test-runbooks/restart_replication.sh",
+      "sha256": "354036c69201c152e6df43715a4e911194db813daff1279c0ce97c736b026d06",
+      "kind": "remediation"
+    },
+    "restart_time_service": {
+      "path": "test-runbooks/restart_time_service.sh",
+      "sha256": "7a55827a80d5062082c62417ef7bd53742c143017374976479621c93ee86eae1",
+      "kind": "remediation"
+    },
+    "resync_ntp_time": {
+      "path": "test-runbooks/resync_ntp_time.sh",
+      "sha256": "39a51e02c1b37d23941c0a584e2f147cafb0717b84d0b06b5671f31c37ccf87a",
+      "kind": "remediation"
+    },
+    "retry_failed_transactions": {
+      "path": "test-runbooks/retry_failed_transactions.sh",
+      "sha256": "27458db2a7bf5dc6f5806008c915ad8f516bd198d189556fad15e54a438244b7",
+      "kind": "remediation"
+    },
+    "rollback_deployment": {
+      "path": "test-runbooks/rollback_deployment.sh",
+      "sha256": "f9f7fc1bb339614f8508cdfa18a5046d9ad476b3bbee18c8a17135dc64e5fb42",
+      "kind": "remediation"
+    },
+    "rotate_signing_key": {
+      "path": "test-runbooks/rotate_signing_key.sh",
+      "sha256": "d0946f5d07c58dd447a9f1179f38c47dc1e07fc80e9c0576c2000d6daf4ed1c0",
+      "kind": "remediation"
+    },
+    "route_reads_to_primary": {
+      "path": "test-runbooks/route_reads_to_primary.sh",
+      "sha256": "9d1bab5bb3079f0891158d0e2e573c7046570624eb0523602c3efc36462493c8",
+      "kind": "remediation"
+    },
+    "switch_api_endpoint": {
+      "path": "test-runbooks/switch_api_endpoint.sh",
+      "sha256": "0da357eb208dc1bbab21e9873cfc03bd26d0dc4080b72804356cb56c9beb497b",
+      "kind": "remediation"
+    },
+    "switch_payment_provider": {
+      "path": "test-runbooks/switch_payment_provider.sh",
+      "sha256": "0c03d55848d61f1a8a397fe45e95e4cf3b92e2a1d14b98312a795ee62dbb8d0b",
+      "kind": "remediation"
+    },
+    "update_jdbc_driver": {
+      "path": "test-runbooks/update_jdbc_driver.sh",
+      "sha256": "c053d0df6e992fd3b4eaa672f7f00d08417c2763ab737bca6dd515224cf47ca0",
+      "kind": "remediation"
+    }
+  }
+}

@@ -27,6 +27,7 @@ from operations.privacy import redact
 from operations.redis_store import client as redis_client
 from operations.activity import redis_activity, worker_activity
 from error_detector import is_context_only_incident
+from operations.settings import with_execution_targets, bind_recommendation, manual_action_available
 
 LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
@@ -187,6 +188,10 @@ def latest_recommendation():
 
     latest = max(fresh, key=lambda doc: doc["timestamp"])
     recommendation = latest.get("recommendation") or latest.get("guidance")
+    if isinstance(recommendation, dict) and recommendation.get("incident_id"):
+        incident = repository.get_operational_incident(recommendation["incident_id"])
+        if incident:
+            recommendation = bind_recommendation(incident, recommendation)
 
     return jsonify(
         {
@@ -241,7 +246,7 @@ def recent_incidents():
     for document in documents:
         if is_context_only_incident(document):
             continue
-        incident = dict(document)
+        incident = with_execution_targets(dict(document))
         hosts = incident.get("affected_hosts") or []
         incident["hosts"] = hosts
         incident["host_count"] = len(hosts)
@@ -268,6 +273,7 @@ def incident_detail(incident_id):
         incident = repository.get_operational_incident(incident_id)
         if incident is None:
             return jsonify(status="not_found"), 404
+        incident = with_execution_targets(incident)
     except Exception as exc:
         return jsonify(status="unavailable", error=type(exc).__name__), 503
 
@@ -279,6 +285,7 @@ def incident_detail(incident_id):
     return jsonify(redact({
         "status": "ready", "incident": incident,
         "logs": logs, "logs_status": logs_status,
+        "manual_action_available": manual_action_available(incident),
     }))
 
 

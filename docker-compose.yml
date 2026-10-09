@@ -182,6 +182,7 @@ services:
     - .:/workspace
     - log-volume:/workspace/fluentbit
     - embedding-cache:/models
+    - scenario-script-state:/state/scenario-scripts
     environment:
     - PYTHONPATH=/workspace
     - API_HOST=0.0.0.0
@@ -200,6 +201,7 @@ services:
     - OPENAI_TIMEOUT=${OPENAI_TIMEOUT:-30}
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
+    - SCENARIO_SCRIPT_STATE_DIR=/state/scenario-scripts
     - BUSINESS_SERVICES_FILE=/workspace/business-services.json
     - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
@@ -380,4 +382,5 @@ volumes:
   embedding-cache: null
   redis-data: null
   execution-agent-state: null
+  scenario-script-state: null
 

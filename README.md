@@ -39,6 +39,14 @@ docker compose --profile verification run --rm deployment-check python -m operat
 
 `.env`에 `LOG_GENERATOR_MODE=random`이 있으면 먼저 `manual`로 변경합니다. 초기화 컨테이너의 정상 상태는 `Exited (0)`이며 반복 실행되는 서비스가 아닙니다. 첫 검사는 기동·readiness 및 실패한 컨테이너의 최근 로그를, 두 번째 검사는 INFO 표식의 실제 전달·저장을 확인합니다. 기존 장애 데이터는 삭제하지 않으며 마지막 발생 이후 10분이 지나면 목록에서 제외됩니다.
 
+## 시나리오 셸 스크립트와 수동 조치 등록
+
+이전에 등록했던 셸 스크립트 58개를 `test-runbooks/`에 원본 그대로 복원했습니다. `log_generator`의 20개 장애 중 대응 스크립트가 있는 19개에는 기존 조치·진단 스크립트를 연결합니다. Runbook에서 `simulation / order-api / web01 / log-generator-scripts` 대상을 선택하면 **승인 → 셸 스크립트 실행 → 모의 복구 확인**으로 진행합니다. 기본 Compose에서 사용할 수 있으며 별도 실행 Agent 설정은 필요하지 않습니다. 기존에 저장된 추천에도 실행 대상이 다시 연결됩니다.
+
+기존 조치 스크립트는 작업 메시지를 출력하는 테스트용입니다. 진단 스크립트도 테스트 출력이며 디스크 점검만 API 컨테이너의 `df`를 읽습니다. 화면에 파일 경로와 모의 실행을 표시하고, 모의 복구 확인은 테스트 실행 결과를 확인합니다. 실제 서비스 복구 측정이나 운영 조치 성공 통계로 집계하지 않습니다.
+
+대응 스크립트가 없는 `RATE_LIMIT_EXCEEDED`, 미등록 오류, 실제 실행 대상이 없는 장애는 상세의 **수동 조치 등록**을 사용합니다. **수동으로 별도 조치 → 조치 방법·운영자 입력 → 등록** 순서로 진행하며 이력을 저장합니다. 복구 확인을 체크하지 않으면 `복구 확인중`, 운영자가 확인했다고 체크하면 `해결됨`으로 기록합니다. 같은 요청을 다시 보내도 중복 등록하지 않습니다. 자세한 내용은 [수동 조치 등록](OPERATIONS.md#수동-조치-등록)에 있습니다.
+
 ## Compose 컨테이너 진단·조치
 
 `execution-targets.example.json`을 `execution-targets.json`으로, `execution_agent/manifest.example.json`을 `agent-manifest.json`으로 복사합니다. `.env`의 `EXECUTION_AGENT_TOKEN`에 32자 이상의 무작위 값을 설정한 뒤 `docker compose --profile execution up -d --build`를 실행합니다. Agent도 기존 `hanati-aiops:local` 이미지를 사용합니다.

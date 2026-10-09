@@ -501,6 +501,8 @@ class RemediationApiTests(unittest.TestCase):
         self.repo = MemoryRepository()
         self.repo.incidents["INC-1"] = {
             "incident_id": "INC-1",
+            "host": TARGET["host"], "affected_hosts": [TARGET["host"]],
+            "environment": TARGET["environment"], "service": TARGET["service"],
             "version": 2,
             "status": "ACTION_REQUIRED",
             "error_code": "MEMORY_LEAK",
@@ -514,6 +516,9 @@ class RemediationApiTests(unittest.TestCase):
             "actions": [{"action_id": "ACTION-1", "script_id": "restart_application"}],
             "targets": [TARGET],
         }
+        settings_registry = patch("operations.settings.registry", side_effect=lambda: __import__("operations.execution", fromlist=["registry"]).registry())
+        settings_registry.start()
+        self.addCleanup(settings_registry.stop)
         for name, value in [
             ("repository", self.repo),
             ("operational_incident_service", OperationalIncidentService(self.repo)),
