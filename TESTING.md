@@ -30,4 +30,6 @@ docker compose --profile verification run --rm deployment-check python -m operat
 
 최신 연동 검사 범위·실제/모의 구분·발견 사항은 [INTEGRATION_RESULTS.md](INTEGRATION_RESULTS.md)에 기록했습니다. `tests/test_component_contracts.py`는 실제 formatter/Collector/Worker, 실제 로컬 Qdrant 엔진, 실제 ES 클라이언트 HTTP 직렬화를 함께 검사하되 Redis·ES 서버·Fluent Bit 프로세스는 대체합니다.
 
+관리자→클라이언트 동기화 검증: `tests/test_scenario_sync.py`는 시나리오 생성 전 Redis 게시, 별도 API 인스턴스의 실행 정보 조회, 10분 만료, 동시 실행의 오래된 완료 응답 방지, 생성 실패 공유와 Redis 장애 처리를 검사합니다. Admin·Client는 jsdom과 모의 API로 최상단 시나리오 배치·모니터링 영역 제거, 1초 실행 정보 조회, 분석 전 장애 표시·분석 완료 갱신·반복 실행, 사용자 선택·닫기 유지, 중복 조회 병합, 연결 복구, 서버 시계 차이 및 1분 경계의 강조 해제를 확인했습니다.
+
 2026-10-10 변경 검증: `tests/test_generator_startup.py`는 기본 기동 시 로그·오류 미생성, 명시적 random 모드, 수동 시나리오 전달과 simulation 표시, 반복 장애의 최신 내용·출처 보존, 분석과 독립적인 Worker heartbeat 갱신 및 Redis 오류 후 재개를 검사합니다. `tests/test_incident_detail.py`는 기본 10분 조회, 분석 전 상세 조회, 장애 ID에 연결된 최근 로그 조회와 ES HTTP 직렬화, 민감 정보 마스킹, 부분 조회 실패와 404/503 구분을 검사합니다. Compose 계약은 Collector·Fluent Bit의 API readiness 대기 및 manual 기본 모드를 확인합니다. Docker CLI가 없으면 실제 Compose config 검사는 건너뛰며, 코드·모의 검사를 실제 컨테이너 연동 성공으로 간주하지 않습니다.

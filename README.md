@@ -14,6 +14,10 @@ Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수�
 
 장애 목록은 최근 10분에 발생·갱신된 장애를 표시합니다. 진행중·긴급·미확인·분석중 탭으로 조건을 선택하고, 장애명을 누르면 단위시스템·환경·호스트·발생 구간·원문·발생 시각과 해당 장애의 최근 로그를 확인할 수 있습니다. 분석이 완료되지 않은 장애도 상세 정보는 조회할 수 있습니다.
 
+관리자(`/admin`)의 장애 시나리오 선택·실행 영역은 화면 맨 위에 있습니다. 클라이언트(`/client`)의 별도 장애 모니터링 영역은 제거했습니다. 시나리오 시작을 Redis로 공유하고 클라이언트가 1초마다 확인하여, 수집·분석 경로에 장애가 도착하면 목록과 상세를 자동으로 갱신합니다. Fluent Bit의 전송·파일 발견 주기도 1초로 줄였습니다. 일반 목록 갱신은 관리자 2초, 클라이언트 5초이며 시나리오 결과를 기다리는 동안 클라이언트는 1초마다 갱신합니다. 실제 표시까지는 로그 수집·Worker 처리 시간이 필요합니다.
+
+최근 발생 시각이 1분 이내인 장애는 목록·상세의 빨간 테두리와 `최근 1분` 표시로 강조하고, 1분이 지나면 자동으로 해제합니다. 서버 시각을 기준으로 계산하여 브라우저 시계 차이를 보정합니다. 동기화 중에도 사용자가 선택한 탭·장애 상세·입력 중인 조치 정보를 유지합니다.
+
 `log-generator`는 기본 `LOG_GENERATOR_MODE=manual`로 공유 로그 파일만 준비하고 대기합니다. 기본 기동만으로 모의 장애를 생성하지 않습니다. 관리자 화면에서 시나리오를 실행하면 기존과 같이 한 번만 발생시킵니다. 연속 무작위 장애 데모가 필요할 때만 `.env`에 `LOG_GENERATOR_MODE=random`을 지정합니다. 생성된 로그는 `environment=simulation`, `synthetic=true`로 표시하여 실제 수집 로그와 구별합니다.
 
 이전 구성에서 기본 기동만으로 DNS·Redis·디스크 등의 장애가 계속 보였던 주된 코드 원인은 무작위 시나리오 생성기입니다. 기동 순서도 Fluent Bit·Collector가 AIOps의 준비 상태를 기다리도록 수정했습니다. Worker의 생존 신호는 분석 처리와 별도로 갱신하므로 긴 임베딩·LLM 처리 중 연결이 끊긴 것으로 표시되는 것을 방지합니다. Collector의 단위시스템은 `hanati-collector`, 환경은 `compose`이며, 수집 범위는 해당 컨테이너에서 보이는 자원입니다.
@@ -24,6 +28,7 @@ Redis와 `analysis-worker`가 로그·메트릭 분석을 처리합니다. 수�
 git pull origin mingil
 docker compose stop log-generator
 docker compose up -d --build
+docker compose restart fluent-bit
 docker compose --profile verification run --rm deployment-check
 docker compose --profile verification run --rm deployment-check python -m operations.integration_check --wait-seconds 20
 ```

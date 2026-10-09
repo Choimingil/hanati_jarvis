@@ -211,6 +211,11 @@ _PAGE = """<!doctype html>
   .incident-message { min-width:180px; overflow-wrap:anywhere; }
   button.incident-detail { background:transparent; color:var(--accent); text-align:left; white-space:normal; padding:0; width:100%; min-height:44px; }
   .incident-preview { display:block; font-weight:400; margin-top:4px; }
+  .incident-table tr.recent-incident td { border-top:2px solid var(--err); border-bottom:2px solid var(--err); background:rgba(209,54,74,.08); }
+  .incident-table tr.recent-incident td:first-child { border-left:2px solid var(--err); }
+  .incident-table tr.recent-incident td:last-child { border-right:2px solid var(--err); }
+  .recent-incident-badge { color:var(--err); font-size:12px; font-weight:700; margin-left:8px; }
+  .card.recent-incident { border:2px solid var(--err); }
   .incident-fields { display:grid; grid-template-columns:100px 1fr; gap:8px 14px; margin:14px 0; font-size:14px; }
   .incident-fields dt { color:var(--muted); }
   .incident-fields dd { margin:0; overflow-wrap:anywhere; }
@@ -218,7 +223,7 @@ _PAGE = """<!doctype html>
   .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
-  .scenario-card { margin-top:18px; }
+  .scenario-card { margin-top:0; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
   @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -230,6 +235,15 @@ _PAGE = """<!doctype html>
 </head>
 <body class="mode-__MODE__">
 <div class="wrap">
+  <div class="card scenario-card admin-only">
+    <div class="row">
+      <div>
+        <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
+        <select id="scenario"></select>
+      </div>
+      <button id="analyze" disabled>분석</button>
+    </div>
+  </div>
   <div class="console-head">
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
     <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle" class="admin-only">로그 조회</button></div>
@@ -244,6 +258,7 @@ _PAGE = """<!doctype html>
   <div id="incident-list-panel" class="card" role="tabpanel" aria-labelledby="incident-tab-open" tabindex="0">
     <div class="card-head"><strong id="incident-list-title">진행중 장애</strong><span class="muted">최근 10분</span></div>
     <div id="incident-list-status" class="muted" role="status">장애 목록을 불러오는 중…</div>
+    <div id="incident-sync-status" class="muted client-only" role="status"></div>
     <div id="incident-list" class="incident-table-wrap"></div>
   </div>
   <div id="incident-detail-panel" class="card hidden" aria-labelledby="incident-detail-title" tabindex="-1">
@@ -254,19 +269,6 @@ _PAGE = """<!doctype html>
     <div class="guidance-section"><strong>해당 장애의 최근 10분 로그 (최대 20건)</strong></div>
     <div id="incident-detail-logs-status" class="muted"></div>
     <pre id="incident-detail-logs"></pre>
-  </div>
-  <div id="client-status" class="card client-only">
-    <strong>장애 모니터링</strong>
-    <div id="client-status-text" class="muted" style="margin-top:6px">발생한 장애가 없습니다. 장애가 감지되면 이 화면에 오류 내용이 표시됩니다.</div>
-  </div>
-  <div class="card scenario-card admin-only">
-    <div class="row">
-      <div>
-        <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
-        <select id="scenario"></select>
-      </div>
-      <button id="analyze" disabled>분석</button>
-    </div>
   </div>
   <div id="log-tabs-panel" class="card hidden admin-only">
     <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
@@ -394,6 +396,15 @@ let incidentsLoaded = false;
 let selectedIncidentId = null;
 let incidentDetailRequest = 0;
 let detailRecommendationKey = null;
+let incidentClockOffset = 0;
+let incidentLoadInFlight = null;
+let clientSyncInFlight = null;
+let clientSyncedRun = null;
+let clientRunCaughtUp = false;
+let clientSyncDelayed = false;
+let clientRunSelectionVersion = 0;
+let autoSelectedIncidentId = null;
+let manualSelectionVersion = 0;
 const incidentFilters = {
   open: {label: "진행중", matches: (item) => item.status !== "RESOLVED"},
   critical: {label: "긴급", matches: (item) => item.severity === "CRITICAL"},
@@ -413,12 +424,12 @@ function actionBody(action, el) {
     preflight_id: el.preflightId || null,
   };
 }
-function schedulePoll(callback, interval) {
+function schedulePoll(callback, interval, maxDelay = 60000) {
   let delay=interval;
   async function tick() {
     if (!document.hidden) {
-      try { const ok=await callback(); delay=ok===false ? Math.min(60000,delay*2) : interval; }
-      catch (_) { delay=Math.min(60000,delay*2); }
+      try { const ok=await callback(); delay=ok===false ? Math.min(maxDelay,delay*2) : interval; }
+      catch (_) { delay=Math.min(maxDelay,delay*2); }
     }
     setTimeout(tick,delay);
   }
@@ -470,6 +481,19 @@ function formatDateTime(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString("ko-KR");
 }
+function isRecentIncident(value) {
+  const timestamp = Date.parse(value);
+  const age = Date.now() + incidentClockOffset - timestamp;
+  return Number.isFinite(timestamp) && age >= 0 && age < 60000;
+}
+function refreshRecentIncidents() {
+  document.querySelectorAll("#incident-list tbody tr").forEach(row => {
+    const recent = isRecentIncident(row.dataset.lastSeen);
+    row.classList.toggle("recent-incident", recent);
+    row.querySelector(".recent-incident-badge").classList.toggle("hidden", !recent);
+  });
+  $("incident-detail-panel").classList.toggle("recent-incident", isRecentIncident($("incident-detail-panel").dataset.lastSeen));
+}
 function renderIncidentDetails(incident) {
   const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "복구 확인중", RESOLVED: "해결됨", REOPENED: "재발"};
   const origin = incident.synthetic === true ? "모의 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
@@ -489,6 +513,8 @@ function renderIncidentDetails(incident) {
   ];
   $("incident-detail-fields").innerHTML = fields.map(([label, value]) => '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd>').join("");
   $("incident-detail-message").textContent = incident.latest_message || incident.representative_message || incident.normalized_message || "발생 내용 없음";
+  $("incident-detail-panel").dataset.lastSeen = incident.last_seen || "";
+  refreshRecentIncidents();
 }
 function closeIncidentDetails() {
   selectedIncidentId = null;
@@ -556,7 +582,11 @@ async function loadIncidentDetails(incident, scroll = false, refresh = false) {
     $("incident-detail-load-status").textContent = "최신 상세 조회 실패 — 목록에 있던 정보를 표시합니다. 장애 항목을 다시 눌러 재조회하세요.";
   }
 }
-$("incident-detail-close").addEventListener("click", closeIncidentDetails);
+$("incident-detail-close").addEventListener("click", () => {
+  manualSelectionVersion += 1;
+  autoSelectedIncidentId = null;
+  closeIncidentDetails();
+});
 function renderIncidentList() {
   const filter = incidentFilters[selectedIncidentFilter];
   const items = incidentItems.filter(filter.matches);
@@ -564,18 +594,24 @@ function renderIncidentList() {
   $("incident-list").innerHTML = items.length
     ? '<table class="incident-table"><thead><tr><th scope="col">장애 내용</th><th scope="col">발생 수</th><th scope="col">최근 발생</th></tr></thead><tbody>' + items.map((item, index) => `
       <tr>
-        <td class="incident-message"><button type="button" class="incident-detail" aria-controls="incident-detail-panel" data-index="${index}"><strong>${esc(item.error_code || "UNKNOWN_ERROR")}</strong><span class="muted incident-preview">${esc(item.latest_message || item.representative_message || item.normalized_message || "")}</span></button></td>
+        <td class="incident-message"><button type="button" class="incident-detail" aria-controls="incident-detail-panel" data-index="${index}"><strong>${esc(item.error_code || "UNKNOWN_ERROR")}</strong><span class="recent-incident-badge hidden">최근 1분</span><span class="muted incident-preview">${esc(item.latest_message || item.representative_message || item.normalized_message || "")}</span></button></td>
         <td>${esc(item.occurrence_count)}</td><td>${esc(formatTime(item.last_seen))}</td>
       </tr>`
     ).join("") + "</tbody></table>"
     : (incidentsLoaded ? '<p class="muted">' + esc(filter.label) + ' 조건에 해당하는 장애가 없습니다.</p>' : "");
   $("incident-list").querySelectorAll(".incident-detail").forEach(button => button.addEventListener("click", () => {
+    manualSelectionVersion += 1;
+    autoSelectedIncidentId = null;
     const incident = items[Number(button.dataset.index)];
     loadIncidentDetails(incident, true);
   }));
+  $("incident-list").querySelectorAll("tbody tr").forEach((row, index) => row.dataset.lastSeen = items[index].last_seen || "");
+  refreshRecentIncidents();
 }
 function selectIncidentFilter(key) {
   if (!incidentFilters[key]) return;
+  manualSelectionVersion += 1;
+  autoSelectedIncidentId = null;
   if (selectedIncidentId && selectedIncidentFilter !== key) closeIncidentDetails();
   selectedIncidentFilter = key;
   document.querySelectorAll(".incident-stat").forEach(button => {
@@ -602,9 +638,17 @@ incidentTabs.forEach((button, index) => {
     selectIncidentFilter(incidentTabs[next].dataset.filter);
   });
 });
-async function loadIncidents() {
+function loadIncidents() {
+  if (!incidentLoadInFlight) {
+    incidentLoadInFlight = fetchIncidents().finally(() => { incidentLoadInFlight = null; });
+  }
+  return incidentLoadInFlight;
+}
+async function fetchIncidents() {
   try {
     const data = await getJSON("/api/v1/log-generator/incidents?minutes=10");
+    const serverTime = Date.parse(data.server_time);
+    if (Number.isFinite(serverTime)) incidentClockOffset = serverTime - Date.now();
     incidentItems = data.incidents || [];
     incidentsLoaded = true;
     Object.entries(incidentFilters).forEach(([key, filter]) => {
@@ -649,7 +693,8 @@ document.querySelectorAll(".log-tab").forEach((button) => {
     showLogSource(button.dataset.panel);
   });
 });
-schedulePoll(loadIncidents,15000);
+schedulePoll(loadIncidents, IS_CLIENT ? 5000 : 2000);
+schedulePoll(refreshRecentIncidents,1000);
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -683,6 +728,7 @@ function sleep(ms) {
 let currentSince = null;
 
 $("analyze").addEventListener("click", async () => {
+  closeIncidentDetails();
   $("analyze").disabled = true;
   $("analyze").textContent = "시나리오 실행 중…";
   setLogsVisible(true);
@@ -750,8 +796,8 @@ async function pollActivity() {
   }
 }
 
-// 클라이언트 화면은 로그 패널이 없으므로 상태 문구를 상단 카드에 쓴다.
-const statusEl = () => $(IS_CLIENT ? "client-status-text" : "wait-status");
+// Client synchronization messages live inside the incident list, without a separate card.
+const statusEl = () => $(IS_CLIENT ? "incident-sync-status" : "wait-status");
 
 async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
   if (!IS_CLIENT) {
@@ -784,9 +830,71 @@ async function waitForRecommendation(errorCode, since, isCurrent = () => true) {
 let clientRunPrefix = "";
 function setClientStatus(state) {
   if (IS_CLIENT && clientRunPrefix) {
-    $("client-status-text").textContent = `${clientRunPrefix} — ${state}`;
+    $("incident-sync-status").textContent = `${clientRunPrefix} — ${state}`;
   }
 }
+function syncClientRun() {
+  if (!clientSyncInFlight) {
+    clientSyncInFlight = fetchClientRun().finally(() => { clientSyncInFlight = null; });
+  }
+  return clientSyncInFlight;
+}
+async function fetchClientRun() {
+  const selectionVersion = manualSelectionVersion;
+  try {
+    const data = await getJSON("/api/v1/log-generator/latest-run");
+    if (clientSyncDelayed) {
+      if (data.status === "ready") setClientStatus("관리자 장애 동기화 연결 복구");
+      else $("incident-sync-status").textContent = "";
+      clientSyncDelayed = false;
+    }
+    if (data.status !== "ready") return;
+    const run = data.run;
+    const newRun = clientSyncedRun?.run_id !== run.run_id;
+    if (newRun) {
+      clientSyncedRun = run;
+      clientRunCaughtUp = false;
+      clientRunSelectionVersion = selectionVersion;
+      clientRunPrefix = run.label || run.error_code;
+      setClientStatus("관리자 시나리오 수신 — 장애 발생·분석 결과를 확인하는 중…");
+    }
+    if (run.phase === "failed") {
+      if (newRun || clientSyncedRun.phase !== "failed") await loadIncidents();
+      clientSyncedRun = run;
+      setClientStatus("시나리오 실행 실패 — 발생한 로그가 있으면 장애 목록에서 확인하세요.");
+      return;
+    }
+    clientSyncedRun = run;
+    const age = Date.now() + incidentClockOffset - Date.parse(run.triggered_at);
+    if (clientRunCaughtUp || age > 120000) return;
+    if (await loadIncidents() === false) return false;
+    const incident = incidentItems.find(item => item.error_code === run.error_code
+      && item.synthetic === true && Date.parse(item.last_seen) >= Date.parse(run.triggered_at));
+    if (!incident) return;
+    if (selectionVersion === manualSelectionVersion
+        && clientRunSelectionVersion === manualSelectionVersion
+        && (!selectedIncidentId || selectedIncidentId === autoSelectedIncidentId)
+        && incidentFilters[selectedIncidentFilter].matches(incident)) {
+      if (selectedIncidentId !== incident.incident_id) {
+        autoSelectedIncidentId = incident.incident_id;
+        await loadIncidentDetails(incident);
+      }
+    }
+    clientRunCaughtUp = run.phase === "completed" && Boolean(incident.latest_recommendation);
+  } catch (error) {
+    clientSyncDelayed = true;
+    $("incident-sync-status").textContent = "관리자 장애 동기화 지연 — 연결을 다시 확인하고 있습니다.";
+    return false;
+  }
+}
+if (IS_CLIENT) schedulePoll(syncClientRun,1000,5000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    refreshRecentIncidents();
+    loadIncidents();
+    if (IS_CLIENT) syncClientRun();
+  }
+});
 function renderRecommendation(errorCode, rec, decisions = []) {
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);

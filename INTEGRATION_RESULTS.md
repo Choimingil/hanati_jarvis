@@ -2,6 +2,14 @@
 
 대상: `mingil`, 기준 커밋 `4488ec6a19d8105d22e0f6ac0d56dbd9b125fa36` 이후 변경.
 
+## 관리자·클라이언트 동기화 및 최근 장애 강조
+
+- 관리자 시나리오 영역을 최상단으로 이동하고 클라이언트의 별도 장애 모니터링 영역을 제거했습니다.
+- 기존 클라이언트는 실행 정보를 조회하지 않았고 목록 조회 주기가 15초였습니다. 시나리오 시작 전에 Redis에 실행 정보를 게시하고 클라이언트가 1초마다 조회합니다. API 프로세스 간 상태를 공유하고, 늦게 완료한 이전 요청이 최신 실행을 덮어쓰지 않도록 원자적으로 갱신합니다. Fluent Bit의 전송·파일 발견 주기도 5초에서 1초로 줄였습니다.
+- 분석 전부터 장애 목록과 상세를 표시하고 분석 결과가 도착하면 갱신합니다. 반복 시나리오의 기존 추천 재사용, 수동 선택·닫기·입력 보존, 중복 목록 조회 병합과 연결 복구를 검증했습니다.
+- 최근 발생 시각이 1분 이내인 항목은 목록·상세에 빨간 테두리와 표시를 적용합니다. 서버 시각 보정, 59.999초·60초 경계, 잘못된 시각·미래 시각, 조회 없이 강조 해제를 검증했습니다.
+- 전체 단위·계약 검사: 103개 중 102개 통과, Docker CLI 필요 검사 1개 생략. 별도 API 인스턴스의 시작·완료 공유, 10분 만료, 동시 실행·실패 경로는 fakeredis의 실제 Lua 실행으로 검증했습니다. UI 검사는 jsdom·모의 API이며 실제 배포 브라우저 및 컨테이너 간 표시 지연은 미측정입니다.
+
 ## 기본 기동 후 장애 자동 발생 원인 및 수정
 
 - 기본 Compose가 `log_generator/main.py`를 실행하고, 해당 프로그램은 매 반복에서 확률 0.1로 무작위 시나리오를 내보내고 있었습니다. `web01 / order-api`의 DNS·Redis·디스크 오류 등은 이 경로에서 만들어지는 모의 로그이며, 화면에 이런 장애가 보이는 것만으로 실제 Redis·Qdrant 등의 연결 실패라고 판단할 수 없습니다. 기본 모드를 `manual`로 바꾸어 공유 파일만 준비하고 대기하도록 수정했습니다. 관리자 화면의 한 번 실행은 유지하며, `random`은 명시적으로 설정해야 실행됩니다.
@@ -48,6 +56,7 @@
 ```sh
 git pull origin mingil
 docker compose up -d --build
+docker compose restart fluent-bit
 docker compose --profile verification run --rm deployment-check
 docker compose --profile verification run --rm deployment-check python -m operations.integration_check --wait-seconds 20
 ```

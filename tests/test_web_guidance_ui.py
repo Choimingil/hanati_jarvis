@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+import fakeredis
 from flask import Flask
 
 from routes.log_generator_routes import _es_since, log_generator_blueprint
@@ -92,6 +93,10 @@ class GuidanceWebTest(unittest.TestCase):
 
         with (
             patch(
+                "routes.log_generator_routes.redis_client",
+                return_value=fakeredis.FakeRedis(decode_responses=True),
+            ),
+            patch(
                 "routes.log_generator_routes.now_iso",
                 return_value=triggered_at,
             ),
@@ -104,16 +109,14 @@ class GuidanceWebTest(unittest.TestCase):
                 "/api/v1/log-generator/run",
                 json={"scenario": "disk_full"},
             )
-
-        self.assertEqual(response.status_code, 200)
-
-        clients = [self.app.test_client() for _ in range(3)]
-        latest_runs = [
-            client.get(
-                "/api/v1/log-generator/latest-run"
-            ).get_json()
-            for client in clients
-        ]
+            self.assertEqual(response.status_code, 200)
+            clients = [self.app.test_client() for _ in range(3)]
+            latest_runs = [
+                client.get(
+                    "/api/v1/log-generator/latest-run"
+                ).get_json()
+                for client in clients
+            ]
 
         self.assertTrue(all(item == latest_runs[0] for item in latest_runs))
         self.assertEqual(latest_runs[0]["status"], "ready")
