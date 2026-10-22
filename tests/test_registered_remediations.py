@@ -60,7 +60,7 @@ class RegisteredScriptTests(unittest.TestCase):
                 result = backend.perform({"script_id": script_id, "kind": item["kind"]})
                 self.assertEqual(result["status"], "success")
                 if item["kind"] == "remediation":
-                    self.assertIn("[" + script_id + "]", result["stdout"])
+                    self.assertIn("component=" + script_id, result["stdout"])
                 else:
                     self.assertIn("TEST_", result["stdout"])
                 self.assertEqual(result["execution_mode"], "simulation")
@@ -78,7 +78,7 @@ class RegisteredScriptTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200, result)
                 self.assertEqual(result["execution_mode"], "simulation")
                 self.assertIn(rec["actions"][0]["script_id"], result["stdout"])
-                self.assertEqual(self.repo.incidents[incident["incident_id"]]["status"], "MONITORING")
+                self.assertEqual(self.repo.incidents[incident["incident_id"]]["status"], "RESOLVED")
                 receipt = self.api.post("/api/v1/remediations/approve", json=body).get_json()
                 self.assertTrue(receipt["duplicate"])
                 verified = self.api.post("/api/v1/remediations/verify", json={"execution_id": result["execution_id"]}).get_json()
@@ -88,6 +88,38 @@ class RegisteredScriptTests(unittest.TestCase):
                 supported += 1
         self.assertEqual(supported, 19)
         self.transport.request.assert_not_called()
+
+    def test_sequential_scenarios_and_recurrence_do_not_wait_for_manual_verification(self):
+        legacy_key = "jarvis:host:" + hashlib.sha256(b"web01").hexdigest()
+        self.redis.set(legacy_key, "EXEC-existing-host-operation")
+        for code in ("DISK_FULL", "MEMORY_LEAK", "DNS_RESOLUTION_FAILURE", "DISK_FULL"):
+            incident, rec = self.incident(code)
+            response = self.api.post("/api/v1/remediations/approve", json=self.approval(incident, rec))
+            self.assertEqual(response.status_code, 200, response.get_json())
+            self.assertEqual(self.repo.incidents[incident["incident_id"]]["status"], "RESOLVED")
+            self.assertIsNone(self.redis.get(self.manager.host_lock_key(rec["targets"][0])))
+        self.assertEqual(self.redis.get(legacy_key), "EXEC-existing-host-operation")
+
+    def test_unknown_registered_execution_still_blocks_a_second_scenario(self):
+        incident, rec = self.incident("DISK_FULL")
+        with patch.object(ScenarioScriptBackend, "perform", return_value={"status": "unknown", "execution_mode": "simulation"}) as perform:
+            first = self.api.post("/api/v1/remediations/approve", json=self.approval(incident, rec))
+            self.assertEqual(first.get_json()["status"], "unknown")
+            other_incident, other_rec = self.incident("DNS_RESOLUTION_FAILURE")
+            blocked = self.api.post("/api/v1/remediations/approve", json=self.approval(other_incident, other_rec))
+            self.assertEqual(blocked.status_code, 409)
+            self.assertIn("host is executing", blocked.get_json()["reason"])
+            self.assertEqual(perform.call_count, 1)
+
+    def test_legacy_successful_scenario_waiting_for_verification_reopens(self):
+        incident, rec = self.incident("DISK_FULL")
+        stored = self.repo.incidents[incident["incident_id"]]
+        stored.update(status="MONITORING", recovery_confirmation="pending_execution",
+                      last_execution={"status": "success", "target": rec["targets"][0]})
+        reopened = self.service.start({"host": "web01", "service": "order-api", "environment": "simulation",
+                                       "synthetic": True, "message": "DISK_FULL"}, "DISK_FULL")
+        self.assertEqual(reopened["status"], "REOPENED")
+        self.assertFalse(reopened["analysis_suppressed"])
 
     def test_rate_limit_without_script_offers_manual_registration(self):
         incident, rec = self.incident("RATE_LIMIT_EXCEEDED")
@@ -130,7 +162,7 @@ class RegisteredScriptTests(unittest.TestCase):
             executed = self.api.post("/api/v1/remediations/approve", json=self.approval(incident, rec)).get_json()
             self.assertEqual(executed["status"], "success")
             pending = observer.get(path).get_json()
-            self.assertEqual(pending["processing"]["state"], "action_completed")
+            self.assertEqual(pending["processing"]["state"], "completed")
             self.assertEqual(pending["execution"]["execution_id"], executed["execution_id"])
             verified = observer.post("/api/v1/remediations/verify", json={"execution_id": executed["execution_id"]}).get_json()
             self.assertTrue(verified["recovered"])

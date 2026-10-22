@@ -51,3 +51,10 @@ docker compose --profile verification run --rm deployment-check python -m operat
 관리자→클라이언트 동기화 검증: `tests/test_scenario_sync.py`는 시나리오 생성 전 Redis 게시, 별도 API 인스턴스의 실행 정보 조회, 10분 만료, 동시 실행의 오래된 완료 응답 방지, 생성 실패 공유와 Redis 장애 처리를 검사합니다. Admin·Client는 jsdom과 모의 API로 최상단 시나리오 배치·모니터링 영역 제거, 1초 실행 정보 조회, 분석 전 장애 표시·분석 완료 갱신·반복 실행, 사용자 선택·닫기 유지, 중복 조회 병합, 연결 복구, 서버 시계 차이 및 1분 경계의 강조 해제를 확인했습니다.
 
 2026-10-10 변경 검증: `tests/test_generator_startup.py`는 기본 기동 시 로그·오류 미생성, 명시적 random 모드, 수동 시나리오 전달과 simulation 표시, 반복 장애의 최신 내용·출처 보존, 분석과 독립적인 Worker heartbeat 갱신 및 Redis 오류 후 재개를 검사합니다. `tests/test_incident_detail.py`는 기본 10분 조회, 분석 전 상세 조회, 장애 ID에 연결된 최근 로그 조회와 ES HTTP 직렬화, 민감 정보 마스킹, 부분 조회 실패와 404/503 구분을 검사합니다. Compose 계약은 Collector·Fluent Bit의 API readiness 대기 및 manual 기본 모드를 확인합니다. Docker CLI가 없으면 실제 Compose config 검사는 건너뛰며, 코드·모의 검사를 실제 컨테이너 연동 성공으로 간주하지 않습니다.
+
+
+## 시나리오 승인·조치 연속 실행 회귀 검증
+
+`tests/test_scenario_approval_flow.py`는 기본 20개 시나리오를 실제 JSON 로그로 발생시켜 오류 감지·분석·추천·승인 API를 연결합니다. 대응 스크립트가 있는 19종의 모든 조치 후보 38개는 실제 등록 셸 파일을 실행하며, 별도 수동 확인 없이 자동 완료·예약 해제 및 같은 요청의 중복 실행 방지를 확인합니다. 대응 스크립트가 없는 레이트 리밋 오류와 동적으로 생성한 신규 오류는 수동 복구 등록·파일 첨부·학습 후 재발 시 승인 경로를 검증합니다. 첨부 실행 Backend는 이 테스트에서 대체하며 원본 파일과 선택된 파일의 일치를 확인합니다.
+
+`tests/test_registered_remediations.py`는 기존 호스트 예약을 보존하면서 서로 다른 시나리오와 재발 시나리오를 연속 승인하고, 이전 버전의 정상 종료 후 확인 대기 상태가 재발 시 다시 분석되는지 확인합니다. 결과가 불명확한 실행은 다음 시나리오를 차단하는지도 검증합니다. 화면 테스트는 Admin·Client에서 진단 요청·새로고침 버튼 제거와 자동 갱신 유지 여부를 확인합니다.
