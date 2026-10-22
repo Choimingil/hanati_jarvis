@@ -40,7 +40,7 @@ async function mount(mode, s) {
       w.fetch=async (url,options={})=>{
         let body, ok=true;
         if (!options.body) assert.equal(options.cache,'no-store');
-        if (options.body) s.posts.push({url,body:JSON.parse(options.body)});
+        if (options.body) s.posts.push({url,body:JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body), file:options.body instanceof w.FormData ? options.body.get('script')?.name : null});
         s.reads.push(url);
         if (url==='/api/v1/operations/status') body={status:'ready',components:{},hosts:[]};
         else if(url==='/api/v1/log-generator/scenarios') body=[];
@@ -58,7 +58,7 @@ async function mount(mode, s) {
           body=JSON.parse(JSON.stringify(body));
           if(controls.holdDetail) await controls.holdDetail;
         } else if(url==='/api/v1/remediations/approve') {
-          const input=JSON.parse(options.body);
+          const input=JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body);
           body={execution_id:'EXEC-SHARED',status:'success',returncode:0,stdout:'restarted'};
           s.execution={...input,execution_id:body.execution_id,script_id:'restart_application',result:body};
           s.incident={...s.incident,status:'MONITORING',version:3,recovery_confirmation:'pending_execution',last_execution:s.execution};
@@ -66,7 +66,7 @@ async function mount(mode, s) {
           s.incident={...s.incident,status:'RESOLVED',version:4,recovery_confirmation:'business_probe',recovered_at:'2026-10-09T15:15:13Z'};
           body={recovered:true,incident:s.incident,processing:processing(s)};
         } else if(url==='/api/v1/remediations/manual') {
-          const input=JSON.parse(options.body);
+          const input=JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body);
           s.incident={...s.incident,status:'RESOLVED',version:s.incident.version+1,recovery_confirmation:'operator_report',
             recovered_at:'2026-10-09T15:15:13Z',manual_actions:[{...input,registered_at:'2026-10-09T15:15:13Z'}]};
           body={incident:s.incident,status:'registered'};
@@ -152,5 +152,29 @@ function completed(m) {
   view.w.document.dispatchEvent(new view.w.Event('visibilitychange'));await settle();
   assert.equal(element(view.w,'incident-processing').classList.contains('hidden'),true);
   assert.deepEqual(view.errors,[]);view.dom.window.close();
+  // Script-less results hide resource guidance and send the actual attachment as multipart.
+  const attachmentServer=server();
+  attachmentServer.incident.error_code='CONFIGURATION_MISMATCH';
+  attachmentServer.incident.latest_recommendation={...attachmentServer.incident.latest_recommendation,
+    status:'manual_required',runbooks:[],actions:[],targets:[]};
+  const attachmentUi=await mount('admin',attachmentServer); await open(attachmentUi);
+  assert.equal(element(attachmentUi.w,'guidance-result').classList.contains('hidden'),true);
+  assert.equal(element(attachmentUi.w,'result').classList.contains('hidden'),true);
+  assert.equal(element(attachmentUi.w,'manual-form').classList.contains('hidden'),false);
+  const file=new attachmentUi.w.File(['#!/bin/bash\necho fixed\n'],'restore.sh',{type:'text/x-shellscript'});
+  Object.defineProperty(element(attachmentUi.w,'manual-script'),'files',{value:[file],configurable:true});
+  for(const [id,value] of [['manual-method','설정 복원'],['manual-operator','tester']]) {
+    element(attachmentUi.w,id).value=value;
+    element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
+  }
+  for(const id of ['manual-performed','manual-recovered']) {
+    element(attachmentUi.w,id).checked=true;
+    element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
+  }
+  element(attachmentUi.w,'manual-form').dispatchEvent(new attachmentUi.w.Event('submit',{cancelable:true})); await settle();
+  assert.equal(attachmentServer.posts.at(-1).file,'restore.sh');
+  assert.equal(attachmentServer.posts.at(-1).body.method,'설정 복원');
+  assert.equal(attachmentUi.errors.length,0);
+  attachmentUi.dom.window.close();
   console.log('Passed: four session pairs, scenario result tracking, execution/recovery sync, expired/failed/stale list, manual history, close, delayed read, coalescing, tab return and no-store reads.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

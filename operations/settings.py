@@ -59,11 +59,25 @@ def bind_recommendation(incident, recommendation):
             if not any(item.get("script_id") == script_id for item in action_items):
                 action_items.append({"action_id": "SCRIPT-" + script_id, "script_id": script_id})
         recommendation.update(runbooks=runbooks, actions=action_items)
+    from operations.learned_scripts import ScriptLibrary, targets_for as learned_targets, metadata
+
+    learned = ScriptLibrary().latest(incident)
+    if learned:
+        runbooks = [item for item in recommendation.get("runbooks", []) if not str(item.get("script_id", "")).startswith("LEARNED-")]
+        runbooks.append({"script_id": learned["script_id"], "learned_script": True,
+            "incident": incident.get("error_code"), "estimated_cause": "동일 오류의 운영자 복구 확인 이력",
+            "action": "학습된 첨부 스크립트: " + learned["filename"], "confidence": 0,
+            "expected_impact": "격리된 테스트 컨테이너에서 실행", "rollback": "테스트 컨테이너 삭제",
+            "attachment": metadata(learned)})
+        items = [item for item in recommendation.get("actions", []) if not str(item.get("script_id", "")).startswith("LEARNED-")]
+        items.append({"action_id": learned["script_id"], "script_id": learned["script_id"],
+                      "learned_script": True, "attachment": metadata(learned)})
+        recommendation.update(runbooks=runbooks, actions=items, status="learned_script")
     actions, targets = [], []
     for action in recommendation.get("actions", []):
         script_id = action.get("script_id")
-        bound = targets_for_script(incident, script_id)
-        if not (incident.get("synthetic") is True and incident.get("environment") == "simulation"):
+        bound = learned_targets(incident, script_id) if action.get("learned_script") else targets_for_script(incident, script_id)
+        if not action.get("learned_script") and not (incident.get("synthetic") is True and incident.get("environment") == "simulation"):
             bound = [
                 target_identity(entry) for entry in registry()
                 if entry.get("host") in incident.get("affected_hosts", [])
@@ -75,6 +89,10 @@ def bind_recommendation(incident, recommendation):
         for target in bound:
             if target not in targets:
                 targets.append(target)
+    if (incident.get("synthetic") is True and incident.get("error_code") in ERROR_RULES
+        and not ERROR_RULES[incident["error_code"]].get("remediation_candidates") and not learned):
+        recommendation.update(status="manual_required", runbooks=[], actions=[], targets=[],
+            summary="등록된 조치 스크립트가 없습니다. 수동 조치 후 스크립트를 첨부해 등록하세요.")
     return {**recommendation, "actions": actions, "targets": targets}
 
 

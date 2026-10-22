@@ -44,6 +44,14 @@ class AgentRuntime:
             raise ValueError("action not enabled in host manifest")
         if body.get("kind") != action.get("kind"):
             raise ValueError("action kind mismatch")
+        if action.get("operation") == "learned_script":
+            from operations.learned_scripts import ScriptLibrary, is_learned_target
+            if self.manifest.get("scope") != "simulation" or not is_learned_target(self.identity()):
+                raise ValueError("learned scripts require a simulation target")
+            script = ScriptLibrary().get(body["script_id"], active=True)
+            if script["sha256"] != action.get("sha256"):
+                raise ValueError("learned script integrity check failed")
+            return action
         if action.get("operation") == "scenario_script":
             from operations.scenario_scripts import is_scenario_target, script_path
 
@@ -99,7 +107,17 @@ class AgentRuntime:
             row = db.execute(
                 "SELECT result FROM executions WHERE id=?", (execution_id,)
             ).fetchone()
-        return json.loads(row[0]) if row else None
+        result = json.loads(row[0]) if row else None
+        if (result and result.get("status") in {"running", "unknown"}
+            and str(result.get("script_id", "")).startswith("LEARNED-")):
+            completed = self.backend.result(execution_id)
+            if completed:
+                result.update(completed, finished_at=time.time())
+                with self.connect() as db:
+                    db.execute("UPDATE executions SET result=? WHERE id=?", (json.dumps(result), execution_id))
+                    if result["status"] in {"success", "failed", "blocked", "timeout"}:
+                        db.execute("DELETE FROM active WHERE execution_id=?", (execution_id,))
+        return result
 
     def execute(self, body):
         # Look up the original receipt before validating a newly deployed policy.
@@ -155,7 +173,7 @@ class AgentRuntime:
             else:
                 before = self.backend.snapshot(action)
                 result.update(
-                    self.backend.perform(action), prechecks=checks, before=before
+                    self.backend.perform({**action, "execution_id": execution_id}), prechecks=checks, before=before
                 )
                 if result["status"] != "success" and action["kind"] == "remediation":
                     result["rollback_result"] = self.backend.rollback(action, before)
@@ -191,7 +209,7 @@ class AgentRuntime:
             raise ValueError("policy changed since execution")
         samples = []
         for index in range(2):
-            if index and action.get("operation") != "scenario_script":
+            if index and action.get("operation") not in {"scenario_script", "learned_script"}:
                 time.sleep(
                     min(
                         30,
@@ -213,7 +231,7 @@ class AgentRuntime:
             }
             for c in samples[0]
         ]
-        simulation = action.get("operation") == "scenario_script"
+        simulation = action.get("operation") in {"scenario_script", "learned_script"}
         return {
             "execution_id": body["execution_id"],
             "target": self.identity(),

@@ -19,7 +19,22 @@ def register_manual_remediation():
     from aiops.manual_remediation_service import ManualRemediationService
 
     try:
-        result = ManualRemediationService(repository).submit(request.get_json(silent=True))
+        attachment = None
+        if request.mimetype == "multipart/form-data":
+            from operations.learned_scripts import MAX_SCRIPT_BYTES
+            # Bound the whole request before accessing Flask's multipart parser.
+            if request.content_length is None or request.content_length > MAX_SCRIPT_BYTES + 32768:
+                return jsonify(status="blocked", reason="attachment request too large"), 413
+            body = json.loads(request.form.get("metadata", "null"))
+            uploads = request.files.getlist("script")
+            if len(uploads) > 1:
+                raise ValueError("attach only one script")
+            if uploads:
+                upload = uploads[0]
+                attachment = (upload.filename, upload.stream.read(MAX_SCRIPT_BYTES + 1))
+        else:
+            body = request.get_json(silent=True)
+        result = ManualRemediationService(repository).submit(body, attachment=attachment)
         return jsonify(redact(result)), 200 if result["duplicate"] else 201
     except LookupError as exc:
         return jsonify(status="not_found", reason=str(exc)), 404
@@ -104,9 +119,14 @@ def _validate_action_request(body):
     )
     code = incident.get("error_code")
     rule = ERROR_RULES.get(code, {})
-    if not action or action.get("script_id") not in rule.get(
+    learned = False
+    if action and str(action.get("script_id", "")).startswith("LEARNED-"):
+        from operations.learned_scripts import ScriptLibrary
+        ScriptLibrary().get(action["script_id"], incident, active=True)
+        learned = True
+    if not action or (not learned and action.get("script_id") not in rule.get(
         "remediation_candidates", []
-    ):
+    )):
         raise ValueError("action not allowed for incident")
     return {
         "incident": incident,
@@ -125,6 +145,23 @@ def _error(exc):
         reason="dependency unavailable; inspect service status",
         error=type(exc).__name__,
     ), 503
+
+
+@remediation_blueprint.get("/api/v1/remediations/scripts/<script_id>")
+def download_learned_script(script_id):
+    from io import BytesIO
+    from flask import send_file
+    from operations.learned_scripts import ScriptLibrary
+
+    try:
+        incident = repository.get_operational_incident(request.args.get("incident_id", ""))
+        if not incident:
+            return jsonify(status="not_found"), 404
+        script = ScriptLibrary().get(script_id, incident)
+        return send_file(BytesIO(script["content"]), mimetype="application/octet-stream",
+                         as_attachment=True, download_name=script["filename"])
+    except Exception as exc:
+        return _error(exc)
 
 
 @remediation_blueprint.post("/api/v1/remediations/preflight")

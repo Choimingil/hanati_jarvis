@@ -48,8 +48,10 @@ class ExecutionCoordinator:
     def call(self, target, path, body=None):
         from operations.scenario_scripts import is_scenario_target, runtime_for
 
-        if is_scenario_target(target):
-            runtime = runtime_for(target)
+        from operations.learned_scripts import is_learned_target, runtime_for as learned_runtime
+
+        if is_scenario_target(target) or is_learned_target(target):
+            runtime = learned_runtime(target) if is_learned_target(target) else runtime_for(target)
             if path == "/identity":
                 return {"target": runtime.identity(), "policy_digest": runtime.digest}
             if path == "/preflight":
@@ -144,7 +146,8 @@ class ExecutionCoordinator:
         if proof["target"] not in action_targets:
             raise ValueError("target no longer bound to recommendation")
         from operations.scenario_scripts import is_scenario_target
-        if not is_scenario_target(proof["target"]):
+        from operations.learned_scripts import is_learned_target
+        if not is_scenario_target(proof["target"]) and not is_learned_target(proof["target"]):
             self.entry(proof["target"])
         return proof
 

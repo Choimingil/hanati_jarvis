@@ -344,11 +344,12 @@ _PAGE = """<!doctype html>
 
   <div id="manual-remediation" class="card hidden">
     <strong>수동 조치 등록</strong>
-    <p id="manual-flow" class="muted">수동으로 별도 조치 → 서비스에 조치 방법 기입 → 등록</p>
+    <p id="manual-flow" class="muted">수동 조치 → 조치 방법과 스크립트 첨부 → 복구 확인 후 학습</p>
     <p id="manual-target" class="muted"></p>
     <form id="manual-form" class="feedback-grid hidden">
       <div class="check-row full"><input id="manual-performed" type="checkbox" required><label for="manual-performed" style="margin:0">서비스 밖에서 수동 조치를 수행했습니다.</label></div>
       <div class="full"><label for="manual-method">수행한 조치 방법</label><textarea id="manual-method" required maxlength="8000" placeholder="어떤 단위시스템에서 무엇을 확인하고 어떻게 조치했는지 입력하세요."></textarea></div>
+      <div class="full"><label for="manual-script">재사용할 조치 스크립트 첨부 (.sh, UTF-8, 최대 64KB)</label><input id="manual-script" type="file" accept=".sh"><p class="muted">복구 확인 후 같은 오류·서비스·환경에 연결해 학습합니다. 재발 시 파일을 불러와 승인 후 격리된 테스트 컨테이너에서 실행합니다.</p></div>
       <div><label for="manual-operator">조치 운영자</label><input id="manual-operator" required maxlength="200" value="web-ui"></div>
       <div class="check-row"><input id="manual-recovered" type="checkbox"><label for="manual-recovered" style="margin:0">운영자가 서비스 복구를 확인했습니다.</label></div>
       <div class="full"><p class="muted">복구 확인을 체크하면 운영자 확인으로 해결 처리됩니다. 미체크 시 복구 확인중으로 기록됩니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
@@ -628,6 +629,7 @@ function renderManualRemediation(incident, available) {
   if (changed) {
     manualRegistrationId = newManualRegistrationId();
     $("manual-method").value = "";
+    $("manual-script").value = "";
     $("manual-performed").checked = false;
     $("manual-recovered").checked = false;
     $("manual-register-status").textContent = "";
@@ -635,16 +637,16 @@ function renderManualRemediation(incident, available) {
   const history = incident.manual_actions || [];
   $("manual-remediation").classList.toggle("hidden", !available && !history.length);
   $("manual-form").classList.toggle("hidden", !available);
-  $("manual-flow").textContent = available ? "자동 실행 대상이 없습니다. 수동으로 별도 조치 → 서비스에 조치 방법 기입 → 등록 순서로 진행하세요." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
+  $("manual-flow").textContent = available ? "수동 조치 후 방법과 스크립트를 등록하세요. 복구를 확인하면 같은 오류 재발 시 첨부 파일을 조치로 불러옵니다." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
   $("manual-target").textContent = [environmentLabel(incident.environment), incident.service, ...(incident.affected_hosts || [])].join(" / ");
   $("manual-history").innerHTML = history.length
     ? '<strong>등록된 수동 조치 이력</strong>' + history.slice().reverse().map(item =>
       '<details><summary>' + esc(formatDateTime(item.registered_at)) + ' · ' + esc(item.operator)
-      + ' · ' + (item.recovered ? '운영자 복구 확인' : '복구 확인 대기') + '</summary><pre>' + esc(item.method) + '</pre></details>'
+      + ' · ' + (item.recovered ? '운영자 복구 확인' : '복구 확인 대기') + '</summary><pre>' + esc(item.method) + '</pre>' + (item.attachment ? '<a href="/api/v1/remediations/scripts/' + encodeURIComponent(item.attachment.script_id) + '?incident_id=' + encodeURIComponent(incident.incident_id) + '">첨부 스크립트: ' + esc(item.attachment.filename) + '</a>' : '') + '</details>'
     ).join("") : "";
   updateManualRegisterButton();
 }
-["manual-method", "manual-operator", "manual-performed", "manual-recovered"].forEach(id => $(id).addEventListener("input", () => {
+["manual-method", "manual-script", "manual-operator", "manual-performed", "manual-recovered"].forEach(id => $(id).addEventListener("input", () => {
   manualRegistrationId = newManualRegistrationId();
   $("manual-register-status").textContent = "";
   updateManualRegisterButton();
@@ -658,17 +660,28 @@ $("manual-form").addEventListener("submit", async event => {
   $("manual-register-status").className = "status-pending";
   $("manual-register-status").textContent = "등록 중…";
   try {
-    const {ok, data} = await postJSON("/api/v1/remediations/manual", {
+    const upload = $("manual-script").files[0];
+    if (upload && (upload.size > 65536 || !upload.name.endsWith(".sh") || upload.name.length > 128)) {
+      throw new Error(".sh 파일(최대 64KB, 파일명 최대 128자)을 첨부하세요.");
+    }
+    const metadata = {
       incident_id: incident.incident_id, incident_version: incident.version,
       registration_id: manualRegistrationId, operator: $("manual-operator").value.trim(),
       method: $("manual-method").value.trim(), performed: $("manual-performed").checked,
       recovered: $("manual-recovered").checked,
-    });
+    };
+    const form = new FormData();
+    form.append("metadata", JSON.stringify(metadata));
+    if (upload) form.append("script", upload);
+    const response = await fetch("/api/v1/remediations/manual", {method: "POST", body: form});
+    const data = await response.json();
+    const ok = response.ok;
     if (currentManualIncident?.incident_id === incident.incident_id) {
       $("manual-register-status").className = ok ? "status-ok" : "status-err";
-      $("manual-register-status").textContent = ok ? "조치 방법이 등록되었습니다." : (data.reason === "incident changed; reload details before registering" ? "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요." : "등록 실패: " + (data.reason || data.status));
+      $("manual-register-status").textContent = ok ? "조치가 등록되었습니다. 복구 확인된 첨부 스크립트는 같은 오류에 재사용됩니다." : (data.reason === "incident changed; reload details before registering" ? "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요." : "등록 실패: " + (data.reason || data.status));
       if (ok && !isOlderIncident(data.incident)) {
         $("manual-method").value = "";
+        $("manual-script").value = "";
         $("manual-performed").checked = false;
         $("manual-recovered").checked = false;
         manualRegistrationId = newManualRegistrationId();
@@ -680,7 +693,7 @@ $("manual-form").addEventListener("submit", async event => {
   } catch (error) {
     if (currentManualIncident?.incident_id === incident.incident_id) {
       $("manual-register-status").className = "status-err";
-      $("manual-register-status").textContent = "등록 응답을 받지 못했습니다. 다시 등록하면 같은 요청의 중복 저장을 방지합니다.";
+      $("manual-register-status").textContent = error.message || "등록 응답을 받지 못했습니다. 같은 요청으로 다시 등록하세요.";
     }
   } finally {
     manualRegisterPending = false;
@@ -1120,6 +1133,15 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 function renderRecommendation(errorCode, rec, decisions = [], processing = null) {
+  $("guidance-result").classList.add("hidden");
+  currentGuidance = null;
+  if (rec?.status === "manual_required") {
+    currentErrorCode = errorCode;
+    currentRecommendation = rec;
+    $("result").classList.add("hidden");
+    setClientStatus("수동 조치 및 스크립트 등록 필요");
+    return;
+  }
   if (rec && rec.status === "resource_guidance") {
     renderResourceGuidance(rec);
     setClientStatus("분석 완료");
@@ -1146,7 +1168,7 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
       <dl>
         <dt>장애</dt><dd>${esc(rb.incident)}</dd>
         <dt>추정 원인</dt><dd>${esc(rb.estimated_cause)}</dd>
-        <dt>신뢰도</dt><dd>${rb.registered_script ? "기존 등록 스크립트 · 평가 없음" : pct + "%"}
+        <dt>신뢰도</dt><dd>${rb.learned_script ? "운영자 복구 확인 후 등록된 첨부 스크립트" : rb.registered_script ? "기존 등록 스크립트 · 평가 없음" : pct + "%"}
           <div class="confidence-bar"><span style="width:${pct}%"></span></div>
         </dd>
         <dt>조치</dt><dd>${esc(rb.action)}</dd>
@@ -1171,6 +1193,13 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
     if (action) el.dataset.actionId = action.action_id;
     el.action = action;
     el.actionable = !["completed", "action_completed"].includes(processing?.state);
+    if (action?.learned_script) {
+      el.querySelector(".runbook-tag").textContent = "학습된 첨부 스크립트";
+      const link = document.createElement("a");
+      link.href = "/api/v1/remediations/scripts/" + encodeURIComponent(action.script_id) + "?incident_id=" + encodeURIComponent(rec.incident_id);
+      link.textContent = "첨부 파일 확인: " + action.attachment.filename;
+      el.querySelector("dl").after(link);
+    }
     if (action?.execution_mode === "simulation") {
       el.querySelector(".runbook-tag").textContent = "등록 스크립트 실행";
       const note = document.createElement("p");
