@@ -38,21 +38,27 @@ _PAGE = """<!doctype html>
 <title>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</title>
 <style>
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --fg: #1c2333; --muted: #5b6472;
-    --border: #e3e6eb; --accent: #3b6cf0; --accent-fg: #fff;
-    --bar: #e7ecfb; --ok: #17915a; --err: #d1364a; --code-bg: #0f1524;
-    --code-fg: #d8e0f0;
+    /* Hana Group GIS: Hana Green RGB 0/145/120, Hana Red RGB 220/35/30.
+       Source: https://www.hanatrust.com/ko/company/hanatrust */
+    --hana-green: #009178; --hana-red: #dc231e;
+    --bg: #f3f8f6; --card: #ffffff; --fg: #17352d; --muted: #596f67;
+    --border: #d5e5de; --accent: #007963; --accent-fg: #ffffff;
+    --bar: #e5f3ed; --ok: #008257; --err: var(--hana-red); --warning: #895a16;
+    --danger-wash: rgba(220,35,30,.07); --code-bg: #102720; --code-fg: #d9eee5;
+    --card-shadow: 0 4px 20px rgba(0,72,54,.04);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0e1117; --card: #171b22; --fg: #e6e9ef; --muted: #9aa4b2;
-      --border: #262c36; --accent: #4d7cf6; --bar: #22304f;
-      --code-bg: #0a0e16; --code-fg: #cdd6e6;
+      --bg: #0d1b17; --card: #152922; --fg: #eaf5ef; --muted: #a6bfb3;
+      --border: #304b40; --accent: #69d4b8; --accent-fg: #092c22; --bar: #203d30;
+      --ok: #72d9a5; --err: #ff938a; --warning: #e8bd78;
+      --danger-wash: rgba(255,147,138,.09); --code-bg: #091811; --code-fg: #d0e9dc;
+      --card-shadow: 0 4px 20px rgba(0,0,0,.12);
     }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; background: var(--bg); color: var(--fg);
+    margin: 0; border-top: 4px solid var(--hana-green); background: var(--bg); color: var(--fg);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
   }
@@ -61,7 +67,7 @@ _PAGE = """<!doctype html>
   .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
   .card {
     background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 20px; margin-bottom: 18px;
+    border-radius: 12px; padding: 20px; margin-bottom: 18px; box-shadow: var(--card-shadow);
   }
   label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
   select, button {
@@ -88,6 +94,11 @@ _PAGE = """<!doctype html>
     background: transparent; color: var(--accent);
     border: 1px solid var(--accent);
   }
+  button:not(:disabled):hover { filter: brightness(.95); }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px;
+  }
+  input[type="checkbox"] { accent-color: var(--accent); }
   button:disabled { opacity: .55; cursor: default; }
   .hidden { display: none; }
   .incident-processing { border-left: 4px solid var(--accent); padding: 12px 16px; margin: 12px 0; background: var(--bar); border-radius: 8px; }
@@ -148,8 +159,8 @@ _PAGE = """<!doctype html>
   @keyframes fadein { to { opacity: 1; } }
   .sub-label { font-size: 12px; color: var(--muted); margin: 10px 0 0; font-weight: 600; }
   .sub-label:first-child { margin-top: 0; }
-  pre.src-qdrant { color: #8ab4f8; }
-  pre.src-elasticsearch { color: #7fe0c4; }
+  pre.src-qdrant { color: #a5dbcb; }
+  pre.src-elasticsearch { color: #7ce1b4; }
   .status-ok { color: var(--ok); font-weight: 700; }
   .status-err { color: var(--err); font-weight: 700; }
   .status-pending { color: var(--muted); font-weight: 600; }
@@ -166,25 +177,25 @@ _PAGE = """<!doctype html>
   .card.collapsed .panel-body { display: none; }
   .card.collapsed .panel-toggle .chev { transform: rotate(-90deg); }
   .guidance-summary {
-    border-left: 3px solid #e59b22; padding: 5px 0 5px 14px;
+    border-left: 3px solid var(--warning); padding: 5px 0 5px 14px;
     margin: 8px 0 16px;
   }
   .hypothesis {
     border: 1px solid var(--border); border-radius: 10px;
     padding: 16px; margin-top: 12px;
   }
-  .hypothesis.primary { border-color: #e59b22; }
+  .hypothesis.primary { border-color: var(--warning); }
   .hypothesis-head {
     display: flex; justify-content: space-between; gap: 12px;
     align-items: center; margin-bottom: 10px;
   }
   .hypothesis-title { font-weight: 700; }
-  .confidence { color: #e59b22; font-weight: 700; white-space: nowrap; }
+  .confidence { color: var(--warning); font-weight: 700; white-space: nowrap; }
   .confidence-track {
     height: 6px; border-radius: 999px; background: var(--bar);
     overflow: hidden; margin: 8px 0 12px;
   }
-  .confidence-fill { height: 100%; background: #e59b22; }
+  .confidence-fill { height: 100%; background: var(--warning); }
   .guidance-list { margin: 6px 0 0; padding-left: 21px; font-size: 14px; }
   .guidance-list li { margin: 4px 0; }
   .guidance-section { margin-top: 14px; }
@@ -193,12 +204,14 @@ _PAGE = """<!doctype html>
     background: transparent; color: var(--accent);
     border: 1px solid var(--accent); padding: 8px 12px;
   }
-  button.feedback-choice.selected { background: var(--accent); color: white; }
+  button.feedback-choice.selected { background: var(--accent); color: var(--accent-fg); }
   .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .feedback-grid .full { grid-column: 1 / -1; }
   .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   .check-row input { width: auto; }
   .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .console-head { border-left:4px solid var(--hana-green); padding-left:16px; margin-bottom:20px; }
+  .console-head .sub { margin-bottom:0; }
   .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
   .incident-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
   .incident-stat { background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:13px; text-align:left; }
@@ -214,7 +227,7 @@ _PAGE = """<!doctype html>
   .incident-message { min-width:180px; overflow-wrap:anywhere; }
   button.incident-detail { background:transparent; color:var(--accent); text-align:left; white-space:normal; padding:0; width:100%; min-height:44px; }
   .incident-preview { display:block; font-weight:400; margin-top:4px; }
-  .incident-table tr.recent-incident td { border-top:2px solid var(--err); border-bottom:2px solid var(--err); background:rgba(209,54,74,.08); }
+  .incident-table tr.recent-incident td { border-top:2px solid var(--err); border-bottom:2px solid var(--err); background:var(--danger-wash); }
   .incident-table tr.recent-incident td:first-child { border-left:2px solid var(--err); }
   .incident-table tr.recent-incident td:last-child { border-right:2px solid var(--err); }
   .recent-incident-badge { color:var(--err); font-size:12px; font-weight:700; margin-left:8px; }
@@ -223,11 +236,16 @@ _PAGE = """<!doctype html>
   .incident-fields { display:grid; grid-template-columns:100px 1fr; gap:8px 14px; margin:14px 0; font-size:14px; }
   .incident-fields dt { color:var(--muted); }
   .incident-fields dd { margin:0; overflow-wrap:anywhere; }
-  .component-status { display:flex; gap:8px 18px; flex-wrap:wrap; margin-top:8px; font-size:13px; }
+  .operations-card > strong { display:block; margin-bottom:8px; }
+  #operations-status { color:var(--muted); font-size:14px; }
+  .component-status { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; font-size:13px; }
+  .component-status > span { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:1px solid var(--border); border-radius:999px; background:var(--bar); }
+  .component-status > span::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .component-status > .status-err { background:var(--danger-wash); }
   .log-tabs { display:flex; gap:8px; flex-wrap:wrap; }
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
-  .scenario-card { margin-top:0; }
+  .scenario-card { margin-top:0; border-top:3px solid var(--hana-green); }
   .scenario-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap; }
   .scenario-heading label { margin:0; }
   body.mode-client .admin-only { display:none !important; }
@@ -254,7 +272,7 @@ _PAGE = """<!doctype html>
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
     <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
-  <div class="card"><strong>수집·분석 상태</strong><div id="operations-status">상태 확인 중…</div><div id="operations-components" class="component-status"></div><div id="collection-hosts"></div></div>
+  <div class="card operations-card"><strong>수집·분석 상태</strong><div id="operations-status" role="status">상태 확인 중…</div><div id="operations-components" class="component-status"></div></div>
   <div class="incident-stats" role="tablist" aria-label="장애 상태">
     <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
     <button id="incident-tab-critical" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="critical"><span>긴급</span><strong id="stat-critical">0건</strong></button>
@@ -479,11 +497,11 @@ function schedulePoll(callback, interval, maxDelay = 60000) {
 async function loadOperationsStatus() {
   try {
     const data = await getJSON("/api/v1/operations/status");
-    $("operations-status").textContent = `${data.status} / 확인 시각: ${data.checked_at} / 대기 ${data.queue?.stream_length || 0}건 / 실패 보관 ${data.queue?.dead_letters || 0}건`;
-    $("collection-hosts").textContent = (data.hosts || []).map(h => `${h.host}: ${h.status} (마지막 수집 ${h.last_sample_at || "없음"})${h.connections_access_denied ? " / 연결 조회 권한 부족" : ""}`).join(" · ");
+    const status = {healthy: "수집·분석 정상", ready: "수집·분석 정상", degraded: "수집·분석 확인 필요"}[data.status] || "상태 확인 필요";
+    $("operations-status").textContent = `${status} · 대기 ${data.queue?.stream_length || 0}건 · 실패 보관 ${data.queue?.dead_letters || 0}건`;
     const names = {redis: "Redis", elasticsearch: "Elasticsearch", qdrant: "Qdrant", analysis_workers: "분석 Worker"};
     $("operations-components").innerHTML = Object.entries(data.components || {}).map(([key, value]) =>
-      '<span class="' + (value.healthy ? 'status-ok' : 'status-err') + '">' + esc(names[key] || key) + ': ' + (value.healthy ? '연결 정상' : '확인 필요') + (value.error ? ' (' + esc(value.error) + ')' : '') + '</span>'
+      '<span class="' + (value.healthy ? 'status-ok' : 'status-err') + '">' + esc(names[key] || key) + ': ' + (value.healthy ? '연결 정상' : '확인 필요') + '</span>'
     ).join("");
   } catch (error) { $("operations-status").textContent = "상태 조회 실패 — 현재 표시된 데이터가 최신인지 확인하세요."; return false; }
 }
