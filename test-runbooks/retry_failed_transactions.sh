@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: 롤백된 주문 트랜잭션 재처리 (retry_failed_transactions)
-echo "[retry_failed_transactions] 롤백된 주문 트랜잭션 재처리 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="retry_failed_transactions"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=retry failed transactions change_id=SIM-RETRY_FAILED_TRANSACTIONS"
 sleep 0.2
-echo "[retry_failed_transactions] 롤백된 주문 트랜잭션 재처리 작업 완료.."
+log INFO "Action step completed; validation=passed action=retry failed transactions"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

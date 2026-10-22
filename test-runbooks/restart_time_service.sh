@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: 시각 동기 서비스 재시작 (restart_time_service)
-echo "[restart_time_service] 시각 동기 서비스 재시작 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="restart_time_service"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=restart time service change_id=SIM-RESTART_TIME_SERVICE"
 sleep 0.2
-echo "[restart_time_service] 시각 동기 서비스 재시작 작업 완료.."
+log INFO "Action step completed; validation=passed action=restart time service"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

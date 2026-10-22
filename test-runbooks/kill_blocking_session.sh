@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: 데드락을 유발한 차단 세션 종료 (kill_blocking_session)
-echo "[kill_blocking_session] 데드락을 유발한 차단 세션 종료 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="kill_blocking_session"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=kill blocking session change_id=SIM-KILL_BLOCKING_SESSION"
 sleep 0.2
-echo "[kill_blocking_session] 데드락을 유발한 차단 세션 종료 작업 완료.."
+log INFO "Action step completed; validation=passed action=kill blocking session"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

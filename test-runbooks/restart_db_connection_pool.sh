@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: DB 커넥션 풀 재시작 (restart_db_connection_pool)
-echo "[restart_db_connection_pool] DB 커넥션 풀 재시작 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="restart_db_connection_pool"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=restart db connection pool change_id=SIM-RESTART_DB_CONNECTION_POOL"
 sleep 0.2
-echo "[restart_db_connection_pool] DB 커넥션 풀 재시작 작업 완료.."
+log INFO "Action step completed; validation=passed action=restart db connection pool"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

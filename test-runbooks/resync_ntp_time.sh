@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: NTP 강제 재동기화 (resync_ntp_time)
-echo "[resync_ntp_time] NTP 강제 재동기화 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="resync_ntp_time"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=resync ntp time change_id=SIM-RESYNC_NTP_TIME"
 sleep 0.2
-echo "[resync_ntp_time] NTP 강제 재동기화 작업 완료.."
+log INFO "Action step completed; validation=passed action=resync ntp time"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

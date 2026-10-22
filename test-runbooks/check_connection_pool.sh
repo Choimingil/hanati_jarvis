@@ -1,5 +1,15 @@
-#!/bin/bash
-# 진단 스크립트: DB 커넥션 풀 사용률 점검 (check_connection_pool)
-echo "TEST_CONNECTION_POOL_OK"
-echo "[check_connection_pool] DB 커넥션 풀 사용률 점검 결과를 수집했습니다."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="check_connection_pool"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Diagnostic probe started; target=web01/worker-3"
+sleep 0.2
+log INFO "Collected check connection pool telemetry; probe_status=healthy latency_ms=27 error_count=0"
+printf 'TEST_CHECK_CONNECTION_POOL_OK\n'
+sleep 0.2
+log INFO "Diagnostic probe completed; result=success"
 exit 0

@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: 예비 메시지 브로커로 페일오버 전환 (failover_message_broker)
-echo "[failover_message_broker] 예비 메시지 브로커로 페일오버 전환 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="failover_message_broker"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=failover message broker change_id=SIM-FAILOVER_MESSAGE_BROKER"
 sleep 0.2
-echo "[failover_message_broker] 예비 메시지 브로커로 페일오버 전환 작업 완료.."
+log INFO "Action step completed; validation=passed action=failover message broker"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0

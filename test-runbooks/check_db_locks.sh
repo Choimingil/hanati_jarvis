@@ -1,5 +1,15 @@
-#!/bin/bash
-# 진단 스크립트: DB 락·데드락 상태 점검 (check_db_locks)
-echo "TEST_DB_LOCKS_OK"
-echo "[check_db_locks] DB 락·데드락 상태 점검 결과를 수집했습니다."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="check_db_locks"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Diagnostic probe started; target=web01/worker-3"
+sleep 0.2
+log INFO "Collected check db locks telemetry; probe_status=healthy latency_ms=27 error_count=0"
+printf 'TEST_CHECK_DB_LOCKS_OK\n'
+sleep 0.2
+log INFO "Diagnostic probe completed; result=success"
 exit 0

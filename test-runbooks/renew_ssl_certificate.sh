@@ -1,6 +1,14 @@
-#!/bin/bash
-# 해결 스크립트: SSL 인증서 갱신 (renew_ssl_certificate)
-echo "[renew_ssl_certificate] SSL 인증서 갱신 작업 수행.."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_ID="renew_ssl_certificate"
+log() {
+  local level="$1"; shift
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+}
+
+log INFO "Runbook started; action=renew ssl certificate change_id=SIM-RENEW_SSL_CERTIFICATE"
 sleep 0.2
-echo "[renew_ssl_certificate] SSL 인증서 갱신 작업 완료.."
+log INFO "Action step completed; validation=passed action=renew ssl certificate"
+sleep 0.2
+log INFO "Runbook completed; result=success recovery_confirmation=pending"
 exit 0
