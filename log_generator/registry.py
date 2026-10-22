@@ -60,8 +60,15 @@ from scenario.pod_crashloop_backoff_scenario import (
     PodCrashLoopBackOffScenario,
 )
 
+from scenario.configuration_mismatch_scenario import ConfigurationMismatchScenario
+
 
 SCENARIO_REGISTRY = {
+    "configuration_mismatch": (
+        ConfigurationMismatchScenario,
+        "설정 불일치 · 조치 스크립트 없음 (CONFIGURATION_MISMATCH)",
+        "CONFIGURATION_MISMATCH",
+    ),
     "disk_full": (
         DiskFullScenario,
         "디스크 부족 (DISK_FULL)",

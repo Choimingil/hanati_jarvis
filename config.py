@@ -57,6 +57,11 @@ RESOURCE_FALLBACK_CONFIDENCE_THRESHOLD = float(
 # log_generator가 발생시키는 각 장애 시나리오(+ 기존 ORA-28040)에 대한
 # 진단/조치 규칙. error_detector.ERROR_PATTERNS의 코드와 1:1로 매핑된다.
 ERROR_RULES = {
+    "CONFIGURATION_MISMATCH": {
+        # 승인된 설정과 비교한 뒤 운영자가 수동으로 조치한다.
+        "diagnostic_scripts": [],
+        "remediation_candidates": [],
+    },
     "ORA-28040": {
         "diagnostic_scripts": [
             "check_jdbc_version",

@@ -54,6 +54,10 @@ _CONTEXT_MESSAGE_KEYS = {_message_key(message) for message in SCENARIO_CONTEXT_M
 
 
 ERROR_PATTERNS = {
+    "CONFIGURATION_MISMATCH": re.compile(
+        r"Configuration mismatch detected for order processing",
+        re.IGNORECASE,
+    ),
     "ORA-28040": re.compile(
         r"\bORA-28040\b",
         re.IGNORECASE,
