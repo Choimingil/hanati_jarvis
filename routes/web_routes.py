@@ -351,8 +351,8 @@ _PAGE = """<!doctype html>
       <div class="full"><label for="manual-method">수행한 조치 방법</label><textarea id="manual-method" required maxlength="8000" placeholder="어떤 단위시스템에서 무엇을 확인하고 어떻게 조치했는지 입력하세요."></textarea></div>
       <div class="full"><label for="manual-script">재사용할 조치 스크립트 첨부 (.sh, UTF-8, 최대 64KB)</label><input id="manual-script" type="file" accept=".sh"><p class="muted">복구 확인 후 같은 오류·서비스·환경에 연결해 학습합니다. 재발 시 파일을 불러와 승인 후 격리된 테스트 컨테이너에서 실행합니다.</p></div>
       <div><label for="manual-operator">조치 운영자</label><input id="manual-operator" required maxlength="200" value="web-ui"></div>
-      <div class="check-row"><input id="manual-recovered" type="checkbox"><label for="manual-recovered" style="margin:0">운영자가 서비스 복구를 확인했습니다.</label></div>
-      <div class="full"><p class="muted">복구 확인을 체크하면 운영자 확인으로 해결 처리됩니다. 미체크 시 복구 확인중으로 기록됩니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
+      <div class="check-row"><input id="manual-recovered" type="checkbox" required><label for="manual-recovered" style="margin:0">운영자가 서비스 복구를 확인했습니다.</label></div>
+      <div class="full"><p class="muted">수행 완료와 서비스 복구 확인을 모두 체크해야 등록할 수 있습니다. 등록하면 해당 오류가 처리 완료되고 이 등록 영역은 닫힙니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
     </form>
     <div id="manual-history"></div>
   </div>
@@ -620,12 +620,12 @@ function newManualRegistrationId() {
 }
 function updateManualRegisterButton() {
   $("manual-register").disabled = manualRegisterPending || !currentManualIncident?.manualAllowed
-    || !$("manual-performed").checked || !$("manual-method").value.trim() || !$("manual-operator").value.trim();
+    || !$("manual-performed").checked || !$("manual-recovered").checked || !$("manual-method").value.trim() || !$("manual-operator").value.trim();
   $("manual-form").querySelectorAll("input, textarea").forEach(input => input.disabled = manualRegisterPending);
 }
 function renderManualRemediation(incident, available) {
   const changed = currentManualIncident?.incident_id !== incident.incident_id;
-  currentManualIncident = {...incident, manualAllowed: available};
+  currentManualIncident = {...incident, manualAllowed: available && incident.status !== "RESOLVED"};
   if (changed) {
     manualRegistrationId = newManualRegistrationId();
     $("manual-method").value = "";
@@ -635,7 +635,7 @@ function renderManualRemediation(incident, available) {
     $("manual-register-status").textContent = "";
   }
   const history = incident.manual_actions || [];
-  $("manual-remediation").classList.toggle("hidden", !available && !history.length);
+  $("manual-remediation").classList.toggle("hidden", incident.status === "RESOLVED" || (!available && !history.length));
   $("manual-form").classList.toggle("hidden", !available);
   $("manual-flow").textContent = available ? "수동 조치 후 방법과 스크립트를 등록하세요. 복구를 확인하면 같은 오류 재발 시 첨부 파일을 조치로 불러옵니다." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
   $("manual-target").textContent = [environmentLabel(incident.environment), incident.service, ...(incident.affected_hosts || [])].join(" / ");

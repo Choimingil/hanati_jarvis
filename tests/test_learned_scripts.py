@@ -80,6 +80,10 @@ class LearnedScriptTests(unittest.TestCase):
         with patch("subprocess.run", side_effect=AssertionError("upload must not execute")):
             response = self.upload()
         self.assertEqual(response.status_code, 201, response.get_json())
+        self.assertEqual(response.get_json()["incident"]["status"], "RESOLVED")
+        detail = self.api.get("/api/v1/log-generator/incidents/" + self.incident["incident_id"]).get_json()
+        self.assertEqual(detail["processing"]["state"], "completed")
+        self.assertFalse(detail["manual_action_available"])
         attachment = response.get_json()["manual_action"]["attachment"]
         self.assertNotIn("content", attachment)
         self.assertEqual(ScriptLibrary().get(attachment["script_id"])["content"], self.content)

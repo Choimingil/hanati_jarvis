@@ -121,18 +121,33 @@ function completed(m) {
     assert.deepEqual(actor.errors,[]);assert.deepEqual(observer.errors,[]);
     actor.dom.window.close();observer.dom.window.close();
   }
-  // Manual completion from another session also closes its form and restores history.
+  // Require recovery confirmation, then close the entire panel in both sessions.
   const s=server();s.incident.latest_recommendation.targets=[];s.incident.latest_recommendation.actions=[];
   const actor=await mount('admin',s), observer=await mount('client',s);
   await open(actor);await open(observer);
   for(const [id,value] of [['manual-method','설정 변경 후 주문 정상 확인'],['manual-operator','other-session']]) {
     element(actor.w,id).value=value;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
   }
-  for(const id of ['manual-performed','manual-recovered']) {
-    element(actor.w,id).checked=true;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
-  }
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-performed').checked=true;
+  element(actor.w,'manual-performed').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-recovered').checked=true;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,false);
+  element(actor.w,'manual-recovered').checked=false;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-recovered').checked=true;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
   element(actor.w,'manual-form').dispatchEvent(new actor.w.Event('submit',{cancelable:true}));await settle();
+  completed(actor);
+  assert.equal(s.incident.status,'RESOLVED');
+  assert.equal(element(actor.w,'manual-remediation').classList.contains('hidden'),true);
   await tickDetails(observer);completed(observer);
+  assert.equal(element(observer.w,'manual-remediation').classList.contains('hidden'),true);
+  await tickDetails(observer);
+  assert.equal(element(observer.w,'manual-remediation').classList.contains('hidden'),true);
   assert.equal(element(observer.w,'manual-form').classList.contains('hidden'),true);
   assert.match(element(observer.w,'manual-history').textContent,/other-session.*설정 변경 후 주문 정상 확인/s);
   assert.deepEqual(actor.errors,[]);assert.deepEqual(observer.errors,[]);
