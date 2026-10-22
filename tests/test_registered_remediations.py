@@ -94,6 +94,29 @@ class RegisteredScriptTests(unittest.TestCase):
         self.assertEqual(rec["targets"], [])
         self.assertTrue(manual_action_available(incident))
 
+    def test_scriptless_error_requires_operator_action_without_scripts(self):
+        from aiops.recommendation_quality_gate import RecommendationQualityGate
+        from error_detector import detect_error_code
+
+        scenario, _, code = log_generator_routes.SCENARIO_REGISTRY["rate_limit_exceeded"]
+        errors = [event for event in scenario().events() if event.level == "ERROR"]
+        self.assertEqual([detected for event in errors if (detected := detect_error_code(event.message))], [code])
+        self.assertEqual(ERROR_RULES[code]["diagnostic_scripts"], [])
+        self.assertEqual(RecommendationQualityGate().requires_fallback(
+            code, ERROR_RULES[code]["remediation_candidates"], None
+        ), (True, "no_remediation_candidates"))
+        incident, rec = self.incident(code)
+        self.assertEqual(rec["actions"], [])
+        self.assertEqual(rec["targets"], [])
+        self.assertTrue(manual_action_available(incident))
+        result = ManualRemediationService(self.repo).submit({
+            "incident_id": incident["incident_id"], "incident_version": incident["version"],
+            "registration_id": "MANUAL-config-mismatch", "operator": "tester",
+            "method": "승인된 설정과 비교 후 설정 복원", "performed": True, "recovered": True,
+        })
+        self.assertEqual(result["incident"]["status"], "RESOLVED")
+        self.transport.request.assert_not_called()
+
     def test_separate_api_sessions_share_execution_and_verified_completion(self):
         incident, rec = self.incident()
         self.repo.recent_incident_logs = lambda *args, **kwargs: []

@@ -54,6 +54,10 @@ _CONTEXT_MESSAGE_KEYS = {_message_key(message) for message in SCENARIO_CONTEXT_M
 
 
 ERROR_PATTERNS = {
+    "CONFIGURATION_MISMATCH": re.compile(
+        r"Configuration mismatch detected for order processing",
+        re.IGNORECASE,
+    ),
     "ORA-28040": re.compile(
         r"\bORA-28040\b",
         re.IGNORECASE,
@@ -151,7 +155,8 @@ def detect_error_code(
         if pattern.search(message):
             return error_code
 
-    return None
+    from operations.custom_scenarios import custom_error_code
+    return custom_error_code(message)
 
 
 def is_context_only_error(message, synthetic=False):

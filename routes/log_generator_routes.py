@@ -34,7 +34,7 @@ LOG_GENERATOR_DIR = Path(__file__).resolve().parent.parent / "log_generator"
 if str(LOG_GENERATOR_DIR) not in sys.path:
     sys.path.insert(0, str(LOG_GENERATOR_DIR))
 
-from registry import SCENARIO_REGISTRY  # noqa: E402
+from registry import SCENARIO_REGISTRY, get_scenarios  # noqa: E402
 from trigger import run_scenario  # noqa: E402
 
 
@@ -45,7 +45,7 @@ log_generator_blueprint = Blueprint("log_generator", __name__)
 def prevent_state_response_caching(response):
     if request.endpoint in {
         "log_generator.recent_incidents", "log_generator.incident_detail",
-        "log_generator.latest_run", "log_generator.latest_recommendation",
+        "log_generator.latest_run", "log_generator.latest_recommendation", "log_generator.list_scenarios",
     }:
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -72,7 +72,7 @@ def list_scenarios():
     return jsonify(
         [
             {"key": key, "label": label}
-            for key, (_, label, _) in SCENARIO_REGISTRY.items()
+            for key, (_, label, _) in get_scenarios().items()
         ]
     )
 
@@ -82,7 +82,12 @@ def run():
     body = request.get_json(silent=True) or {}
     key = body.get("scenario")
 
-    if key not in SCENARIO_REGISTRY:
+    return _run_scenario(key)
+
+
+def _run_scenario(key):
+    scenarios = get_scenarios()
+    if key not in scenarios:
         return jsonify(
             {
                 "status": "invalid_request",
@@ -94,9 +99,9 @@ def run():
     current_run = {
         "run_id": uuid.uuid4().hex,
         "scenario": key,
-        "label": SCENARIO_REGISTRY[key][1],
+        "label": scenarios[key][1],
         "triggered_at": triggered_at,
-        "error_code": SCENARIO_REGISTRY[key][2],
+        "error_code": scenarios[key][2],
         "phase": "running",
     }
     try:
@@ -135,6 +140,24 @@ def run():
             "events": result["events"],
         }
     )
+
+
+@log_generator_blueprint.post("/api/v1/log-generator/scenarios/new")
+def create_error_scenario():
+    from operations.custom_scenarios import CustomScenarioStore
+
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify(status="invalid_request", reason="JSON object required"), 400
+    try:
+        scenario = CustomScenarioStore().create(body.get("request_id"))
+    except ValueError as exc:
+        return jsonify(status="invalid_request", reason=str(exc)), 400
+    except Exception as exc:
+        return jsonify(status="unavailable", error=type(exc).__name__), 503
+    response = _run_scenario(scenario["key"])
+    result, status = response if isinstance(response, tuple) else (response, 200)
+    return jsonify({**result.get_json(), "scenario": scenario}), status
 
 
 @log_generator_blueprint.get("/api/v1/log-generator/latest-run")

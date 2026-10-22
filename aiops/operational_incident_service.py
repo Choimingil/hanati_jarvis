@@ -115,7 +115,17 @@ class OperationalIncidentService:
             sources.add(str(log["source"]))
         count = int(existing.get("occurrence_count", 0)) + 1
         status = existing.get("status", "ANALYZING")
-        if status == "RESOLVED":
+        from operations.learned_scripts import is_learned_target
+
+        previous_execution = existing.get("last_execution") or {}
+        completed_sandbox = (
+            status == "MONITORING" and existing.get("synthetic") is True
+            and existing.get("recovery_confirmation") == "pending_execution"
+            and previous_execution.get("status") == "success"
+            and is_learned_target(previous_execution.get("target"))
+            and previous_execution["target"].get("environment") == "simulation"
+        )
+        if status == "RESOLVED" or completed_sandbox:
             status = "REOPENED"
         priority = business_priority(log, count, existing)
         recommendation = existing.get("latest_recommendation") or {}

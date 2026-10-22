@@ -13,7 +13,7 @@ class ManualRemediationService:
     def __init__(self, repository):
         self.repository = repository
 
-    def submit(self, body):
+    def submit(self, body, attachment=None):
         if not isinstance(body, dict):
             raise ValueError("JSON object required")
         for field, limit in (("incident_id", 200), ("registration_id", 100), ("operator", 200), ("method", 8000)):
@@ -32,9 +32,20 @@ class ManualRemediationService:
         incident = self.repository.get_operational_incident(body["incident_id"])
         if incident is None:
             raise LookupError("incident not found")
+        from operations.learned_scripts import ScriptLibrary, metadata
+
+        script = None
+        if attachment is not None:
+            # Validate eligibility before accepting attachment bytes into the library.
+            if incident.get("version") != version and not any(
+                item["registration_id"] == body["registration_id"] for item in incident.get("manual_actions", [])
+            ):
+                raise ValueError("incident changed; reload details before registering")
+            script = ScriptLibrary().attach(incident, attachment[0], attachment[1])
         content = redact({
             "operator": body["operator"].strip(), "method": body["method"].strip(),
             "performed": True, "recovered": body["recovered"],
+            **({"attachment": metadata(script)} if script else {}),
         })
         fingerprint = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
         history = list(incident.get("manual_actions") or [])
@@ -42,6 +53,7 @@ class ManualRemediationService:
         if existing:
             if existing["fingerprint"] != fingerprint:
                 raise ValueError("registration id reused with different action")
+            self._learn_confirmed(incident, history)
             return {"status": "registered", "duplicate": True, "manual_action": existing, "incident": incident}
         if incident.get("version") != version:
             raise ValueError("incident changed; reload details before registering")
@@ -67,4 +79,16 @@ class ManualRemediationService:
         updated = self.repository.update_operational_incident(
             incident["incident_id"], changes, expected_version=version,
         )
+        self._learn_confirmed(updated, history + [action])
         return {"status": "registered", "duplicate": False, "manual_action": action, "incident": updated}
+
+    @staticmethod
+    def _learn_confirmed(incident, history):
+        from operations.learned_scripts import ScriptLibrary
+
+        if incident.get("status") != "RESOLVED" or incident.get("recovery_confirmation") != "operator_report":
+            return
+        # A follow-up recovery confirmation can promote the preceding attachment.
+        attachment = next((item["attachment"] for item in reversed(history) if item.get("attachment")), None)
+        if attachment:
+            ScriptLibrary().activate(attachment["script_id"], incident)

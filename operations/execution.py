@@ -48,8 +48,10 @@ class ExecutionCoordinator:
     def call(self, target, path, body=None):
         from operations.scenario_scripts import is_scenario_target, runtime_for
 
-        if is_scenario_target(target):
-            runtime = runtime_for(target)
+        from operations.learned_scripts import is_learned_target, runtime_for as learned_runtime
+
+        if is_scenario_target(target) or is_learned_target(target):
+            runtime = learned_runtime(target) if is_learned_target(target) else runtime_for(target)
             if path == "/identity":
                 return {"target": runtime.identity(), "policy_digest": runtime.digest}
             if path == "/preflight":
@@ -85,11 +87,20 @@ class ExecutionCoordinator:
             raise ValueError("agent response identity mismatch")
         return result
 
+    @staticmethod
+    def host_lock_key(target):
+        from operations.learned_scripts import is_learned_target
+
+        if is_learned_target(target) and target.get("environment") == "simulation":
+            identity = json.dumps(target_identity(target), sort_keys=True)
+            return "jarvis:sandbox:" + hashlib.sha256(identity.encode()).hexdigest()
+        return "jarvis:host:" + hashlib.sha256(target["host"].encode()).hexdigest()
+
     def prepare(self, context, target):
         action_targets = context.get("action", {}).get("targets", context["recommendation"].get("targets", []))
         if target not in action_targets:
             raise ValueError("target not bound to recommendation")
-        host_key = "jarvis:host:" + hashlib.sha256(target["host"].encode()).hexdigest()
+        host_key = self.host_lock_key(target)
         if self.redis.get(host_key):
             raise ValueError(
                 "host is executing or waiting for business recovery confirmation"
@@ -144,7 +155,8 @@ class ExecutionCoordinator:
         if proof["target"] not in action_targets:
             raise ValueError("target no longer bound to recommendation")
         from operations.scenario_scripts import is_scenario_target
-        if not is_scenario_target(proof["target"]):
+        from operations.learned_scripts import is_learned_target
+        if not is_scenario_target(proof["target"]) and not is_learned_target(proof["target"]):
             self.entry(proof["target"])
         return proof
 
@@ -152,8 +164,7 @@ class ExecutionCoordinator:
         key = "jarvis:execution:" + execution_id
         locks = [
             "jarvis:action:" + body["recommendation_id"],
-            "jarvis:host:"
-            + hashlib.sha256(proof["target"]["host"].encode()).hexdigest(),
+            self.host_lock_key(proof["target"]),
             "jarvis:decision:" + body["recommendation_id"] + ":" + body["action_id"],
         ]
         # Reservations have no TTL: a crash or ambiguous transport result cannot

@@ -75,6 +75,25 @@ class LogProcessor:
             }
         )
 
+        if (incident and incident.get("synthetic") is True
+            and error_code is not None and not ERROR_RULES.get(error_code, {}).get("remediation_candidates")
+            and incident.get("status") not in {"REMEDIATING", "MONITORING"}):
+            from operations.learned_scripts import ScriptLibrary
+            learned = ScriptLibrary().latest(incident)
+            previous = incident.get("latest_recommendation") or {}
+            already_learned = any(item.get("script_id") == (learned or {}).get("script_id")
+                                  for item in previous.get("actions", [])) if learned else previous.get("status") == "manual_required"
+            if not incident.get("analysis_suppressed") or not already_learned:
+                recommendation, incident = self.incident_service.complete_analysis(incident, {
+                    "status": "learned_script" if learned else "manual_required",
+                    "error_code": error_code,
+                    "summary": "동일 오류에 등록된 첨부 스크립트를 불러왔습니다." if learned else "등록된 조치 스크립트가 없습니다. 수동 조치 후 스크립트를 첨부해 등록하세요.",
+                    "runbooks": [],
+                }, status="ACTION_REQUIRED" if learned else "INVESTIGATING")
+                self.repository.save_recommendation({"timestamp": now_iso(), "incident_id": incident["incident_id"],
+                                                     "log": log, "recommendation": recommendation})
+                return {"status": "recommended", "error_code": error_code, "recommendation": recommendation}
+
         if (
             incident
             and incident.get("analysis_suppressed")
@@ -106,7 +125,7 @@ class LogProcessor:
                 incident=incident,
             )
 
-        rule = ERROR_RULES[error_code]
+        rule = ERROR_RULES.get(error_code, {})
 
         diagnosis_results = self._run_diagnostics(
             error_code=error_code,

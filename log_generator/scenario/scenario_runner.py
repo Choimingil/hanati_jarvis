@@ -93,7 +93,9 @@ class ScenarioRunner:
             return []
 
         if behavior.scenarios:
-            return [config.scenario for config in behavior.scenarios]
+            from registry import get_scenarios, SCENARIO_REGISTRY
+            custom = [factory() for key, (factory, _, _) in get_scenarios().items() if key not in SCENARIO_REGISTRY]
+            return [config.scenario for config in behavior.scenarios] + custom
         
         return []
 
@@ -116,6 +118,8 @@ class ScenarioRunner:
                 scenarios = [scenario]
 
         while True:
+            if scenario is None:
+                scenarios = self._get_configured_scenarios()
             if not self._emit_normal_log():
                 break
 

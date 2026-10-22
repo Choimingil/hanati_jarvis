@@ -1,5 +1,5 @@
 # 8 GiB / 2 vCPU: per-container ceilings, not reservations.
-# Steady-state RAM ceilings: 5632 MiB including optional execution Agent.
+# Steady-state RAM ceilings: 5760 MiB including optional execution Agent; script sandbox adds 64 MiB while running.
 # .env is optional: Compose interpolates configured values below when present.
 # Avoid service env_file so older Compose versions do not require .env.
 name: hanati-jarvis
@@ -111,8 +111,10 @@ services:
     volumes:
     - .:/workspace
     - log-volume:/workspace/fluentbit
+    - learned-script-state:/state/learned-scripts
     environment:
     - PYTHONPATH=/workspace/log_generator:/workspace
+    - LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts
     - LOG_GENERATOR_MODE=${LOG_GENERATOR_MODE:-manual}
     command:
     - python
@@ -183,6 +185,7 @@ services:
     - log-volume:/workspace/fluentbit
     - embedding-cache:/models
     - scenario-script-state:/state/scenario-scripts
+    - learned-script-state:/state/learned-scripts
     environment:
     - PYTHONPATH=/workspace
     - API_HOST=0.0.0.0
@@ -202,6 +205,7 @@ services:
     - REDIS_URL=redis://redis:6379/0
     - EXECUTION_TARGETS_FILE=/workspace/execution-targets.json
     - SCENARIO_SCRIPT_STATE_DIR=/state/scenario-scripts
+    - LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts
     - BUSINESS_SERVICES_FILE=/workspace/business-services.json
     - INCIDENT_REANALYSIS_SECONDS=300
     - LLM_EXTERNAL_ENABLED=${LLM_EXTERNAL_ENABLED:-true}
@@ -281,8 +285,10 @@ services:
     - .:/workspace
     - log-volume:/workspace/fluentbit
     - embedding-cache:/models
+    - learned-script-state:/state/learned-scripts
     environment:
     - PYTHONPATH=/workspace
+    - LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts
     - API_HOST=0.0.0.0
     - API_PORT=8080
     - CASE_SEARCHER_BACKEND=hybrid
@@ -359,6 +365,37 @@ services:
     mem_limit: 192m
     memswap_limit: 192m
     cpus: 0.15
+  script-sandbox-image:
+    image: hanati-script-sandbox:local
+    build:
+      context: .
+      dockerfile: script_sandbox/Dockerfile
+    command: ["/bin/true"]
+    restart: 'no'
+    mem_limit: 64m
+    cpus: 0.1
+  script-executor:
+    image: hanati-aiops:local
+    build:
+      context: .
+      dockerfile: aiops/Dockerfile
+    working_dir: /workspace
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+    - PYTHONPATH=/workspace
+    - REDIS_URL=redis://redis:6379/0
+    - SCRIPT_SANDBOX_IMAGE=hanati-script-sandbox:local
+    depends_on:
+      redis:
+        condition: service_healthy
+      script-sandbox-image:
+        condition: service_completed_successfully
+    command: ["python", "-m", "operations.script_sandbox"]
+    restart: unless-stopped
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.15
   deployment-check:
     image: hanati-aiops:local
     profiles:
@@ -383,4 +420,5 @@ volumes:
   redis-data: null
   execution-agent-state: null
   scenario-script-state: null
+  learned-script-state: null
 

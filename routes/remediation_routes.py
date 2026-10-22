@@ -19,7 +19,22 @@ def register_manual_remediation():
     from aiops.manual_remediation_service import ManualRemediationService
 
     try:
-        result = ManualRemediationService(repository).submit(request.get_json(silent=True))
+        attachment = None
+        if request.mimetype == "multipart/form-data":
+            from operations.learned_scripts import MAX_SCRIPT_BYTES
+            # Bound the whole request before accessing Flask's multipart parser.
+            if request.content_length is None or request.content_length > MAX_SCRIPT_BYTES + 32768:
+                return jsonify(status="blocked", reason="attachment request too large"), 413
+            body = json.loads(request.form.get("metadata", "null"))
+            uploads = request.files.getlist("script")
+            if len(uploads) > 1:
+                raise ValueError("attach only one script")
+            if uploads:
+                upload = uploads[0]
+                attachment = (upload.filename, upload.stream.read(MAX_SCRIPT_BYTES + 1))
+        else:
+            body = request.get_json(silent=True)
+        result = ManualRemediationService(repository).submit(body, attachment=attachment)
         return jsonify(redact(result)), 200 if result["duplicate"] else 201
     except LookupError as exc:
         return jsonify(status="not_found", reason=str(exc)), 404
@@ -104,9 +119,14 @@ def _validate_action_request(body):
     )
     code = incident.get("error_code")
     rule = ERROR_RULES.get(code, {})
-    if not action or action.get("script_id") not in rule.get(
+    learned = False
+    if action and str(action.get("script_id", "")).startswith("LEARNED-"):
+        from operations.learned_scripts import ScriptLibrary
+        ScriptLibrary().get(action["script_id"], incident, active=True)
+        learned = True
+    if not action or (not learned and action.get("script_id") not in rule.get(
         "remediation_candidates", []
-    ):
+    )):
         raise ValueError("action not allowed for incident")
     return {
         "incident": incident,
@@ -127,6 +147,23 @@ def _error(exc):
     ), 503
 
 
+@remediation_blueprint.get("/api/v1/remediations/scripts/<script_id>")
+def download_learned_script(script_id):
+    from io import BytesIO
+    from flask import send_file
+    from operations.learned_scripts import ScriptLibrary
+
+    try:
+        incident = repository.get_operational_incident(request.args.get("incident_id", ""))
+        if not incident:
+            return jsonify(status="not_found"), 404
+        script = ScriptLibrary().get(script_id, incident)
+        return send_file(BytesIO(script["content"]), mimetype="application/octet-stream",
+                         as_attachment=True, download_name=script["filename"])
+    except Exception as exc:
+        return _error(exc)
+
+
 @remediation_blueprint.post("/api/v1/remediations/preflight")
 def preflight():
     try:
@@ -141,6 +178,26 @@ def preflight():
 def _persist_result(manager, record):
     if record["result"].get("status") not in TERMINAL:
         return
+    from operations.learned_scripts import is_learned_target
+
+    learned_success = (
+        is_learned_target(record.get("target"))
+        and record["target"].get("environment") == "simulation"
+        and record["result"].get("execution_mode") == "simulation"
+        and record["result"]["status"] == "success"
+    )
+    if learned_success and not record.get("recovery_verified"):
+        # Sandbox completion has no external business recovery window to wait for.
+        # Keep unknown or failed verification pending rather than releasing it.
+        try:
+            verification = manager.verify(record)
+        except Exception:
+            verification = None
+        if verification and verification.get("recovered"):
+            repository.save_recovery_verification(redact({**verification, "incident_id": record["incident_id"]}))
+            record["recovery_verified"] = True
+            manager.redis.set("jarvis:execution:" + record["execution_id"], json.dumps(record))
+    completed = learned_success and record.get("recovery_verified") is True
     existing = repository.get_remediation_execution(record["execution_id"])
     if existing is None:
         repository.save_remediation_execution(
@@ -153,10 +210,12 @@ def _persist_result(manager, record):
     if incident and incident.get("active_execution_id") == record["execution_id"]:
         operational_incident_service.transition(
             incident,
-            "MONITORING"
+            "RESOLVED" if completed else "MONITORING"
             if record["result"]["status"] == "success"
             else "ACTION_REQUIRED",
-            {"last_execution_id": record["execution_id"], "last_execution": execution_summary(record), "active_execution_id": None, "recovery_confirmation": "pending_execution"},
+            {"last_execution_id": record["execution_id"], "last_execution": execution_summary(record),
+             "active_execution_id": None, "recovery_confirmation": "simulation" if completed else "pending_execution",
+             **({"recovered_at": now_iso()} if completed else {})},
         )
     manager.release_host(record)
 
@@ -267,7 +326,7 @@ def request_diagnosis():
             raise ValueError("target not bound to recommendation")
         results = [
             coordinator().diagnose(target, script_id)
-            for script_id in ERROR_RULES[context["error_code"]].get(
+            for script_id in ERROR_RULES.get(context["error_code"], {}).get(
                 "diagnostic_scripts", []
             )
         ]

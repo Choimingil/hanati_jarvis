@@ -21,7 +21,7 @@ function server() {
   return {incident:{incident_id:'INC-SHARED',version:2,status:'ACTION_REQUIRED',service:'orders',environment:'prod',
     error_code:'MEMORY_LEAK',affected_hosts:['orders-01'],occurrence_count:1,
     first_seen:'2026-10-09T15:15:00Z',last_seen:'2026-10-09T15:15:00Z',latest_recommendation:rec},
-    listMissing:false, listStale:null, execution:null, posts:[], reads:[]};
+    listMissing:false, listStale:null, execution:null, posts:[], reads:[], scenarios:[]};
 }
 function processing(s) {
   const i=s.incident, completed=i.status==='RESOLVED', done=i.status==='MONITORING';
@@ -40,10 +40,17 @@ async function mount(mode, s) {
       w.fetch=async (url,options={})=>{
         let body, ok=true;
         if (!options.body) assert.equal(options.cache,'no-store');
-        if (options.body) s.posts.push({url,body:JSON.parse(options.body)});
+        if (options.body) s.posts.push({url,body:JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body), file:options.body instanceof w.FormData ? options.body.get('script')?.name : null});
         s.reads.push(url);
         if (url==='/api/v1/operations/status') body={status:'ready',components:{},hosts:[]};
-        else if(url==='/api/v1/log-generator/scenarios') body=[];
+        else if(url==='/api/v1/log-generator/scenarios') body=s.scenarios;
+        else if(url==='/api/v1/log-generator/scenarios/new') {
+          const scenario={key:'custom_browser',label:'신규 오류 (NEW_ERROR_BROWSER)',error_code:'NEW_ERROR_BROWSER'};
+          s.scenarios.push(scenario);
+          s.incident={...s.incident,error_code:scenario.error_code,synthetic:true,status:'ACTION_REQUIRED',
+            latest_recommendation:{...s.incident.latest_recommendation,status:'manual_required',runbooks:[],actions:[],targets:[]}};
+          body={status:'triggered',scenario,error_code:scenario.error_code,triggered_at:'2026-10-09T15:15:00Z',events:[{level:'ERROR',message:'new error'}]};
+        }
         else if(url==='/api/v1/log-generator/latest-run') body={status:'none'};
         else if(url.startsWith('/api/v1/log-generator/activity?')) body={};
         else if(url.startsWith('/api/v1/log-generator/latest-recommendation?'))
@@ -58,7 +65,7 @@ async function mount(mode, s) {
           body=JSON.parse(JSON.stringify(body));
           if(controls.holdDetail) await controls.holdDetail;
         } else if(url==='/api/v1/remediations/approve') {
-          const input=JSON.parse(options.body);
+          const input=JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body);
           body={execution_id:'EXEC-SHARED',status:'success',returncode:0,stdout:'restarted'};
           s.execution={...input,execution_id:body.execution_id,script_id:'restart_application',result:body};
           s.incident={...s.incident,status:'MONITORING',version:3,recovery_confirmation:'pending_execution',last_execution:s.execution};
@@ -66,7 +73,7 @@ async function mount(mode, s) {
           s.incident={...s.incident,status:'RESOLVED',version:4,recovery_confirmation:'business_probe',recovered_at:'2026-10-09T15:15:13Z'};
           body={recovered:true,incident:s.incident,processing:processing(s)};
         } else if(url==='/api/v1/remediations/manual') {
-          const input=JSON.parse(options.body);
+          const input=JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body);
           s.incident={...s.incident,status:'RESOLVED',version:s.incident.version+1,recovery_confirmation:'operator_report',
             recovered_at:'2026-10-09T15:15:13Z',manual_actions:[{...input,registered_at:'2026-10-09T15:15:13Z'}]};
           body={incident:s.incident,status:'registered'};
@@ -121,18 +128,33 @@ function completed(m) {
     assert.deepEqual(actor.errors,[]);assert.deepEqual(observer.errors,[]);
     actor.dom.window.close();observer.dom.window.close();
   }
-  // Manual completion from another session also closes its form and restores history.
+  // Require recovery confirmation, then close the entire panel in both sessions.
   const s=server();s.incident.latest_recommendation.targets=[];s.incident.latest_recommendation.actions=[];
   const actor=await mount('admin',s), observer=await mount('client',s);
   await open(actor);await open(observer);
   for(const [id,value] of [['manual-method','설정 변경 후 주문 정상 확인'],['manual-operator','other-session']]) {
     element(actor.w,id).value=value;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
   }
-  for(const id of ['manual-performed','manual-recovered']) {
-    element(actor.w,id).checked=true;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
-  }
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-performed').checked=true;
+  element(actor.w,'manual-performed').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-recovered').checked=true;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,false);
+  element(actor.w,'manual-recovered').checked=false;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-recovered').checked=true;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
   element(actor.w,'manual-form').dispatchEvent(new actor.w.Event('submit',{cancelable:true}));await settle();
+  completed(actor);
+  assert.equal(s.incident.status,'RESOLVED');
+  assert.equal(element(actor.w,'manual-remediation').classList.contains('hidden'),true);
   await tickDetails(observer);completed(observer);
+  assert.equal(element(observer.w,'manual-remediation').classList.contains('hidden'),true);
+  await tickDetails(observer);
+  assert.equal(element(observer.w,'manual-remediation').classList.contains('hidden'),true);
   assert.equal(element(observer.w,'manual-form').classList.contains('hidden'),true);
   assert.match(element(observer.w,'manual-history').textContent,/other-session.*설정 변경 후 주문 정상 확인/s);
   assert.deepEqual(actor.errors,[]);assert.deepEqual(observer.errors,[]);
@@ -152,5 +174,56 @@ function completed(m) {
   view.w.document.dispatchEvent(new view.w.Event('visibilitychange'));await settle();
   assert.equal(element(view.w,'incident-processing').classList.contains('hidden'),true);
   assert.deepEqual(view.errors,[]);view.dom.window.close();
+  // Script-less results hide resource guidance and send the actual attachment as multipart.
+  const attachmentServer=server();
+  attachmentServer.incident.error_code='CONFIGURATION_MISMATCH';
+  attachmentServer.incident.latest_recommendation={...attachmentServer.incident.latest_recommendation,
+    status:'manual_required',runbooks:[],actions:[],targets:[]};
+  const attachmentUi=await mount('admin',attachmentServer); await open(attachmentUi);
+  assert.equal(element(attachmentUi.w,'guidance-result').classList.contains('hidden'),true);
+  assert.equal(element(attachmentUi.w,'result').classList.contains('hidden'),true);
+  assert.equal(element(attachmentUi.w,'manual-form').classList.contains('hidden'),false);
+  const file=new attachmentUi.w.File(['#!/bin/bash\necho fixed\n'],'restore.sh',{type:'text/x-shellscript'});
+  Object.defineProperty(element(attachmentUi.w,'manual-script'),'files',{value:[file],configurable:true});
+  for(const [id,value] of [['manual-method','설정 복원'],['manual-operator','tester']]) {
+    element(attachmentUi.w,id).value=value;
+    element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
+  }
+  for(const id of ['manual-performed','manual-recovered']) {
+    element(attachmentUi.w,id).checked=true;
+    element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
+  }
+  element(attachmentUi.w,'manual-form').dispatchEvent(new attachmentUi.w.Event('submit',{cancelable:true})); await settle();
+  assert.equal(attachmentServer.posts.at(-1).file,'restore.sh');
+  assert.equal(attachmentServer.posts.at(-1).body.method,'설정 복원');
+  assert.equal(attachmentUi.errors.length,0);
+  attachmentUi.dom.window.close();
+  // Learned errors hide manual history as well as the form, even without a bound target.
+  const learnedServer=server();
+  learnedServer.incident.latest_recommendation.actions=[{script_id:'LEARNED-existing',action_id:'learned',learned_script:true,attachment:{filename:'recover.sh'},targets:[]}];
+  learnedServer.incident.latest_recommendation.runbooks=[{script_id:'LEARNED-existing',learned_script:true}];
+  learnedServer.incident.latest_recommendation.targets=[];
+  learnedServer.incident.manual_actions=[{operator:'previous',method:'fixed',recovered:true}];
+  const learnedUi=await mount('client',learnedServer); await open(learnedUi);
+  assert.equal(element(learnedUi.w,'manual-remediation').classList.contains('hidden'),true);
+  assert.equal(element(learnedUi.w,'manual-register').disabled,true);
+  assert.equal(learnedUi.w.document.querySelector('#result a[href*="/remediations/scripts/"]'),null);
+  assert.doesNotMatch(element(learnedUi.w,'result').textContent,/첨부\s*파일 확인/);
+  assert.equal(element(learnedUi.w,'create-error'),null);
+  learnedUi.dom.window.close();
+  // Admin-only creation generates a log and selects its newly registered scenario.
+  const newErrorServer=server(), newErrorUi=await mount('admin',newErrorServer);
+  element(newErrorUi.w,'create-error').click(); await settle();
+  assert.equal(newErrorServer.posts[0].url,'/api/v1/log-generator/scenarios/new');
+  assert.ok(newErrorServer.posts[0].body.request_id);
+  assert.equal(element(newErrorUi.w,'scenario').value,'custom_browser');
+  assert.equal(element(newErrorUi.w,'create-error').disabled,true);
+  assert.equal(element(newErrorUi.w,'analyze').disabled,true);
+  newErrorUi.timers.find(timer=>timer.ms===1500).fn(); await settle(); await settle();
+  assert.equal(element(newErrorUi.w,'create-error').disabled,false);
+  assert.equal(element(newErrorUi.w,'manual-remediation').classList.contains('hidden'),false);
+  assert.equal(element(newErrorUi.w,'guidance-result').classList.contains('hidden'),true);
+  assert.deepEqual(newErrorUi.errors,[]);
+  newErrorUi.dom.window.close();
   console.log('Passed: four session pairs, scenario result tracking, execution/recovery sync, expired/failed/stale list, manual history, close, delayed read, coalescing, tab return and no-store reads.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
