@@ -219,6 +219,7 @@ _PAGE = """<!doctype html>
   .incident-table tr.recent-incident td:last-child { border-right:2px solid var(--err); }
   .recent-incident-badge { color:var(--err); font-size:12px; font-weight:700; margin-left:8px; }
   .card.recent-incident { border:2px solid var(--err); }
+  .card.completed-incident { border:2px solid var(--ok); }
   .incident-fields { display:grid; grid-template-columns:100px 1fr; gap:8px 14px; margin:14px 0; font-size:14px; }
   .incident-fields dt { color:var(--muted); }
   .incident-fields dd { margin:0; overflow-wrap:anywhere; }
@@ -575,6 +576,7 @@ function isOlderIncident(incident) {
 function renderIncidentDetails(incident, processing = null) {
   if (isOlderIncident(incident)) return;
   currentDetailedIncident = incident;
+  $("incident-detail-panel").classList.toggle("completed-incident", incident.status === "RESOLVED");
   currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
   const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발"};
   const origin = incident.synthetic === true ? "장애 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
