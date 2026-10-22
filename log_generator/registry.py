@@ -2,7 +2,7 @@
 
 main.py(무한 루프로 랜덤 발생)와 trigger.py(웹 콘솔에서 특정 시나리오
 1회 강제 실행) 양쪽이 이 목록을 공유한다. 에러 코드는
-error_detector.ERROR_PATTERNS / config.ERROR_RULES와 1:1로 맞춰져 있다.
+고정 오류 규칙 및 영속 저장된 신규 오류 정의를 통해 감지한다.
 """
 
 from scenario.auth_token_validation_failure_scenario import (
@@ -60,15 +60,8 @@ from scenario.pod_crashloop_backoff_scenario import (
     PodCrashLoopBackOffScenario,
 )
 
-from scenario.configuration_mismatch_scenario import ConfigurationMismatchScenario
-
 
 SCENARIO_REGISTRY = {
-    "configuration_mismatch": (
-        ConfigurationMismatchScenario,
-        "설정 불일치 · 조치 스크립트 없음 (CONFIGURATION_MISMATCH)",
-        "CONFIGURATION_MISMATCH",
-    ),
     "disk_full": (
         DiskFullScenario,
         "디스크 부족 (DISK_FULL)",
@@ -170,3 +163,17 @@ SCENARIO_REGISTRY = {
         "POD_CRASHLOOP_BACKOFF",
     ),
 }
+
+
+def get_scenarios():
+    """Include persisted scenarios without modifying Python source or restarting."""
+    from functools import partial
+    from operations.custom_scenarios import CustomScenarioStore
+    from scenario.custom_error_scenario import CustomErrorScenario
+
+    scenarios = dict(SCENARIO_REGISTRY)
+    for item in CustomScenarioStore().list():
+        scenarios[item["key"]] = (
+            partial(CustomErrorScenario, item["error_code"]), item["label"], item["error_code"],
+        )
+    return scenarios

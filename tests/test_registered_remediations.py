@@ -94,13 +94,13 @@ class RegisteredScriptTests(unittest.TestCase):
         self.assertEqual(rec["targets"], [])
         self.assertTrue(manual_action_available(incident))
 
-    def test_configuration_mismatch_requires_operator_action_without_scripts(self):
+    def test_scriptless_error_requires_operator_action_without_scripts(self):
         from aiops.recommendation_quality_gate import RecommendationQualityGate
         from error_detector import detect_error_code
 
-        scenario, _, code = log_generator_routes.SCENARIO_REGISTRY["configuration_mismatch"]
+        scenario, _, code = log_generator_routes.SCENARIO_REGISTRY["rate_limit_exceeded"]
         errors = [event for event in scenario().events() if event.level == "ERROR"]
-        self.assertEqual([detect_error_code(event.message) for event in errors], [code])
+        self.assertEqual([detected for event in errors if (detected := detect_error_code(event.message))], [code])
         self.assertEqual(ERROR_RULES[code]["diagnostic_scripts"], [])
         self.assertEqual(RecommendationQualityGate().requires_fallback(
             code, ERROR_RULES[code]["remediation_candidates"], None

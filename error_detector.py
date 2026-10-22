@@ -155,7 +155,8 @@ def detect_error_code(
         if pattern.search(message):
             return error_code
 
-    return None
+    from operations.custom_scenarios import custom_error_code
+    return custom_error_code(message)
 
 
 def is_context_only_error(message, synthetic=False):

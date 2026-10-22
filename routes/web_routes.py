@@ -229,6 +229,8 @@ _PAGE = """<!doctype html>
   button.log-tab { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:8px 12px; }
   button.log-tab.selected { background:var(--accent); color:var(--accent-fg); }
   .scenario-card { margin-top:0; }
+  .scenario-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap; }
+  .scenario-heading label { margin:0; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
   @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -243,7 +245,7 @@ _PAGE = """<!doctype html>
   <div class="card scenario-card admin-only">
     <div class="row">
       <div>
-        <label for="scenario">장애 시나리오 (log_generator/main.py 시나리오)</label>
+        <div class="scenario-heading"><label for="scenario">장애 시나리오</label>__CREATE_ERROR_BUTTON__</div>
         <select id="scenario"></select>
       </div>
       <button id="analyze" disabled>분석</button>
@@ -625,7 +627,8 @@ function updateManualRegisterButton() {
 }
 function renderManualRemediation(incident, available) {
   const changed = currentManualIncident?.incident_id !== incident.incident_id;
-  currentManualIncident = {...incident, manualAllowed: available && incident.status !== "RESOLVED"};
+  const learned = (incident.latest_recommendation?.actions || []).some(action => action.learned_script === true);
+  currentManualIncident = {...incident, manualAllowed: available && !learned && incident.status !== "RESOLVED"};
   if (changed) {
     manualRegistrationId = newManualRegistrationId();
     $("manual-method").value = "";
@@ -635,7 +638,7 @@ function renderManualRemediation(incident, available) {
     $("manual-register-status").textContent = "";
   }
   const history = incident.manual_actions || [];
-  $("manual-remediation").classList.toggle("hidden", incident.status === "RESOLVED" || (!available && !history.length));
+  $("manual-remediation").classList.toggle("hidden", learned || incident.status === "RESOLVED" || (!available && !history.length));
   $("manual-form").classList.toggle("hidden", !available);
   $("manual-flow").textContent = available ? "수동 조치 후 방법과 스크립트를 등록하세요. 복구를 확인하면 같은 오류 재발 시 첨부 파일을 조치로 불러옵니다." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
   $("manual-target").textContent = [environmentLabel(incident.environment), incident.service, ...(incident.affected_hosts || [])].join(" / ");
@@ -927,14 +930,18 @@ async function postJSON(url, body) {
   return { ok: res.ok, status: res.status, data: await res.json() };
 }
 
-if (!IS_CLIENT) (async function loadScenarios() {
+let scenarioRunPending = false;
+async function loadScenarios(selected = sel.value) {
   const scenarios = await getJSON("/api/v1/log-generator/scenarios");
+  sel.replaceChildren();
   scenarios.forEach((s) => {
     const o = document.createElement("option");
     o.value = s.key; o.textContent = s.label; sel.appendChild(o);
   });
-  $("analyze").disabled = false;
-})();
+  if ([...sel.options].some(option => option.value === selected)) sel.value = selected;
+  $("analyze").disabled = scenarioRunPending || !sel.options.length;
+}
+if (!IS_CLIENT) loadScenarios();
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -942,9 +949,13 @@ function sleep(ms) {
 
 let currentSince = null;
 
-$("analyze").addEventListener("click", async () => {
+let pendingErrorRequestId = null;
+async function executeSelectedScenario(createNew = false) {
+  if (scenarioRunPending) return;
+  scenarioRunPending = true;
   closeIncidentDetails();
   $("analyze").disabled = true;
+  if ($("create-error")) $("create-error").disabled = true;
   $("analyze").textContent = "시나리오 실행 중…";
   setLogsVisible(true);
   $("result").classList.add("hidden");
@@ -962,9 +973,17 @@ $("analyze").addEventListener("click", async () => {
   selectedVerdict = null;
 
   try {
-    const { data } = await postJSON("/api/v1/log-generator/run", {
-      scenario: sel.value,
-    });
+    if (createNew && !pendingErrorRequestId) {
+      pendingErrorRequestId = globalThis.crypto?.randomUUID?.()
+        || "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, char => {
+          const value = Math.random() * 16 | 0;
+          return (char === "x" ? value : (value & 3 | 8)).toString(16);
+        });
+    }
+    const { data } = await postJSON(createNew ? "/api/v1/log-generator/scenarios/new" : "/api/v1/log-generator/run",
+      createNew ? {request_id: pendingErrorRequestId} : {scenario: sel.value});
+    if (data.scenario) await loadScenarios(data.scenario.key);
+    if (createNew && data.status === "triggered") pendingErrorRequestId = null;
 
     if (data.status !== "triggered") {
       $("wait-status").textContent = "실행 실패: " + JSON.stringify(data);
@@ -987,10 +1006,14 @@ $("analyze").addEventListener("click", async () => {
   } catch (e) {
     $("wait-status").textContent = "실행 실패: " + e;
   } finally {
-    $("analyze").disabled = false;
+    scenarioRunPending = false;
+    $("analyze").disabled = !sel.options.length;
     $("analyze").textContent = "분석";
+    if ($("create-error")) $("create-error").disabled = false;
   }
-});
+}
+$("analyze").addEventListener("click", () => executeSelectedScenario());
+$("create-error")?.addEventListener("click", () => executeSelectedScenario(true));
 
 function pollActivity() {
   if (!activityLoadInFlight) {
@@ -1579,6 +1602,7 @@ def _render(mode: str, title_suffix: str) -> Response:
     page = (
         _PAGE.replace("__MODE__", mode)
         .replace("__TITLE_SUFFIX__", title_suffix)
+        .replace("__CREATE_ERROR_BUTTON__", '<button id="create-error" type="button" class="secondary">신규 오류 생성</button>' if mode == "admin" else "")
     )
     return Response(page, mimetype="text/html")
 

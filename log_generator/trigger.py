@@ -11,7 +11,7 @@ from pathlib import Path
 
 from logger.file_writer import FileWriter
 from logger.json_formatter import JsonFormatter
-from registry import SCENARIO_REGISTRY
+from registry import get_scenarios
 from scenario.scenario_runner import ScenarioRunner
 from system.system_info import (
     FailureBehavior,
@@ -28,10 +28,11 @@ FLUENTBIT_LOG_PATH = (
 
 
 def run_scenario(key: str) -> dict:
-    if key not in SCENARIO_REGISTRY:
+    scenarios = get_scenarios()
+    if key not in scenarios:
         raise KeyError(f"unknown scenario: {key}")
 
-    scenario_cls, _, error_code = SCENARIO_REGISTRY[key]
+    scenario_cls, _, error_code = scenarios[key]
     scenario = scenario_cls()
 
     writer = FileWriter(str(FLUENTBIT_LOG_PATH))

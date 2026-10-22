@@ -21,7 +21,7 @@ function server() {
   return {incident:{incident_id:'INC-SHARED',version:2,status:'ACTION_REQUIRED',service:'orders',environment:'prod',
     error_code:'MEMORY_LEAK',affected_hosts:['orders-01'],occurrence_count:1,
     first_seen:'2026-10-09T15:15:00Z',last_seen:'2026-10-09T15:15:00Z',latest_recommendation:rec},
-    listMissing:false, listStale:null, execution:null, posts:[], reads:[]};
+    listMissing:false, listStale:null, execution:null, posts:[], reads:[], scenarios:[]};
 }
 function processing(s) {
   const i=s.incident, completed=i.status==='RESOLVED', done=i.status==='MONITORING';
@@ -43,7 +43,14 @@ async function mount(mode, s) {
         if (options.body) s.posts.push({url,body:JSON.parse(options.body instanceof w.FormData ? options.body.get('metadata') : options.body), file:options.body instanceof w.FormData ? options.body.get('script')?.name : null});
         s.reads.push(url);
         if (url==='/api/v1/operations/status') body={status:'ready',components:{},hosts:[]};
-        else if(url==='/api/v1/log-generator/scenarios') body=[];
+        else if(url==='/api/v1/log-generator/scenarios') body=s.scenarios;
+        else if(url==='/api/v1/log-generator/scenarios/new') {
+          const scenario={key:'custom_browser',label:'신규 오류 (NEW_ERROR_BROWSER)',error_code:'NEW_ERROR_BROWSER'};
+          s.scenarios.push(scenario);
+          s.incident={...s.incident,error_code:scenario.error_code,synthetic:true,status:'ACTION_REQUIRED',
+            latest_recommendation:{...s.incident.latest_recommendation,status:'manual_required',runbooks:[],actions:[],targets:[]}};
+          body={status:'triggered',scenario,error_code:scenario.error_code,triggered_at:'2026-10-09T15:15:00Z',events:[{level:'ERROR',message:'new error'}]};
+        }
         else if(url==='/api/v1/log-generator/latest-run') body={status:'none'};
         else if(url.startsWith('/api/v1/log-generator/activity?')) body={};
         else if(url.startsWith('/api/v1/log-generator/latest-recommendation?'))
@@ -191,5 +198,29 @@ function completed(m) {
   assert.equal(attachmentServer.posts.at(-1).body.method,'설정 복원');
   assert.equal(attachmentUi.errors.length,0);
   attachmentUi.dom.window.close();
+  // Learned errors hide manual history as well as the form, even without a bound target.
+  const learnedServer=server();
+  learnedServer.incident.latest_recommendation.actions=[{script_id:'LEARNED-existing',action_id:'learned',learned_script:true,targets:[]}];
+  learnedServer.incident.latest_recommendation.targets=[];
+  learnedServer.incident.manual_actions=[{operator:'previous',method:'fixed',recovered:true}];
+  const learnedUi=await mount('client',learnedServer); await open(learnedUi);
+  assert.equal(element(learnedUi.w,'manual-remediation').classList.contains('hidden'),true);
+  assert.equal(element(learnedUi.w,'manual-register').disabled,true);
+  assert.equal(element(learnedUi.w,'create-error'),null);
+  learnedUi.dom.window.close();
+  // Admin-only creation generates a log and selects its newly registered scenario.
+  const newErrorServer=server(), newErrorUi=await mount('admin',newErrorServer);
+  element(newErrorUi.w,'create-error').click(); await settle();
+  assert.equal(newErrorServer.posts[0].url,'/api/v1/log-generator/scenarios/new');
+  assert.ok(newErrorServer.posts[0].body.request_id);
+  assert.equal(element(newErrorUi.w,'scenario').value,'custom_browser');
+  assert.equal(element(newErrorUi.w,'create-error').disabled,true);
+  assert.equal(element(newErrorUi.w,'analyze').disabled,true);
+  newErrorUi.timers.find(timer=>timer.ms===1500).fn(); await settle(); await settle();
+  assert.equal(element(newErrorUi.w,'create-error').disabled,false);
+  assert.equal(element(newErrorUi.w,'manual-remediation').classList.contains('hidden'),false);
+  assert.equal(element(newErrorUi.w,'guidance-result').classList.contains('hidden'),true);
+  assert.deepEqual(newErrorUi.errors,[]);
+  newErrorUi.dom.window.close();
   console.log('Passed: four session pairs, scenario result tracking, execution/recovery sync, expired/failed/stale list, manual history, close, delayed read, coalescing, tab return and no-store reads.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -89,8 +89,8 @@ def bind_recommendation(incident, recommendation):
         for target in bound:
             if target not in targets:
                 targets.append(target)
-    if (incident.get("synthetic") is True and incident.get("error_code") in ERROR_RULES
-        and not ERROR_RULES[incident["error_code"]].get("remediation_candidates") and not learned):
+    if (incident.get("synthetic") is True and incident.get("error_code") not in {None, "UNKNOWN_ERROR"}
+        and not ERROR_RULES.get(incident["error_code"], {}).get("remediation_candidates") and not learned):
         recommendation.update(status="manual_required", runbooks=[], actions=[], targets=[],
             summary="등록된 조치 스크립트가 없습니다. 수동 조치 후 스크립트를 첨부해 등록하세요.")
     return {**recommendation, "actions": actions, "targets": targets}
@@ -107,7 +107,8 @@ def manual_action_available(incident):
     bound = with_execution_targets(incident)
     recommendation = bound.get("latest_recommendation") or {}
     return (
-        not recommendation.get("targets")
+        not any(action.get("learned_script") for action in recommendation.get("actions", []))
+        and not recommendation.get("targets")
         and bound.get("status") in {"ACTION_REQUIRED", "INVESTIGATING", "REOPENED", "MONITORING"}
         and not bound.get("active_execution_id")
         and (bound.get("status") != "MONITORING" or bound.get("recovery_confirmation") == "pending_manual")

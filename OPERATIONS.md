@@ -16,7 +16,7 @@ Agent 사용 전 다음을 준비합니다.
 
 ## 시나리오의 기존 셸 스크립트 실행
 
-`test-runbooks/catalog.json`은 기존 커밋 `245c9fa4b8b9d2bc562a0023a5bc738dfac88cd9`에서 복원한 셸 스크립트 58개의 종류·경로·SHA-256을 등록합니다. `config.ERROR_RULES`의 장애별 매핑을 사용하며 21개 시나리오 중 19개에는 대응 스크립트가 있습니다. `RATE_LIMIT_EXCEEDED`, `CONFIGURATION_MISMATCH`는 대응 스크립트가 없어 리소스 제안 없이 수동 등록으로 진행합니다.
+`test-runbooks/catalog.json`은 기존 커밋 `245c9fa4b8b9d2bc562a0023a5bc738dfac88cd9`에서 복원한 셸 스크립트 58개의 종류·경로·SHA-256을 등록합니다. `config.ERROR_RULES`의 장애별 매핑을 사용하며 기본 20개 시나리오 중 19개에는 대응 스크립트가 있습니다. `RATE_LIMIT_EXCEEDED`와 관리자가 생성한 신규 오류는 대응 스크립트가 없어 리소스 제안 없이 수동 등록으로 진행합니다.
 
 등록 스크립트 실행 대상은 `synthetic=true`, `simulation / order-api`인 해당 장애의 호스트에만 연결됩니다. 기존 추천을 조회할 때도 현재 등록 대상을 다시 연결하며 추천 ID·버전·유효 시간 검증을 유지합니다. 리소스 분석으로 전환된 시나리오 장애도 기존 등록 스크립트를 선택할 수 있습니다. 추가된 등록 스크립트는 평가되지 않은 항목으로 표시합니다.
 
@@ -187,10 +187,15 @@ Admin과 Client는 실제 장애 목록의 서비스 버튼으로 분석 상세�
 
 ## 첨부 스크립트 실행 서비스
 
-변경 후 `docker compose up -d --build`로 API·Worker와 `script-executor`, `script-sandbox-image`를 반영합니다. API와 Worker는 `LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts` 및 같은 `learned-script-state` 영속 볼륨을 사용합니다. 파일 원본은 외부 LLM에 전송하거나 모델 학습 데이터로 사용하지 않으며, 오류와 원본 파일의 연결을 저장합니다. 미확인 조치의 첨부 파일은 활성화하지 않습니다. 후속 수동 등록에서 복구를 확인하면 이전 첨부를 활성화할 수 있습니다.
+변경 후 `docker compose up -d --build`로 API·Worker와 `script-executor`, `script-sandbox-image`를 반영합니다. API·Worker·log-generator는 `LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts` 및 같은 `learned-script-state` 영속 볼륨을 사용합니다. 파일 원본은 외부 LLM에 전송하거나 모델 학습 데이터로 사용하지 않으며, 오류와 원본 파일의 연결을 저장합니다. 미확인 조치의 첨부 파일은 활성화하지 않습니다. 후속 수동 등록에서 복구를 확인하면 이전 첨부를 활성화할 수 있습니다.
 
 학습된 시뮬레이션 조치의 대상 인스턴스는 `learned-scripts`입니다. 기존 승인·사전검사·Redis 중복 예약·SQLite 실행 이력을 사용하며 첨부 파일의 SHA-256과 오류 범위를 확인합니다. 승인 후 파일 원본을 Redis 작업 큐로 보내고 별도 Executor가 일회용 컨테이너에서 실행합니다. API 프로세스에서는 첨부 코드를 실행하지 않습니다.
 
 Executor만 Docker socket을 사용합니다. 첨부 코드를 실행하는 컨테이너에는 Docker socket·호스트 디렉토리·애플리케이션 소스·서비스 자격 증명을 제공하지 않습니다. 네트워크 차단, UID 65534, 읽기 전용 루트, 64MiB 메모리, 32개 프로세스, 20초 실행 제한을 적용합니다. 결과는 시뮬레이션 실행 확인이며 실제 업무 복구 성공과 구분합니다. 실제 운영 환경 첨부는 조회·보관만 하며 기존 Agent의 명시적 운영 작업을 대신 실행하지 않습니다.
 
 실행 응답이 지연되면 영속 실행 ID로 뒤늦은 결과를 조회합니다. Executor가 결과를 남기기 전에 종료된 경우 같은 실행 ID를 자동 재실행하지 않습니다. `script-executor` 상태와 해당 실행 컨테이너·Redis 실행 기록을 점검한 뒤 처리합니다.
+
+
+## 관리자 신규 오류 생성
+
+관리자 화면의 **장애 시나리오** 제목 오른쪽 **신규 오류 생성**을 누르면 고유한 `NEW_ERROR_...` 오류와 `custom_...` 시나리오를 영속 저장하고 즉시 실행합니다. 별도 조치 스크립트가 없는 오류로 분석되며 리소스 제안 없이 수동 조치를 등록할 수 있습니다. 생성된 항목은 시나리오 선택 목록에서 다시 실행할 수 있고 재기동 후에도 유지됩니다. 학습을 완료한 오류가 재발하면 수동 조치 등록 영역은 숨기고 기존 학습된 스크립트를 제공합니다. 생성 버튼은 `/admin`(및 동일한 관리자 화면인 `/`)에만 표시합니다.

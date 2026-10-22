@@ -304,7 +304,7 @@ def request_diagnosis():
             raise ValueError("target not bound to recommendation")
         results = [
             coordinator().diagnose(target, script_id)
-            for script_id in ERROR_RULES[context["error_code"]].get(
+            for script_id in ERROR_RULES.get(context["error_code"], {}).get(
                 "diagnostic_scripts", []
             )
         ]

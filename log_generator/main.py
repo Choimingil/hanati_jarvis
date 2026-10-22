@@ -51,7 +51,6 @@ system = SystemInfo(
         probability=0.1,
         trigger_after=1.0,
         scenarios=[
-            FailureScenarioConfig(scenario=_scenario("configuration_mismatch"), probability=0.03),
             FailureScenarioConfig(scenario=_scenario("memory_leak"), probability=0.05),
             FailureScenarioConfig(scenario=_scenario("dns_failure"), probability=0.03),
             FailureScenarioConfig(scenario=_scenario("external_api_failure"), probability=0.03),

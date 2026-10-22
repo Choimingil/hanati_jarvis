@@ -111,8 +111,10 @@ services:
     volumes:
     - .:/workspace
     - log-volume:/workspace/fluentbit
+    - learned-script-state:/state/learned-scripts
     environment:
     - PYTHONPATH=/workspace/log_generator:/workspace
+    - LEARNED_SCRIPT_STATE_DIR=/state/learned-scripts
     - LOG_GENERATOR_MODE=${LOG_GENERATOR_MODE:-manual}
     command:
     - python

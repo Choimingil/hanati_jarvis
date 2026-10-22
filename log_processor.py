@@ -76,7 +76,7 @@ class LogProcessor:
         )
 
         if (incident and incident.get("synthetic") is True
-            and error_code in ERROR_RULES and not ERROR_RULES[error_code].get("remediation_candidates")
+            and error_code is not None and not ERROR_RULES.get(error_code, {}).get("remediation_candidates")
             and incident.get("status") not in {"REMEDIATING", "MONITORING"}):
             from operations.learned_scripts import ScriptLibrary
             learned = ScriptLibrary().latest(incident)
@@ -125,7 +125,7 @@ class LogProcessor:
                 incident=incident,
             )
 
-        rule = ERROR_RULES[error_code]
+        rule = ERROR_RULES.get(error_code, {})
 
         diagnosis_results = self._run_diagnostics(
             error_code=error_code,
