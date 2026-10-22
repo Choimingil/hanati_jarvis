@@ -178,6 +178,26 @@ def preflight():
 def _persist_result(manager, record):
     if record["result"].get("status") not in TERMINAL:
         return
+    from operations.learned_scripts import is_learned_target
+
+    learned_success = (
+        is_learned_target(record.get("target"))
+        and record["target"].get("environment") == "simulation"
+        and record["result"].get("execution_mode") == "simulation"
+        and record["result"]["status"] == "success"
+    )
+    if learned_success and not record.get("recovery_verified"):
+        # Sandbox completion has no external business recovery window to wait for.
+        # Keep unknown or failed verification pending rather than releasing it.
+        try:
+            verification = manager.verify(record)
+        except Exception:
+            verification = None
+        if verification and verification.get("recovered"):
+            repository.save_recovery_verification(redact({**verification, "incident_id": record["incident_id"]}))
+            record["recovery_verified"] = True
+            manager.redis.set("jarvis:execution:" + record["execution_id"], json.dumps(record))
+    completed = learned_success and record.get("recovery_verified") is True
     existing = repository.get_remediation_execution(record["execution_id"])
     if existing is None:
         repository.save_remediation_execution(
@@ -190,10 +210,12 @@ def _persist_result(manager, record):
     if incident and incident.get("active_execution_id") == record["execution_id"]:
         operational_incident_service.transition(
             incident,
-            "MONITORING"
+            "RESOLVED" if completed else "MONITORING"
             if record["result"]["status"] == "success"
             else "ACTION_REQUIRED",
-            {"last_execution_id": record["execution_id"], "last_execution": execution_summary(record), "active_execution_id": None, "recovery_confirmation": "pending_execution"},
+            {"last_execution_id": record["execution_id"], "last_execution": execution_summary(record),
+             "active_execution_id": None, "recovery_confirmation": "simulation" if completed else "pending_execution",
+             **({"recovered_at": now_iso()} if completed else {})},
         )
     manager.release_host(record)
 

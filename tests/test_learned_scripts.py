@@ -138,6 +138,63 @@ class LearnedScriptTests(unittest.TestCase):
             self.assertEqual(verified.get_json()["execution_mode"], "simulation")
         self.transport.request.assert_not_called()
 
+    def test_prior_host_observation_does_not_block_learned_script_or_its_next_recurrence(self):
+        import hashlib
+
+        self.upload()
+        legacy_key = "jarvis:host:" + hashlib.sha256(b"web01").hexdigest()
+        self.redis.set(legacy_key, "EXEC-other-action-awaiting-recovery")
+        self.redis.set(PREFIX + "heartbeat", "ready")
+        ids = []
+        with patch("operations.script_sandbox.client", return_value=self.redis), patch(
+            "operations.script_sandbox.SandboxBackend.perform",
+            return_value={"status": "success", "execution_mode": "simulation", "stdout": "attachment executed"}
+        ) as perform:
+            for _ in range(2):
+                rec = self.processor.process(self.log)["recommendation"]
+                incident = self.repo.get_operational_incident(rec["incident_id"])
+                body = {"incident_id": incident["incident_id"], "incident_version": incident["version"],
+                        "recommendation_id": rec["recommendation_id"], "action_id": rec["actions"][0]["action_id"],
+                        "approved_by": "tester", "target": rec["targets"][0]}
+                response = self.api.post("/api/v1/remediations/approve", json=body)
+                self.assertEqual(response.status_code, 200, response.get_json())
+                ids.append(response.get_json()["execution_id"])
+                self.assertEqual(self.repo.get_operational_incident(incident["incident_id"])["status"], "RESOLVED")
+                self.assertTrue(self.manager.get(ids[-1])["recovery_verified"])
+                self.assertIsNone(self.redis.get(self.manager.host_lock_key(body["target"])))
+            self.assertEqual(perform.call_count, 2)
+        self.assertNotEqual(ids[0], ids[1])
+        self.assertEqual(self.redis.get(legacy_key), "EXEC-other-action-awaiting-recovery")
+
+    def test_unresolved_sandbox_execution_is_still_reserved_and_never_reexecuted(self):
+        self.upload()
+        rec = self.processor.process(self.log)["recommendation"]
+        incident = self.repo.get_operational_incident(rec["incident_id"])
+        body = {"incident_id": incident["incident_id"], "incident_version": incident["version"],
+                "recommendation_id": rec["recommendation_id"], "action_id": rec["actions"][0]["action_id"],
+                "approved_by": "tester", "target": rec["targets"][0]}
+        self.redis.set(PREFIX + "heartbeat", "ready")
+        with patch("operations.script_sandbox.client", return_value=self.redis), patch(
+            "operations.script_sandbox.SandboxBackend.perform", return_value={"status": "unknown", "execution_mode": "simulation"}
+        ) as perform:
+            response = self.api.post("/api/v1/remediations/approve", json=body)
+            self.assertEqual(response.get_json()["status"], "unknown")
+            self.assertIsNotNone(self.redis.get(self.manager.host_lock_key(body["target"])))
+            again = self.api.post("/api/v1/remediations/approve", json=body)
+            self.assertTrue(again.get_json()["duplicate"])
+            self.assertEqual(perform.call_count, 1)
+            self.assertEqual(self.repo.get_operational_incident(incident["incident_id"])["status"], "REMEDIATING")
+
+    def test_prior_successful_learned_observation_reopens_on_recurrence(self):
+        self.upload()
+        rec = self.processor.process(self.log)["recommendation"]
+        incident = self.repo.incidents[rec["incident_id"]]
+        incident.update(status="MONITORING", recovery_confirmation="pending_execution",
+            last_execution={"status": "success", "target": rec["targets"][0], "script_id": rec["actions"][0]["script_id"]})
+        result = self.processor.process(self.log)
+        self.assertEqual(result["status"], "recommended")
+        self.assertNotEqual(result["recommendation"]["recommendation_id"], rec["recommendation_id"])
+
     def test_attachment_is_not_reused_for_other_error_service_environment_or_real_logs(self):
         self.upload()
         for changes in ({"error_code": "RATE_LIMIT_EXCEEDED"}, {"service": "payment-api"},

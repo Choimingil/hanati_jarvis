@@ -200,12 +200,15 @@ function completed(m) {
   attachmentUi.dom.window.close();
   // Learned errors hide manual history as well as the form, even without a bound target.
   const learnedServer=server();
-  learnedServer.incident.latest_recommendation.actions=[{script_id:'LEARNED-existing',action_id:'learned',learned_script:true,targets:[]}];
+  learnedServer.incident.latest_recommendation.actions=[{script_id:'LEARNED-existing',action_id:'learned',learned_script:true,attachment:{filename:'recover.sh'},targets:[]}];
+  learnedServer.incident.latest_recommendation.runbooks=[{script_id:'LEARNED-existing',learned_script:true}];
   learnedServer.incident.latest_recommendation.targets=[];
   learnedServer.incident.manual_actions=[{operator:'previous',method:'fixed',recovered:true}];
   const learnedUi=await mount('client',learnedServer); await open(learnedUi);
   assert.equal(element(learnedUi.w,'manual-remediation').classList.contains('hidden'),true);
   assert.equal(element(learnedUi.w,'manual-register').disabled,true);
+  assert.equal(learnedUi.w.document.querySelector('#result a[href*="/remediations/scripts/"]'),null);
+  assert.doesNotMatch(element(learnedUi.w,'result').textContent,/첨부\s*파일 확인/);
   assert.equal(element(learnedUi.w,'create-error'),null);
   learnedUi.dom.window.close();
   // Admin-only creation generates a log and selects its newly registered scenario.

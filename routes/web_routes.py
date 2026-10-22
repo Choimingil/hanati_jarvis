@@ -1218,10 +1218,6 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
     el.actionable = !["completed", "action_completed"].includes(processing?.state);
     if (action?.learned_script) {
       el.querySelector(".runbook-tag").textContent = "학습된 첨부 스크립트";
-      const link = document.createElement("a");
-      link.href = "/api/v1/remediations/scripts/" + encodeURIComponent(action.script_id) + "?incident_id=" + encodeURIComponent(rec.incident_id);
-      link.textContent = "첨부 파일 확인: " + action.attachment.filename;
-      el.querySelector("dl").after(link);
     }
     if (action?.execution_mode === "simulation") {
       el.querySelector(".runbook-tag").textContent = "등록 스크립트 실행";
