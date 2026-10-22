@@ -104,6 +104,8 @@ function completed(m) {
   for(const [actorMode,observerMode] of [['admin','client'],['client','admin'],['admin','admin'],['client','client']]) {
     const s=server(), actor=await mount(actorMode,s), observer=await mount(observerMode,s);
     await open(actor);
+    assert.equal(actor.w.document.getElementById('refresh-incidents'),null);
+    assert.equal(actor.w.document.querySelector('.runbook .diagnose'),null);
     if(observerMode==='admin') {
       // Scenario results must start tracking the incident without a list click.
       const waiting=observer.w.waitForRecommendation('MEMORY_LEAK','2026-10-09T15:15:00Z');

@@ -116,13 +116,15 @@ class OperationalIncidentService:
         count = int(existing.get("occurrence_count", 0)) + 1
         status = existing.get("status", "ANALYZING")
         from operations.learned_scripts import is_learned_target
+        from operations.scenario_scripts import is_scenario_target
 
         previous_execution = existing.get("last_execution") or {}
         completed_sandbox = (
             status == "MONITORING" and existing.get("synthetic") is True
             and existing.get("recovery_confirmation") == "pending_execution"
             and previous_execution.get("status") == "success"
-            and is_learned_target(previous_execution.get("target"))
+            and (is_learned_target(previous_execution.get("target"))
+                 or is_scenario_target(previous_execution.get("target")))
             and previous_execution["target"].get("environment") == "simulation"
         )
         if status == "RESOLVED" or completed_sandbox:

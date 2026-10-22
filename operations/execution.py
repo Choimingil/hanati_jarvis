@@ -94,6 +94,10 @@ class ExecutionCoordinator:
         if is_learned_target(target) and target.get("environment") == "simulation":
             identity = json.dumps(target_identity(target), sort_keys=True)
             return "jarvis:sandbox:" + hashlib.sha256(identity.encode()).hexdigest()
+        from operations.scenario_scripts import is_scenario_target
+        if is_scenario_target(target):
+            identity = json.dumps(target_identity(target), sort_keys=True)
+            return "jarvis:scenario:" + hashlib.sha256(identity.encode()).hexdigest()
         return "jarvis:host:" + hashlib.sha256(target["host"].encode()).hexdigest()
 
     def prepare(self, context, target):

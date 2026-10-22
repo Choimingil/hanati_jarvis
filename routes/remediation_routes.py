@@ -179,14 +179,15 @@ def _persist_result(manager, record):
     if record["result"].get("status") not in TERMINAL:
         return
     from operations.learned_scripts import is_learned_target
+    from operations.scenario_scripts import is_scenario_target
 
-    learned_success = (
-        is_learned_target(record.get("target"))
+    simulation_success = (
+        (is_learned_target(record.get("target")) or is_scenario_target(record.get("target")))
         and record["target"].get("environment") == "simulation"
         and record["result"].get("execution_mode") == "simulation"
         and record["result"]["status"] == "success"
     )
-    if learned_success and not record.get("recovery_verified"):
+    if simulation_success and not record.get("recovery_verified"):
         # Sandbox completion has no external business recovery window to wait for.
         # Keep unknown or failed verification pending rather than releasing it.
         try:
@@ -197,7 +198,7 @@ def _persist_result(manager, record):
             repository.save_recovery_verification(redact({**verification, "incident_id": record["incident_id"]}))
             record["recovery_verified"] = True
             manager.redis.set("jarvis:execution:" + record["execution_id"], json.dumps(record))
-    completed = learned_success and record.get("recovery_verified") is True
+    completed = simulation_success and record.get("recovery_verified") is True
     existing = repository.get_remediation_execution(record["execution_id"])
     if existing is None:
         repository.save_remediation_execution(

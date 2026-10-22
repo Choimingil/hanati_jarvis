@@ -20,8 +20,8 @@
    (장애/추정 원인/신뢰도/조치/예상 영향/과거 실행 이력/실패 시 대응)
 4. 각 Runbook에서 "승인"하면 `POST /api/v1/remediations/approve` 로 해당
    스크립트를 실제로 호출하고 결과(stdout)를 보여준다. "거부"는 스크립트를
-   실행하지 않고 감사 기록만 남긴다. "진단 요청"은 그 오류 코드의 진단
-   스크립트를 다시 돌려서 최신 상태를 보여준다
+   실행하지 않고 감사 기록만 남긴다. 시나리오 스크립트의 정상 종료와 파일
+   검증이 확인되면 자동으로 시뮬레이션 처리를 완료한다.
 """
 
 from flask import Blueprint, Response
@@ -132,9 +132,7 @@ _PAGE = """<!doctype html>
   .runbook button.reject {
     background: transparent; color: var(--err); border: 1px solid var(--err);
   }
-  .runbook button.diagnose {
-    background: transparent; color: var(--muted); border: 1px solid var(--border);
-  }
+
   .runbook.decided, .runbook.locked { opacity: .6; }
   .runbook .decision {
     font-size: 13px; font-weight: 700; margin-top: 10px;
@@ -253,7 +251,7 @@ _PAGE = """<!doctype html>
   </div>
   <div class="console-head">
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
-    <div class="console-actions"><button id="refresh-incidents" class="secondary">새로고침</button><button id="log-toggle" class="admin-only">로그 조회</button></div>
+    <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
   <div class="card"><strong>수집·분석 상태</strong><div id="operations-status">상태 확인 중…</div><div id="operations-components" class="component-status"></div><div id="collection-hosts"></div></div>
   <div class="incident-stats" role="tablist" aria-label="장애 상태">
@@ -876,7 +874,7 @@ async function fetchIncidents() {
   } catch (error) {
     $("incident-list-status").textContent = incidentsLoaded
       ? "장애 목록 조회 실패 — 마지막 조회 결과를 표시하고 있습니다."
-      : "장애 목록 조회 실패 — 새로고침으로 다시 시도하세요.";
+      : "장애 목록 조회 지연 — 연결을 다시 확인하고 있습니다.";
     return false;
   }
 }
@@ -896,7 +894,6 @@ function setLogsVisible(visible) {
   }
   $("log-toggle").textContent = visible ? "로그 닫기" : "로그 조회";
 }
-$("refresh-incidents").addEventListener("click", loadIncidents);
 $("log-toggle").addEventListener("click", () => setLogsVisible($("log-tabs-panel").classList.contains("hidden")));
 $("log-close").addEventListener("click", () => setLogsVisible(false));
 document.querySelectorAll(".log-tab").forEach((button) => {
@@ -1207,7 +1204,6 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
       <div class="buttons">
         <button class="approve" disabled>승인 후 실행</button>
         <button class="reject">거부</button>
-        <button class="diagnose">진단 요청</button>
       </div>`;
 
     const action = (rec.actions || []).find(
@@ -1248,9 +1244,6 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
     );
     el.querySelector(".reject").addEventListener(
       "click", () => decideRunbook(rb.script_id, action, el, "reject")
-    );
-    el.querySelector(".diagnose").addEventListener(
-      "click", () => requestDiagnosis(action, el)
     );
 
     // 이미 승인/거부한 Runbook은 새로고침해도 처리된 상태로 보여준다.
@@ -1490,7 +1483,7 @@ $("feedback-submit").addEventListener("click", async () => {
 
 function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {
-    const targetRequired = b.matches(".approve, .diagnose");
+    const targetRequired = b.matches(".approve");
     b.disabled = disabled || el.actionable === false || !el.action || el.executionPending
       || el.classList.contains("decided")
       || (el.classList.contains("locked") && b.matches(".approve, .reject"))
@@ -1578,15 +1571,6 @@ async function decideRunbook(scriptId, action, el, decision) {
   }
 }
 
-async function requestDiagnosis(action, el) {
-  if (!action) return;
-  try {
-    const {data} = await postJSON("/api/v1/remediations/diagnose", actionBody(action,el));
-    $("exec").classList.remove("hidden");
-    $("exec-output").textContent = JSON.stringify(data,null,2);
-    $("exec-status").textContent = data.status;
-  } catch (error) { el.querySelector(".decision").textContent = "진단 실패: " + error; }
-}
 
 </script>
 </body>
