@@ -3,12 +3,57 @@ set -euo pipefail
 SCRIPT_ID="cleanup_temp_files"
 log() {
   local level="$1"; shift
-  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$SCRIPT_ID" "$*"
 }
 
-log INFO "Runbook started; action=cleanup temp files change_id=SIM-CLEANUP_TEMP_FILES"
-sleep 0.2
-log INFO "Action step completed; validation=passed action=cleanup temp files"
-sleep 0.2
-log INFO "Runbook completed; result=success recovery_confirmation=pending"
+
+log INFO "phase=01/25 Approval received; execution context validated; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=02/25 Checking target identity and policy scope; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=03/25 Acquiring simulated action reservation; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=04/25 Capturing pre-action state snapshot; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=05/25 Reviewing expected impact and rollback notes; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=06/25 Preparing isolated simulation runbook; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=07/25 Confirming no production command will be issued; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=08/25 Starting simulated action phase; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=09/25 Applying planned step to simulation record; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=10/25 Waiting for dependent component response; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=11/25 Checking intermediate action checkpoint; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=12/25 Refreshing simulated service state; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=13/25 Reviewing queued requests and in-flight work; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=14/25 Validating configuration consistency; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=15/25 Checking downstream dependency indicators; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=16/25 Waiting for propagation window; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=17/25 Confirming action record is complete; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=18/25 Running post-action smoke-check simulation; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=19/25 Comparing simulated state with expected outcome; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=20/25 Recording execution evidence and operator audit; operation=cleanup_temp_files"
+sleep 0.05
+log WARN "phase=21/25 Action script completed in simulation; recovery remains pending; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=22/25 Ready for separate recovery verification; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=23/25 Checking rollback readiness and safety boundary; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=24/25 Reviewing affected request cohort; operation=cleanup_temp_files"
+sleep 0.05
+log INFO "phase=25/25 Confirming no production endpoint was contacted; operation=cleanup_temp_files"
 exit 0

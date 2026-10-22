@@ -1,296 +1,296 @@
 {
-  "source_commit": "245c9fa4b8b9d2bc562a0023a5bc738dfac88cd9",
-  "mode": "simulation",
-  "scripts": {
-    "check_auth_service_health": {
-      "path": "test-runbooks/check_auth_service_health.sh",
-      "sha256": "269135dd93801586ed404600ca7d6f01021d9380bdfc640264c4e5ae1d912f1b",
-      "kind": "diagnostic"
-    },
-    "check_connection_pool": {
-      "path": "test-runbooks/check_connection_pool.sh",
-      "sha256": "4843bb946c57c3084beff573fb8ed5473d76d1b3705af4bb37782967eb7296a5",
-      "kind": "diagnostic"
-    },
-    "check_container_memory_limits": {
-      "path": "test-runbooks/check_container_memory_limits.sh",
-      "sha256": "e5681d953788f16cca2f7584e74ab934939144fe8547293552382dd2a195c038",
-      "kind": "diagnostic"
-    },
-    "check_db_connection": {
-      "path": "test-runbooks/check_db_connection.sh",
-      "sha256": "1e7f620a90b9898908c739872a2bbbd702dcaf347335a829c1f9f64b1859504a",
-      "kind": "diagnostic"
-    },
-    "check_db_locks": {
-      "path": "test-runbooks/check_db_locks.sh",
-      "sha256": "b2703f97c6c67485408d6592256cc768752bae5a8873b40ba53869630a6601fe",
-      "kind": "diagnostic"
-    },
-    "check_disk_usage": {
-      "path": "test-runbooks/check_disk_usage.sh",
-      "sha256": "a239c0f927218d55c0f4d0263e5432b3bcbeecbd42266b5faf9a392bc4da9845",
-      "kind": "diagnostic"
-    },
-    "check_dns_resolution": {
-      "path": "test-runbooks/check_dns_resolution.sh",
-      "sha256": "d6cec3f47b6eae829f1834b00adaf066f58782668e1d51403d57d147699d0717",
-      "kind": "diagnostic"
-    },
-    "check_external_api": {
-      "path": "test-runbooks/check_external_api.sh",
-      "sha256": "961b9d082ca247a88065279c7f9db1b3a18bbfc4ee33eaf2a778c33818503762",
-      "kind": "diagnostic"
-    },
-    "check_jdbc_version": {
-      "path": "test-runbooks/check_jdbc_version.sh",
-      "sha256": "f450e5959bb9ddde14b85f436c167b692ee91b45f995236dfb9880a04006d909",
-      "kind": "diagnostic"
-    },
-    "check_kafka_connection": {
-      "path": "test-runbooks/check_kafka_connection.sh",
-      "sha256": "d6e6b54f7977ce44ebbc2c1759a830f09a5483779f93e03689caa9079ef87105",
-      "kind": "diagnostic"
-    },
-    "check_large_files": {
-      "path": "test-runbooks/check_large_files.sh",
-      "sha256": "f35407b54cea2c50ed39458b4bb04d82840d3214225fff5a4f0b15a03d6e5bff",
-      "kind": "diagnostic"
-    },
-    "check_memory_usage": {
-      "path": "test-runbooks/check_memory_usage.sh",
-      "sha256": "c7d3f12170992262602da2fcdd130928af88792d086c7231688b91dea20dab73",
-      "kind": "diagnostic"
-    },
-    "check_open_files": {
-      "path": "test-runbooks/check_open_files.sh",
-      "sha256": "a1db43389783c477b4748a65c400ade636de49b64e42ff7dfe16a06293e2f4d7",
-      "kind": "diagnostic"
-    },
-    "check_payment_gateway": {
-      "path": "test-runbooks/check_payment_gateway.sh",
-      "sha256": "7d9a7cb462c1ae908a8d2c0942780a9cfcfd7856a896c62ba41cc699c2b9d2b2",
-      "kind": "diagnostic"
-    },
-    "check_pod_status": {
-      "path": "test-runbooks/check_pod_status.sh",
-      "sha256": "a0b8462dbbcc24c457e6c2fc1236972862c8c55aa7d469af758fd517e170a1b6",
-      "kind": "diagnostic"
-    },
-    "check_redis_status": {
-      "path": "test-runbooks/check_redis_status.sh",
-      "sha256": "1454f40002303190a565739177c25a24f448ac61d0b835f7971e7ef130b10f55",
-      "kind": "diagnostic"
-    },
-    "check_replication_lag": {
-      "path": "test-runbooks/check_replication_lag.sh",
-      "sha256": "922a6ef4ac4f794414ddecddce2a6fd624c396a47204ecb94c04d6169e0c24b3",
-      "kind": "diagnostic"
-    },
-    "check_sqlnet": {
-      "path": "test-runbooks/check_sqlnet.sh",
-      "sha256": "8dd0b38fa77f49e46d53ba8b0714939352525c7c9a77f2ecf4d8d95faf4eac15",
-      "kind": "diagnostic"
-    },
-    "check_ssl_certificate": {
-      "path": "test-runbooks/check_ssl_certificate.sh",
-      "sha256": "e004f516d510ab932d90c0bfedfcfa96161c0ad519ed5da4193280bca7209b4b",
-      "kind": "diagnostic"
-    },
-    "check_thread_pool_usage": {
-      "path": "test-runbooks/check_thread_pool_usage.sh",
-      "sha256": "e9d9c19891774dd1411eff90186231bd75598115c207793b8264dba4d196d375",
-      "kind": "diagnostic"
-    },
-    "check_time_sync": {
-      "path": "test-runbooks/check_time_sync.sh",
-      "sha256": "2967d92caacd393d3a6fd6c86de41c54d05d101cd9a8462451c2833d21461f21",
-      "kind": "diagnostic"
-    },
-    "check_upstream_health": {
-      "path": "test-runbooks/check_upstream_health.sh",
-      "sha256": "656a1e430bf628d1c313538143c1653607c3ca3430daaf2b83afbdbd67b548ec",
-      "kind": "diagnostic"
-    },
-    "cleanup_temp_files": {
-      "path": "test-runbooks/cleanup_temp_files.sh",
-      "sha256": "839f20db59509af5d07951801b3029fe457e9d79b36605dc576d0b633f29d599",
-      "kind": "remediation"
-    },
-    "clear_redis_cache": {
-      "path": "test-runbooks/clear_redis_cache.sh",
-      "sha256": "4dfa435fc6b1b5f6a255fc74caf36cf0240f31e64b1949b72b33110abf8f237a",
-      "kind": "remediation"
-    },
-    "compress_old_logs": {
-      "path": "test-runbooks/compress_old_logs.sh",
-      "sha256": "ec978f8868e641f27e0a436ed431f9aa26d8cde10c66636d7298c82aa6172775",
-      "kind": "remediation"
-    },
-    "drain_unhealthy_upstream": {
-      "path": "test-runbooks/drain_unhealthy_upstream.sh",
-      "sha256": "17a9be35cbf777e28f0762fc017b8638d3996291f624fe3e1c2560c3830939cf",
-      "kind": "remediation"
-    },
-    "enable_circuit_breaker": {
-      "path": "test-runbooks/enable_circuit_breaker.sh",
-      "sha256": "d007278c1342345a4b8f47b97f2a122475e10c902f5e9907b2b6ff733a8fcb56",
-      "kind": "remediation"
-    },
-    "enable_payment_retry_queue": {
-      "path": "test-runbooks/enable_payment_retry_queue.sh",
-      "sha256": "ed2fce506fe683ef99c2741d592c5ca9d330d3eb4bd2cda1e7ec81d5c5e6c85e",
-      "kind": "remediation"
-    },
-    "failover_database": {
-      "path": "test-runbooks/failover_database.sh",
-      "sha256": "269fa28f5cc87cbc3f004d85c50ce7534b3c3a43bcc202a7d1188faf3824b1f2",
-      "kind": "remediation"
-    },
-    "failover_message_broker": {
-      "path": "test-runbooks/failover_message_broker.sh",
-      "sha256": "cfcad7646f0c4d19a4f2829f68c32a46b8d666d58b4d02742e13109da615f2f4",
-      "kind": "remediation"
-    },
-    "flush_dns_cache": {
-      "path": "test-runbooks/flush_dns_cache.sh",
-      "sha256": "091db302bdf18dc0ad1cd450b9c8c1dcabf64919711a2bdb7b7a31123e7f8d40",
-      "kind": "remediation"
-    },
-    "increase_connection_pool_size": {
-      "path": "test-runbooks/increase_connection_pool_size.sh",
-      "sha256": "0a8138b7081258650330e0b962ddf3e795e116adbe061a2b94b54dbf59ab0b4b",
-      "kind": "remediation"
-    },
-    "increase_fd_limit": {
-      "path": "test-runbooks/increase_fd_limit.sh",
-      "sha256": "1efc723aadfc0024920674e3ba0bf19ba55a43593af72dadf16ceb2385c00f11",
-      "kind": "remediation"
-    },
-    "increase_heap_size": {
-      "path": "test-runbooks/increase_heap_size.sh",
-      "sha256": "b298cab638f1517e04d33e2f646bad8cd2b99bd9d97f2806476e097191c5da6b",
-      "kind": "remediation"
-    },
-    "increase_memory_limit": {
-      "path": "test-runbooks/increase_memory_limit.sh",
-      "sha256": "20b93f4de1354db1d07b09620d894e648fc81840cda5a3f77f791e5b745db1bf",
-      "kind": "remediation"
-    },
-    "increase_pod_resources": {
-      "path": "test-runbooks/increase_pod_resources.sh",
-      "sha256": "42c6976148e5b214319fc091e16bd73d621a18e09a31955606cfee9c47ca10eb",
-      "kind": "remediation"
-    },
-    "increase_proxy_timeout": {
-      "path": "test-runbooks/increase_proxy_timeout.sh",
-      "sha256": "fcc1cf539d2cd6d31e350a72628617bbccb325aa24063678cedfafaa7c767a33",
-      "kind": "remediation"
-    },
-    "increase_thread_pool_size": {
-      "path": "test-runbooks/increase_thread_pool_size.sh",
-      "sha256": "abff77b0cca7f57da319d8dc62dec23d1a453cf536df96f1972521cbfe889e2b",
-      "kind": "remediation"
-    },
-    "kill_blocking_session": {
-      "path": "test-runbooks/kill_blocking_session.sh",
-      "sha256": "7be0d198966fb7863fc4ef5bba5466a3cb943a0e3fa30b6ceb988b5285ffb4c9",
-      "kind": "remediation"
-    },
-    "modify_sqlnet": {
-      "path": "test-runbooks/modify_sqlnet.sh",
-      "sha256": "8daa6b639f1413373b7cccacf3e62c4a37b226c6615fcd097bcadc629387d3cd",
-      "kind": "remediation"
-    },
-    "reload_tls_config": {
-      "path": "test-runbooks/reload_tls_config.sh",
-      "sha256": "d861181034feeff72dadd8160186ee07b47ca27aab7957f71ecd18daa541d8d7",
-      "kind": "remediation"
-    },
-    "renew_ssl_certificate": {
-      "path": "test-runbooks/renew_ssl_certificate.sh",
-      "sha256": "b2f1d0ad3be3ae7c88d37d39eea05d7e6b28ef93ca76f70280d6de20d4301149",
-      "kind": "remediation"
-    },
-    "restart_application": {
-      "path": "test-runbooks/restart_application.sh",
-      "sha256": "c2d087347a2fd1ecfcdb514a17150b27be1ffdd3e29ee5ce587475d5d550a750",
-      "kind": "remediation"
-    },
-    "restart_auth_service": {
-      "path": "test-runbooks/restart_auth_service.sh",
-      "sha256": "1c7f83a53af3f6e6a44a9e32d37397746f2d52886ba5afba0a92aed5204df96b",
-      "kind": "remediation"
-    },
-    "restart_db_connection_pool": {
-      "path": "test-runbooks/restart_db_connection_pool.sh",
-      "sha256": "48407302de1cacf92c260c377af8fb4c34c904f650c994f5d35c22f99d3edfff",
-      "kind": "remediation"
-    },
-    "restart_dns_resolver": {
-      "path": "test-runbooks/restart_dns_resolver.sh",
-      "sha256": "c62ff3417aca4458c9f503fb50debe9f3ae01f41b3ae0c4ee03bd88ff94ba810",
-      "kind": "remediation"
-    },
-    "restart_kafka_consumer": {
-      "path": "test-runbooks/restart_kafka_consumer.sh",
-      "sha256": "e3ae69894fbe77b8a28b31cfc07cb0b825de6d9acdc22e015bfd72df9db6b76a",
-      "kind": "remediation"
-    },
-    "restart_redis": {
-      "path": "test-runbooks/restart_redis.sh",
-      "sha256": "182d7792d4522010de5afc9466c4721654b4fa694131c5d32920cef0ea9a80f2",
-      "kind": "remediation"
-    },
-    "restart_replication": {
-      "path": "test-runbooks/restart_replication.sh",
-      "sha256": "56128f8e815e0fd3b6d4882f582ee782fc6c3efb475ccef1cfcbc82a596e54b0",
-      "kind": "remediation"
-    },
-    "restart_time_service": {
-      "path": "test-runbooks/restart_time_service.sh",
-      "sha256": "f6a3d12bae902ca97bf1a1d8ee7ac2811b818ac72a60af1ed9d9cd22c6f5bca9",
-      "kind": "remediation"
-    },
-    "resync_ntp_time": {
-      "path": "test-runbooks/resync_ntp_time.sh",
-      "sha256": "c75d0ababa2676b3e404f349b108ecab17dd800a7f4648dcb2e6037c5a9255af",
-      "kind": "remediation"
-    },
-    "retry_failed_transactions": {
-      "path": "test-runbooks/retry_failed_transactions.sh",
-      "sha256": "d7f2b91bbd3c5308a2cb06952bc62ed6e5e5b554f5f06c52d8e1736928926f93",
-      "kind": "remediation"
-    },
-    "rollback_deployment": {
-      "path": "test-runbooks/rollback_deployment.sh",
-      "sha256": "ba5ff443d5c27a139fe16db254b2ab87a00864e70af857962f72aa7ac9202bac",
-      "kind": "remediation"
-    },
-    "rotate_signing_key": {
-      "path": "test-runbooks/rotate_signing_key.sh",
-      "sha256": "4600c81f58f1c7f9af05451ec738a9a6a56f3e2889fb7e69c8e212f26a7be53f",
-      "kind": "remediation"
-    },
-    "route_reads_to_primary": {
-      "path": "test-runbooks/route_reads_to_primary.sh",
-      "sha256": "ea15fdbcf865cbd28c9c8eb068a1f358b6b0f1d5ed0632073f9fbd83cc7b2215",
-      "kind": "remediation"
-    },
-    "switch_api_endpoint": {
-      "path": "test-runbooks/switch_api_endpoint.sh",
-      "sha256": "d19bab77de42448345696bc848e1ff32f22bf731e9df05f4bab4cb683a5343e3",
-      "kind": "remediation"
-    },
-    "switch_payment_provider": {
-      "path": "test-runbooks/switch_payment_provider.sh",
-      "sha256": "0208bbc857da23678b89165f077ceb922f1217effbb2c11a4def1ec476423fc0",
-      "kind": "remediation"
-    },
-    "update_jdbc_driver": {
-      "path": "test-runbooks/update_jdbc_driver.sh",
-      "sha256": "00f0426a5ded138032e84b9a92054bb7871b9c4ece8be240c008b5d924bdaa17",
-      "kind": "remediation"
-    }
-  }
+    "source_commit":  "245c9fa4b8b9d2bc562a0023a5bc738dfac88cd9",
+    "mode":  "simulation",
+    "scripts":  {
+                    "check_auth_service_health":  {
+                                                      "path":  "test-runbooks/check_auth_service_health.sh",
+                                                      "sha256":  "9a669c4092df0d02a16d4f218915f11f14f92d695b1a76195550b07b064dbacc",
+                                                      "kind":  "diagnostic"
+                                                  },
+                    "check_connection_pool":  {
+                                                  "path":  "test-runbooks/check_connection_pool.sh",
+                                                  "sha256":  "5d2ca00f97964cfb991ba91a9bd11a2b8eba4ad2e6f7dd9cc2ddac360f595e2f",
+                                                  "kind":  "diagnostic"
+                                              },
+                    "check_container_memory_limits":  {
+                                                          "path":  "test-runbooks/check_container_memory_limits.sh",
+                                                          "sha256":  "ffbd96448253d60f53a3e5e5a858f8349c3a198d2476ebd9c059770b20808e30",
+                                                          "kind":  "diagnostic"
+                                                      },
+                    "check_db_connection":  {
+                                                "path":  "test-runbooks/check_db_connection.sh",
+                                                "sha256":  "df5b14a27880a5f725dbba77b6099bbcfbf6236b4823d750eaecd0d910293a51",
+                                                "kind":  "diagnostic"
+                                            },
+                    "check_db_locks":  {
+                                           "path":  "test-runbooks/check_db_locks.sh",
+                                           "sha256":  "6839a755afe90f16cd89a4d3e5d9dad976a364c21e4632909496a916da0083d1",
+                                           "kind":  "diagnostic"
+                                       },
+                    "check_disk_usage":  {
+                                             "path":  "test-runbooks/check_disk_usage.sh",
+                                             "sha256":  "43f635c9fbe2c44a4c39acb770f19a96890aaf802f56f09d1ef37760ff8616c3",
+                                             "kind":  "diagnostic"
+                                         },
+                    "check_dns_resolution":  {
+                                                 "path":  "test-runbooks/check_dns_resolution.sh",
+                                                 "sha256":  "7f67b5f79c0e0bb6af1bc00dc159e2f7d92dedc35a06690c25ab66423245f4ab",
+                                                 "kind":  "diagnostic"
+                                             },
+                    "check_external_api":  {
+                                               "path":  "test-runbooks/check_external_api.sh",
+                                               "sha256":  "68ffe892d45f9fc9b00d9f759c29cd1dd4f4ae05e4f3d1d5a538a112b046f846",
+                                               "kind":  "diagnostic"
+                                           },
+                    "check_jdbc_version":  {
+                                               "path":  "test-runbooks/check_jdbc_version.sh",
+                                               "sha256":  "6656b831d6391778a5501b2e42a3f695c1ae0c270616831f18cb41c95e2f29c5",
+                                               "kind":  "diagnostic"
+                                           },
+                    "check_kafka_connection":  {
+                                                   "path":  "test-runbooks/check_kafka_connection.sh",
+                                                   "sha256":  "4ae4267b6d58351a9f5dc83e35aa1595669c2ff25067f208a2e2a13b7423e881",
+                                                   "kind":  "diagnostic"
+                                               },
+                    "check_large_files":  {
+                                              "path":  "test-runbooks/check_large_files.sh",
+                                              "sha256":  "45839643d16b93f2da3b5902c2620a21ff8a4c394b32bdb4cb95dc1f913d4250",
+                                              "kind":  "diagnostic"
+                                          },
+                    "check_memory_usage":  {
+                                               "path":  "test-runbooks/check_memory_usage.sh",
+                                               "sha256":  "4a862f14e63635c70faec4c1addfa49d5de56ce59abd8552d2a91e251c77a11f",
+                                               "kind":  "diagnostic"
+                                           },
+                    "check_open_files":  {
+                                             "path":  "test-runbooks/check_open_files.sh",
+                                             "sha256":  "e119b6143b388113d902fe971524ab5728ab4a6522ac17235911a25e254ef1d1",
+                                             "kind":  "diagnostic"
+                                         },
+                    "check_payment_gateway":  {
+                                                  "path":  "test-runbooks/check_payment_gateway.sh",
+                                                  "sha256":  "95448b4ff1e57388baef4d0f165975812c5cb6611b791a1c8a98df54dd50262a",
+                                                  "kind":  "diagnostic"
+                                              },
+                    "check_pod_status":  {
+                                             "path":  "test-runbooks/check_pod_status.sh",
+                                             "sha256":  "50bf3fbbfa20838b5838df8f8268a8e111fdf098243f412a0587fdf8c5143f8b",
+                                             "kind":  "diagnostic"
+                                         },
+                    "check_redis_status":  {
+                                               "path":  "test-runbooks/check_redis_status.sh",
+                                               "sha256":  "b355068689f8a39e9dfde16d80e628903634f3d1b09d7aefe342f30aed9a566a",
+                                               "kind":  "diagnostic"
+                                           },
+                    "check_replication_lag":  {
+                                                  "path":  "test-runbooks/check_replication_lag.sh",
+                                                  "sha256":  "8a8682b76e6a1866e4a50f7a93fefda2900ad3bd7006004bce28a5db42d8dd8c",
+                                                  "kind":  "diagnostic"
+                                              },
+                    "check_sqlnet":  {
+                                         "path":  "test-runbooks/check_sqlnet.sh",
+                                         "sha256":  "d3ed1b23a1128abacd00dc391f813118e4b5f961789457303896279e3090963c",
+                                         "kind":  "diagnostic"
+                                     },
+                    "check_ssl_certificate":  {
+                                                  "path":  "test-runbooks/check_ssl_certificate.sh",
+                                                  "sha256":  "e82c31361785c5854f701469ea56a08623acf15f09c3e6faf3189d753bd3f78c",
+                                                  "kind":  "diagnostic"
+                                              },
+                    "check_thread_pool_usage":  {
+                                                    "path":  "test-runbooks/check_thread_pool_usage.sh",
+                                                    "sha256":  "794bd4fd03e560438e3bdfaab2775585d74c1c986ef8da30da9d0d0a5c4aeb2d",
+                                                    "kind":  "diagnostic"
+                                                },
+                    "check_time_sync":  {
+                                            "path":  "test-runbooks/check_time_sync.sh",
+                                            "sha256":  "cd4aa66b956bd66c70c0eedbf90612e99db1f08a756d6c1c909a2f09be651d54",
+                                            "kind":  "diagnostic"
+                                        },
+                    "check_upstream_health":  {
+                                                  "path":  "test-runbooks/check_upstream_health.sh",
+                                                  "sha256":  "281205f5f2cdc718bacdd9afcd6497a93e2a36d1533c66bc2bc88bac661881f0",
+                                                  "kind":  "diagnostic"
+                                              },
+                    "cleanup_temp_files":  {
+                                               "path":  "test-runbooks/cleanup_temp_files.sh",
+                                               "sha256":  "468dbecc1e8bd68d32950546df958bb797a7db38ba49fcd3bc879522d75bb4be",
+                                               "kind":  "remediation"
+                                           },
+                    "clear_redis_cache":  {
+                                              "path":  "test-runbooks/clear_redis_cache.sh",
+                                              "sha256":  "c915cd5bdf1459b6564285f56825cb5087a0f9f6c3a0bf3e70adcb46c746a5cd",
+                                              "kind":  "remediation"
+                                          },
+                    "compress_old_logs":  {
+                                              "path":  "test-runbooks/compress_old_logs.sh",
+                                              "sha256":  "5c25c6daf804510c7b3a4dbae0c475ac48f40b9ceb8abe6afc925ff0e77c76c4",
+                                              "kind":  "remediation"
+                                          },
+                    "drain_unhealthy_upstream":  {
+                                                     "path":  "test-runbooks/drain_unhealthy_upstream.sh",
+                                                     "sha256":  "22cb467916c5b94c076def33dc656affd97eac11c9e4d760f6b878dfc715c0cb",
+                                                     "kind":  "remediation"
+                                                 },
+                    "enable_circuit_breaker":  {
+                                                   "path":  "test-runbooks/enable_circuit_breaker.sh",
+                                                   "sha256":  "15d71aa0e8f71cee70f89fda76e3883e115134b8fd87769397ac14afbac920b7",
+                                                   "kind":  "remediation"
+                                               },
+                    "enable_payment_retry_queue":  {
+                                                       "path":  "test-runbooks/enable_payment_retry_queue.sh",
+                                                       "sha256":  "429522289c1cc1510e9046a8ca290879493a6367e780e544cc75fad918d36c7c",
+                                                       "kind":  "remediation"
+                                                   },
+                    "failover_database":  {
+                                              "path":  "test-runbooks/failover_database.sh",
+                                              "sha256":  "0cde6c364ae08ef2ad252b01b89fa2bba7455560c99596de54be8e006d98105b",
+                                              "kind":  "remediation"
+                                          },
+                    "failover_message_broker":  {
+                                                    "path":  "test-runbooks/failover_message_broker.sh",
+                                                    "sha256":  "f797a8c2741528fe3a30cba358031be37c45f2fac63d0c2a02257187c39ba961",
+                                                    "kind":  "remediation"
+                                                },
+                    "flush_dns_cache":  {
+                                            "path":  "test-runbooks/flush_dns_cache.sh",
+                                            "sha256":  "f4373754787728e87a3159186b50a51913850aa25d53a72198f4902332c59904",
+                                            "kind":  "remediation"
+                                        },
+                    "increase_connection_pool_size":  {
+                                                          "path":  "test-runbooks/increase_connection_pool_size.sh",
+                                                          "sha256":  "56672ff0f987470ca54adec4d62aad67171bf6ed6f85b6d358bb9b28c93227ef",
+                                                          "kind":  "remediation"
+                                                      },
+                    "increase_fd_limit":  {
+                                              "path":  "test-runbooks/increase_fd_limit.sh",
+                                              "sha256":  "a2d61b10792b5707eeb613ff8c86c324c7af6f2c4662d8ca0f5766bb916b69c8",
+                                              "kind":  "remediation"
+                                          },
+                    "increase_heap_size":  {
+                                               "path":  "test-runbooks/increase_heap_size.sh",
+                                               "sha256":  "f9b91224203c401cc91ae4e1b1fde32ed25181b3e220d8ed5f42090653609a69",
+                                               "kind":  "remediation"
+                                           },
+                    "increase_memory_limit":  {
+                                                  "path":  "test-runbooks/increase_memory_limit.sh",
+                                                  "sha256":  "059327856513786ed3ebb70051519b71695a614951341937f9af3d346750a28e",
+                                                  "kind":  "remediation"
+                                              },
+                    "increase_pod_resources":  {
+                                                   "path":  "test-runbooks/increase_pod_resources.sh",
+                                                   "sha256":  "2647b437e9bcba54806754802c05c867befd4b8a7c14d629ed5c235f1cc993f9",
+                                                   "kind":  "remediation"
+                                               },
+                    "increase_proxy_timeout":  {
+                                                   "path":  "test-runbooks/increase_proxy_timeout.sh",
+                                                   "sha256":  "869d9251217edcf0061a3c894115810794dc61d01fc814c659734a266c955a9c",
+                                                   "kind":  "remediation"
+                                               },
+                    "increase_thread_pool_size":  {
+                                                      "path":  "test-runbooks/increase_thread_pool_size.sh",
+                                                      "sha256":  "b00cb051fc327d59fe189c7891f6068646285c56d020280cf7fca8adb1b03d12",
+                                                      "kind":  "remediation"
+                                                  },
+                    "kill_blocking_session":  {
+                                                  "path":  "test-runbooks/kill_blocking_session.sh",
+                                                  "sha256":  "b16010ff1eeb9882e1905ec72c9d24787ed2745b95192c7f3b439b5238a09e13",
+                                                  "kind":  "remediation"
+                                              },
+                    "modify_sqlnet":  {
+                                          "path":  "test-runbooks/modify_sqlnet.sh",
+                                          "sha256":  "94a4afd852ae32f49e3bffd354f161987d499b9a9f9b7a747fed19d0deef7098",
+                                          "kind":  "remediation"
+                                      },
+                    "reload_tls_config":  {
+                                              "path":  "test-runbooks/reload_tls_config.sh",
+                                              "sha256":  "7eacf5ff7448d1bb71271c45073c42435e2223eb1cb1600841795b79ee60b7e0",
+                                              "kind":  "remediation"
+                                          },
+                    "renew_ssl_certificate":  {
+                                                  "path":  "test-runbooks/renew_ssl_certificate.sh",
+                                                  "sha256":  "5868ca7e6ffcd35fa0a54d3b391625fc7d8218d68f2b0aa576edeb41169ec375",
+                                                  "kind":  "remediation"
+                                              },
+                    "restart_application":  {
+                                                "path":  "test-runbooks/restart_application.sh",
+                                                "sha256":  "4c6048ae74cfc64ff9fbe7d18a160419f1e361c0548e804ee9deb67f4187a2c0",
+                                                "kind":  "remediation"
+                                            },
+                    "restart_auth_service":  {
+                                                 "path":  "test-runbooks/restart_auth_service.sh",
+                                                 "sha256":  "4a8e14c13b8ff3fa3b2504353f99814693c655179c1f636251574a46da473229",
+                                                 "kind":  "remediation"
+                                             },
+                    "restart_db_connection_pool":  {
+                                                       "path":  "test-runbooks/restart_db_connection_pool.sh",
+                                                       "sha256":  "f184bd5a03add1a30ccde02b506f1306c77e3bd0769ca78c42481dc742c42e65",
+                                                       "kind":  "remediation"
+                                                   },
+                    "restart_dns_resolver":  {
+                                                 "path":  "test-runbooks/restart_dns_resolver.sh",
+                                                 "sha256":  "c81392480a8b90b871f1956c16ba46fc3f41cf02e8ba0a8215abfdfe52695c1a",
+                                                 "kind":  "remediation"
+                                             },
+                    "restart_kafka_consumer":  {
+                                                   "path":  "test-runbooks/restart_kafka_consumer.sh",
+                                                   "sha256":  "01bd2edb58c0b805a370c2cd62a3c26639754d49f6ab1604d63f664a117889c0",
+                                                   "kind":  "remediation"
+                                               },
+                    "restart_redis":  {
+                                          "path":  "test-runbooks/restart_redis.sh",
+                                          "sha256":  "f0c678327d1f7689b002a2ea7b1889c9699d0700273fe69fae1a0bdece34cf03",
+                                          "kind":  "remediation"
+                                      },
+                    "restart_replication":  {
+                                                "path":  "test-runbooks/restart_replication.sh",
+                                                "sha256":  "9b3c5cbeb2ce79ea0abccad1189d8fd163ecf601afc43326a429a1d30b2e2e9a",
+                                                "kind":  "remediation"
+                                            },
+                    "restart_time_service":  {
+                                                 "path":  "test-runbooks/restart_time_service.sh",
+                                                 "sha256":  "5c0f3c5804784a4212679b9bace4357eabe962c7149c7b907ecf8e776c84d236",
+                                                 "kind":  "remediation"
+                                             },
+                    "resync_ntp_time":  {
+                                            "path":  "test-runbooks/resync_ntp_time.sh",
+                                            "sha256":  "3b1e638c3ccc93db7213c9ed5492fb6b3c5b6d9d56e9403c1b06f3058f4c17c5",
+                                            "kind":  "remediation"
+                                        },
+                    "retry_failed_transactions":  {
+                                                      "path":  "test-runbooks/retry_failed_transactions.sh",
+                                                      "sha256":  "43e25e883ff13ea5f0e4c1dbe396997ddc560a3fab2565091670fdfd03ed59b4",
+                                                      "kind":  "remediation"
+                                                  },
+                    "rollback_deployment":  {
+                                                "path":  "test-runbooks/rollback_deployment.sh",
+                                                "sha256":  "8063ed32ec705bfeda04de04f7c7c13cd660830cf67acd0ab7043a4ec11d4459",
+                                                "kind":  "remediation"
+                                            },
+                    "rotate_signing_key":  {
+                                               "path":  "test-runbooks/rotate_signing_key.sh",
+                                               "sha256":  "9bdb50b6411c59fa19d122f7072f7b333b707d62cd92a06d77cd6748bac73035",
+                                               "kind":  "remediation"
+                                           },
+                    "route_reads_to_primary":  {
+                                                   "path":  "test-runbooks/route_reads_to_primary.sh",
+                                                   "sha256":  "f9056897489553c740e5c468a51f0aeef9be43f86110c654e9d55f94d6ac847b",
+                                                   "kind":  "remediation"
+                                               },
+                    "switch_api_endpoint":  {
+                                                "path":  "test-runbooks/switch_api_endpoint.sh",
+                                                "sha256":  "1b216ccc9a6f328482a7deb06fe816a369c6c227eca0a4be4651e36e73b47cf5",
+                                                "kind":  "remediation"
+                                            },
+                    "switch_payment_provider":  {
+                                                    "path":  "test-runbooks/switch_payment_provider.sh",
+                                                    "sha256":  "774ff71a8288e9e560f1459a3e6af45d9bf8b7d8040f7d1e068a7f2c7e0f7d31",
+                                                    "kind":  "remediation"
+                                                },
+                    "update_jdbc_driver":  {
+                                               "path":  "test-runbooks/update_jdbc_driver.sh",
+                                               "sha256":  "4e7f3bc1df3e88f899782eb258a18264d252ef5e18ae2e2f85dafc6856eec89e",
+                                               "kind":  "remediation"
+                                           }
+                }
 }

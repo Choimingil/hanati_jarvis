@@ -3,12 +3,51 @@ set -euo pipefail
 SCRIPT_ID="rollback_deployment"
 log() {
   local level="$1"; shift
-  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$*"
+  printf '%s level=%s host=web01 service=order-api component=%s execution_mode=simulation message="[%s] %s"\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$SCRIPT_ID" "$SCRIPT_ID" "$*"
 }
 
-log INFO "Runbook started; action=rollback deployment change_id=SIM-ROLLBACK_DEPLOYMENT"
-sleep 0.2
-log INFO "Action step completed; validation=passed action=rollback deployment"
-sleep 0.2
-log INFO "Runbook completed; result=success recovery_confirmation=pending"
+
+log INFO "phase=01/22 Approval received; execution context validated; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=02/22 Checking target identity and policy scope; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=03/22 Acquiring simulated action reservation; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=04/22 Capturing pre-action state snapshot; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=05/22 Reviewing expected impact and rollback notes; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=06/22 Preparing isolated simulation runbook; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=07/22 Confirming no production command will be issued; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=08/22 Starting simulated action phase; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=09/22 Applying planned step to simulation record; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=10/22 Waiting for dependent component response; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=11/22 Checking intermediate action checkpoint; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=12/22 Refreshing simulated service state; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=13/22 Reviewing queued requests and in-flight work; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=14/22 Validating configuration consistency; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=15/22 Checking downstream dependency indicators; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=16/22 Waiting for propagation window; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=17/22 Confirming action record is complete; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=18/22 Running post-action smoke-check simulation; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=19/22 Comparing simulated state with expected outcome; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=20/22 Recording execution evidence and operator audit; operation=rollback_deployment"
+sleep 0.12
+log WARN "phase=21/22 Action script completed in simulation; recovery remains pending; operation=rollback_deployment"
+sleep 0.12
+log INFO "phase=22/22 Ready for separate recovery verification; operation=rollback_deployment"
 exit 0
