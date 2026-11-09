@@ -76,6 +76,10 @@ class ManualRemediationService:
             "version": version + 1, "updated_at": timestamp,
             **({"recovered_at": timestamp} if content["recovered"] else {}),
         }
+        if content["recovered"]:
+            from operations.incident_history import with_resolution
+
+            changes = with_resolution(incident, changes, manual_action=action)
         updated = self.repository.update_operational_incident(
             incident["incident_id"], changes, expected_version=version,
         )

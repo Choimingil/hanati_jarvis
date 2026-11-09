@@ -221,10 +221,12 @@ def _persist_result(manager, record):
     manager.release_host(record)
 
 
-@remediation_blueprint.post("/api/v1/remediations/approve")
-def approve_remediation():
+def execute_action(body):
+    """승인된 조치를 실행하고 (응답 본문, HTTP 상태)를 돌려준다.
+
+    직접 승인 API와 관리자 결재 승인이 같은 검증·잠금·실행 경로를 사용한다.
+    """
     try:
-        body = request.get_json(silent=True)
         if not isinstance(body, dict):
             raise ValueError("JSON object required")
         # Validate identifiers before consulting execution receipts.
@@ -239,14 +241,12 @@ def approve_remediation():
         if record:
             record = manager.reconcile(record)
             _persist_result(manager, record)
-            return jsonify(
-                {**record["result"], "execution_id": execution_id, "duplicate": True}
-            ), 200
+            return {**record["result"], "execution_id": execution_id, "duplicate": True}, 200
         context = _validate_action_request(body)
         # Approval is the only user step; inspect the selected target now.
         prepared = manager.prepare(context, body.get("target"))
         if prepared["status"] != "ready":
-            return jsonify(prepared), 409
+            return prepared, 409
         # Analysis may update while the Agent is answering; validate again before locking.
         context = _validate_action_request(body)
         proof = manager.validate_proof(
@@ -261,11 +261,19 @@ def approve_remediation():
             )
             record = manager.dispatch(record)
         _persist_result(manager, record)
-        return jsonify(
-            {**record["result"], "execution_id": execution_id}
-        ), 200 if record["result"].get("status") == "success" else 409
+        return (
+            {**record["result"], "execution_id": execution_id},
+            200 if record["result"].get("status") == "success" else 409,
+        )
     except Exception as exc:
-        return _error(exc)
+        response, status = _error(exc)
+        return response.get_json(), status
+
+
+@remediation_blueprint.post("/api/v1/remediations/approve")
+def approve_remediation():
+    payload, status = execute_action(request.get_json(silent=True))
+    return jsonify(payload), status
 
 
 @remediation_blueprint.get("/api/v1/remediations/executions/<execution_id>")
