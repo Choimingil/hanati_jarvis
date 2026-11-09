@@ -18,7 +18,8 @@
    Elasticsearch에 쌓일 때까지 짧게 폴링한다.
 3. LLM이 준 "오류 원인"과 신뢰도 높은 순 조치 제안을 Runbook 카드로 보여준다
    (장애/추정 원인/신뢰도/조치/예상 영향/과거 실행 이력/실패 시 대응)
-4. 각 Runbook에서 "승인"하면 `POST /api/v1/remediations/approve` 로 해당
+4. 각 Runbook에서 "결재 요청"하면 `POST /api/v1/approvals`로 결재 대기열에 올리고,
+   관리자가 admin 화면 "결재 대기"에서 승인하면 기존 승인 실행 경로로 해당
    스크립트를 실제로 호출하고 결과(stdout)를 보여준다. "거부"는 스크립트를
    실행하지 않고 감사 기록만 남긴다. 시나리오 스크립트의 정상 종료와 파일
    검증이 확인되면 자동으로 시뮬레이션 처리를 완료한다.
@@ -200,7 +201,7 @@ _PAGE = """<!doctype html>
   .check-row input { width: auto; }
   .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
   .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
-  .incident-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
+  .incident-stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
   .incident-stat { background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:13px; text-align:left; }
   .incident-stat:hover { border-color:var(--accent); }
   .incident-stat.selected { border-color:var(--accent); background:var(--bar); }
@@ -230,9 +231,28 @@ _PAGE = """<!doctype html>
   .scenario-card { margin-top:0; }
   .scenario-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap; }
   .scenario-heading label { margin:0; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; margin-left:6px; vertical-align:middle; }
+  .badge.approval { background:#fff1d6; color:#9a5b00; }
+  .badge.hold { background:#e8e3fb; color:#5a3fc0; }
+  .badge.rule { background:#fde4e7; color:var(--err); }
+  .incident-processing.on-hold { border-color:#7b61d9; }
+  .card.held-incident { border:2px solid #7b61d9; }
+  .workflow-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+  .workflow-table th, .workflow-table td { padding:8px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  .workflow-table th { color:var(--muted); white-space:nowrap; }
+  .workflow-table button { padding:6px 12px; font-size:13px; }
+  .workflow-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  button.danger { background:transparent; color:var(--err); border:1px solid var(--err); }
+  .history-summary { border-left:3px solid var(--ok); padding:6px 0 6px 12px; margin:8px 0; font-size:14px; }
+  .hold-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin:12px 0; }
+  .hold-controls input { flex:1 1 260px; width:auto; }
+  .notification { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
+  .notification.unread { background:var(--bar); }
+  .notification strong { display:block; }
+  #notification-count { margin-left:6px; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
-  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
     .feedback-grid .full { grid-column: auto; }
@@ -254,12 +274,37 @@ _PAGE = """<!doctype html>
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
     <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
+  <div id="notification-panel" class="card">
+    <div class="card-head"><div><strong>알림</strong><span id="notification-count" class="badge rule hidden"></span><span class="muted"> 예외 처리·결재·보류 알림</span></div><button id="notification-read" class="secondary" type="button">모두 읽음</button></div>
+    <div id="notification-list" class="muted">알림을 불러오는 중…</div>
+  </div>
+  <div id="approval-panel" class="card admin-only">
+    <div class="card-head"><div><strong>결재 대기</strong><span id="approval-count" class="badge approval">0건</span><span class="muted"> 운영자 결재 요청 → 관리자 승인 시 조치 실행</span></div>
+      <div style="display:flex;gap:6px;align-items:center"><label for="approver" style="margin:0">결재자</label><input id="approver" value="admin" maxlength="200" style="width:120px;padding:6px 8px"></div></div>
+    <div id="approval-status" class="muted" role="status"></div>
+    <div id="approval-list"></div>
+    <details id="approval-history-box"><summary>최근 결재 처리 이력</summary><div id="approval-history"></div></details>
+  </div>
+  <div id="rule-panel" class="card admin-only">
+    <div class="card-head"><div><strong>에러별 예외 처리 규칙</strong><span class="muted"> 즉시 해결이 어려운 오류는 자동 보류(킵)하고 발생 시 알림만 보냅니다</span></div></div>
+    <div id="rule-list"></div>
+    <form id="rule-form" class="feedback-grid" style="margin-top:12px">
+      <div><label for="rule-code">오류 코드</label><input id="rule-code" required maxlength="120" placeholder="예: LEGACY_INTERFACE_TIMEOUT"></div>
+      <div><label for="rule-interval">알림 간격(초, 0=매 발생)</label><input id="rule-interval" type="number" min="0" max="86400" value="300"></div>
+      <div><label for="rule-service">단위시스템 (비우면 전체)</label><input id="rule-service" maxlength="200"></div>
+      <div><label for="rule-environment">환경 (비우면 전체)</label><input id="rule-environment" maxlength="200"></div>
+      <div class="full"><label for="rule-reason">예외 처리 사유</label><input id="rule-reason" required maxlength="1000" placeholder="예: 대외기관 개선 전까지 즉시 조치 불가"></div>
+      <div class="full"><button id="rule-submit" type="submit">예외 처리 규칙 등록</button> <span id="rule-status" class="muted" role="status"></span></div>
+    </form>
+  </div>
   <div class="card"><strong>수집·분석 상태</strong><div id="operations-status" role="status">상태 확인 중…</div><div id="operations-components" class="component-status"></div></div>
   <div class="incident-stats" role="tablist" aria-label="장애 상태">
     <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
     <button id="incident-tab-critical" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="critical"><span>긴급</span><strong id="stat-critical">0건</strong></button>
     <button id="incident-tab-unack" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="unack"><span>미확인</span><strong id="stat-unack">0건</strong></button>
     <button id="incident-tab-analyzing" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="analyzing"><span>분석중</span><strong id="stat-analyzing">0건</strong></button>
+    <button id="incident-tab-approval" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="approval"><span>결재 대기</span><strong id="stat-approval">0건</strong></button>
+    <button id="incident-tab-hold" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="hold"><span>보류(킵)</span><strong id="stat-hold">0건</strong></button>
   </div>
   <div id="incident-list-panel" class="card" role="tabpanel" aria-labelledby="incident-tab-open" tabindex="0">
     <div class="card-head"><strong id="incident-list-title">진행중 장애</strong><span class="muted">최근 10분</span></div>
@@ -273,7 +318,17 @@ _PAGE = """<!doctype html>
     <div id="incident-detail-load-status" class="muted" role="status"></div>
     <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
     <dl id="incident-detail-fields" class="incident-fields"></dl>
+    <div id="hold-controls" class="hold-controls hidden">
+      <input id="hold-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)">
+      <button id="hold-button" type="button" class="secondary">보류(킵)</button>
+      <button id="release-button" type="button" class="secondary hidden">보류 해제</button>
+      <button id="rule-from-incident" type="button" class="danger admin-only">이 오류 예외 처리 등록</button>
+      <span id="hold-status" class="muted" role="status"></span>
+    </div>
     <strong>발생 내용</strong><pre id="incident-detail-message"></pre>
+    <div class="guidance-section"><strong>과거 유사 장애 조치 이력</strong> <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></div>
+    <div id="incident-history-summary" class="history-summary hidden"></div>
+    <div id="incident-history"></div>
     <div class="guidance-section"><strong>해당 장애의 최근 10분 로그 (최대 20건)</strong></div>
     <div id="incident-detail-logs-status" class="muted"></div>
     <pre id="incident-detail-logs"></pre>
@@ -445,11 +500,16 @@ let autoSelectedIncidentId = null;
 let manualSelectionVersion = 0;
 let activityLoadInFlight = null;
 const incidentFilters = {
-  open: {label: "진행중", matches: (item) => item.status !== "RESOLVED"},
+  open: {label: "진행중", matches: (item) => item.status !== "RESOLVED" && item.status !== "ON_HOLD"},
   critical: {label: "긴급", matches: (item) => item.severity === "CRITICAL"},
   unack: {label: "미확인", matches: (item) => item.status === "ACTION_REQUIRED"},
   analyzing: {label: "분석중", matches: (item) => item.status === "ANALYZING"},
+  approval: {label: "결재 대기", matches: (item) => item.pending_approval === true},
+  hold: {label: "보류(킵)", matches: (item) => item.status === "ON_HOLD"},
 };
+let currentApprovals = [];
+let currentHistory = null;
+let holdPending = false;
 let lastExecutionId = null;
 let currentManualIncident = null;
 let manualRegistrationId = null;
@@ -462,6 +522,7 @@ function actionBody(action, el) {
     action_id: action.action_id,
     incident_version: currentRecommendation.incident_version,
     approved_by: "web-ui",
+    requested_by: IS_CLIENT ? "operator" : "web-ui",
     target: selected === "" ? null : el.targets[Number(selected)],
   };
 }
@@ -555,9 +616,18 @@ function environmentLabel(value) {
 function renderIncidentProcessing(incident, processing = null) {
   const completed = incident.status === "RESOLVED";
   const actionCompleted = incident.status === "MONITORING";
+  const held = incident.status === "ON_HOLD";
   const state = processing || incident.processing || {};
-  $("incident-processing").classList.toggle("hidden", !completed && !actionCompleted);
+  $("incident-processing").classList.toggle("hidden", !completed && !actionCompleted && !held);
   $("incident-processing").classList.toggle("completed", completed);
+  $("incident-processing").classList.toggle("on-hold", held);
+  if (held) {
+    const hold = incident.hold || {};
+    $("incident-processing-title").textContent = state.label || "보류(킵)";
+    $("incident-processing-message").textContent = state.message || "보류된 장애입니다.";
+    $("incident-processing-meta").textContent = ["보류 시각: " + formatDateTime(hold.held_at), "보류자: " + (hold.operator || "-"), "사유: " + (hold.reason || "-")].join(" · ");
+    return;
+  }
   $("incident-processing-title").textContent = completed ? "처리 완료" : "조치 완료 · 복구 확인 대기";
   $("incident-processing-message").textContent = state.message || (completed ? "처리가 완료된 장애입니다." : "조치가 완료되었습니다. 서비스 복구 확인 후 처리가 완료됩니다.");
   const meta = [];
@@ -577,8 +647,9 @@ function renderIncidentDetails(incident, processing = null) {
   if (isOlderIncident(incident)) return;
   currentDetailedIncident = incident;
   $("incident-detail-panel").classList.toggle("completed-incident", incident.status === "RESOLVED");
+  $("incident-detail-panel").classList.toggle("held-incident", incident.status === "ON_HOLD");
   currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
-  const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발"};
+  const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발", ON_HOLD: (incident.hold?.source === "exception_rule" ? "예외 처리 · 보류" : "보류(킵)")};
   const origin = incident.synthetic === true ? "장애 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
   const fields = [
     ["단위시스템", incident.service || "unknown"],
@@ -612,6 +683,9 @@ function closeIncidentDetails() {
   $("guidance-result").classList.add("hidden");
   $("exec").classList.add("hidden");
   $("manual-remediation").classList.add("hidden");
+  $("hold-controls").classList.add("hidden");
+  currentApprovals = [];
+  currentHistory = null;
   currentManualIncident = null;
   currentRecommendation = null;
   currentGuidance = null;
@@ -745,7 +819,10 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
     // A read started before local completion must not undo the newer state.
     if (isOlderIncident(latest)) return true;
     renderIncidentDetails(latest, data.processing);
-    renderManualRemediation(latest, data.manual_action_available === true);
+    currentApprovals = data.approvals || [];
+    renderHoldControls(latest, data);
+    renderIncidentHistory(data.history, data.history_status);
+    renderManualRemediation(latest, data.manual_action_available === true && latest.status !== "ON_HOLD");
     $("incident-detail-load-status").textContent = "";
     $("incident-detail-logs-status").textContent = data.logs_status === "unavailable"
       ? "관련 로그 조회 실패 — 장애 정보는 조회되었습니다."
@@ -755,7 +832,7 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
     ).join("\\n\\n");
     clientRunPrefix = latest.service + " / " + latest.incident_id;
     const rec = latest.latest_recommendation;
-    const recommendationKey = JSON.stringify([latest.incident_id, latest.status, latest.version, rec?.recommendation_id, (data.decisions || []).map(d => [d.execution_id, d.result?.status])]);
+    const recommendationKey = JSON.stringify([latest.incident_id, latest.status, latest.version, rec?.recommendation_id, (data.decisions || []).map(d => [d.execution_id, d.result?.status]), currentApprovals.map(a => [a.approval_id, a.status, a.last_error])]);
     if (detailRecommendationKey !== recommendationKey) {
       $("result").classList.add("hidden");
       $("guidance-result").classList.add("hidden");
@@ -796,7 +873,7 @@ function renderIncidentList() {
   $("incident-list").innerHTML = items.length
     ? '<table class="incident-table"><thead><tr><th scope="col">장애 내용</th><th scope="col">발생 수</th><th scope="col">최근 발생</th></tr></thead><tbody>' + items.map((item, index) => `
       <tr>
-        <td class="incident-message"><button type="button" class="incident-detail" aria-controls="incident-detail-panel" data-index="${index}"><strong>${esc(item.error_code || "UNKNOWN_ERROR")}</strong><span class="recent-incident-badge hidden">최근 1분</span><span class="muted incident-preview">${esc(item.latest_message || item.representative_message || item.normalized_message || "")}</span></button></td>
+        <td class="incident-message"><button type="button" class="incident-detail" aria-controls="incident-detail-panel" data-index="${index}"><strong>${esc(item.error_code || "UNKNOWN_ERROR")}</strong><span class="recent-incident-badge hidden">최근 1분</span>${item.pending_approval ? '<span class="badge approval">결재 대기</span>' : ''}${item.status === "ON_HOLD" ? '<span class="badge ' + (item.hold?.source === "exception_rule" ? 'rule">예외 처리 · 보류' : 'hold">보류') + '</span>' : ''}<span class="muted incident-preview">${esc(item.latest_message || item.representative_message || item.normalized_message || "")}</span></button></td>
         <td>${esc(item.occurrence_count)}</td><td>${esc(formatTime(item.last_seen))}</td>
       </tr>`
     ).join("") + "</tbody></table>"
@@ -1200,11 +1277,11 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
       </dl>
       <label>조치 대상 (환경 / 서비스 / 호스트 / 인스턴스)</label>
       <select class="target-select"></select>
-      <p class="muted">대상 선택 → 승인 → 명령 실행 → 복구 확인</p>
+      <p class="muted">대상 선택 → 결재 요청 → 관리자 결재 승인 → 명령 실행 → 복구 확인</p>
       <div class="approval-status muted" role="status"></div>
       <div class="decision"></div>
       <div class="buttons">
-        <button class="approve" disabled>승인 후 실행</button>
+        <button class="approve" disabled>결재 요청</button>
         <button class="reject">거부</button>
       </div>`;
 
@@ -1258,11 +1335,14 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
     el.querySelector(".approval-status").textContent = processing?.state === "completed" ? "이 장애는 처리가 완료되었습니다."
       : decided?.result?.status === "success" ? "조치가 완료되었습니다. 서비스 복구 상태를 확인하세요."
       : decided?.decision === "reject" ? "거부한 조치입니다." : approvalHint(el);
+    if (!decided) applyApprovalState(el, rb.script_id);
     setRunbookButtonsDisabled(el, el.classList.contains("decided"));
   });
 
-  // 한 추천에서는 조치 하나만 실행한다 - 이미 승인된 게 있으면 나머지를 잠근다.
+  // 한 추천에서는 조치 하나만 실행한다 - 이미 승인(또는 결재 대기)된 게 있으면 나머지를 잠근다.
+  const pendingEl = [...box.querySelectorAll(".runbook")].find(el => el.approvalPending);
   if (decisions.some((d) => d.decision === "approve")) lockOtherRunbooks();
+  else if (pendingEl) lockOtherRunbooks(pendingEl);
 
   if (decisions.length) {
     const last = decisions[decisions.length - 1];
@@ -1273,14 +1353,38 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   ) ? "명령 실행 완료 — 업무 복구 확인 필요" : "분석 완료");
 }
 
-const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행되어 선택할 수 없습니다.";
+const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행(또는 결재 대기)되어 선택할 수 없습니다.";
+const APPROVAL_LABELS = {PENDING: "결재 대기", EXECUTING: "결재 승인 · 실행 중", APPROVED: "결재 승인", REJECTED: "결재 반려", FAILED: "결재 승인 후 실행 불가"};
+
+function applyApprovalState(el, scriptId) {
+  const approval = currentApprovals.find(item => item.script_id === scriptId);
+  el.approvalPending = Boolean(approval && ["PENDING", "EXECUTING"].includes(approval.status));
+  if (!approval) return;
+  const status = el.querySelector(".approval-status");
+  if (el.approvalPending) {
+    status.className = "approval-status status-pending";
+    status.textContent = "⏳ 결재 대기 — " + (approval.requested_by || "-") + " · " + formatDateTime(approval.requested_at)
+      + " 요청. 관리자 결재 승인 후 조치가 실행됩니다." + (approval.last_error ? " (직전 승인 시도 차단: " + approvalBlockReason({reason: approval.last_error}).replace("실행 차단 — ", "") + ")" : "");
+    el.querySelector(".decision").textContent = "⏳ 결재 대기중";
+    if (approval.target) {
+      const index = el.targets.findIndex(target => JSON.stringify(target) === JSON.stringify(approval.target));
+      if (index >= 0) el.querySelector(".target-select").value = String(index);
+    }
+  } else if (approval.status === "REJECTED" || approval.status === "FAILED") {
+    status.className = "approval-status status-err";
+    status.textContent = (APPROVAL_LABELS[approval.status]) + " — " + (approval.decided_by || "-")
+      + (approval.decision_reason ? " · 사유: " + approval.decision_reason : "")
+      + (approval.last_error ? " · " + approvalBlockReason({reason: approval.last_error}).replace("실행 차단 — ", "") : "")
+      + " · 대상을 확인하고 다시 결재를 요청할 수 있습니다.";
+  }
+}
 
 function approvalHint(el) {
   if (!el.action) return "이 추천에는 자동 실행 가능한 조치가 없습니다. 분석 내용과 진단 항목을 확인하세요.";
   if (!el.targets.length) return "이 조치에 등록된 실행 대상이 없습니다. 장애 상세의 수동 조치 등록에서 수행한 조치 방법을 입력하세요.";
   return el.querySelector(".target-select").value === ""
-    ? "조치 대상을 먼저 선택한 뒤 ‘승인 후 실행’을 누르세요."
-    : "선택한 대상에 조치를 실행하려면 ‘승인 후 실행’을 누르세요.";
+    ? "조치 대상을 먼저 선택한 뒤 ‘결재 요청’을 누르세요."
+    : "‘결재 요청’을 누르면 관리자 결재 승인 후 선택한 대상에 조치가 실행됩니다.";
 }
 function approvalBlockReason(data) {
   const checks = {redundancy:"이중화 컨테이너 정상", maintenance:"점검 상태 아님", rollback_ready:"실행 상태 복원 가능", host_idle:"진행 중인 실행 없음"};
@@ -1291,7 +1395,10 @@ function approvalBlockReason(data) {
     "agent machine credential rejected":"실행 Agent가 인증을 거절했습니다. 인증 설정을 확인하세요.",
     "stale recommendation":"장애 또는 추천이 갱신되었습니다. 최신 장애 상세에서 다시 승인하세요.",
     "expired recommendation":"추천 유효 시간이 지났습니다. 최신 분석 결과가 필요합니다.",
-    "incident is not actionable":"현재 장애 상태에서는 조치를 실행할 수 없습니다.",
+    "incident is not actionable":"현재 장애 상태(보류·완료 등)에서는 조치를 실행할 수 없습니다.",
+    "action not allowed for incident":"최신 분석 결과에 이 조치·대상이 없습니다. 다시 결재를 요청하세요.",
+    "recommendation does not belong to incident":"장애의 최신 추천이 바뀌었습니다. 다시 결재를 요청하세요.",
+    "invalid requested_by":"결재 요청자를 확인하세요.",
     "host is executing or waiting for business recovery confirmation":"대상이 다른 조치를 실행 중이거나 복구 확인을 기다리고 있습니다.",
     "dependency unavailable; inspect service status":"실행 Agent 또는 저장소에 연결할 수 없습니다. 기동·연결 상태를 확인하세요.",
     "container is not the registered Compose service":"등록한 Compose 프로젝트·서비스와 실제 컨테이너가 다릅니다.",
@@ -1487,12 +1594,46 @@ function setRunbookButtonsDisabled(el, disabled) {
   el.querySelectorAll(".buttons button").forEach((b) => {
     const targetRequired = b.matches(".approve");
     b.disabled = disabled || el.actionable === false || !el.action || el.executionPending
-      || el.classList.contains("decided")
+      || el.classList.contains("decided") || el.approvalPending
       || (el.classList.contains("locked") && b.matches(".approve, .reject"))
       || (targetRequired && el.querySelector(".target-select").value === "");
   });
-  el.querySelector(".target-select").disabled = Boolean(el.executionPending)
+  el.querySelector(".target-select").disabled = Boolean(el.executionPending) || Boolean(el.approvalPending)
     || el.classList.contains("decided") || el.actionable === false || !el.targets.length;
+}
+
+async function requestApproval(scriptId, action, el) {
+  const incidentId = currentRecommendation.incident_id;
+  el.executionPending = true;
+  setRunbookButtonsDisabled(el, true);
+  lockOtherRunbooks(el);
+  const status = el.querySelector(".approval-status");
+  status.className = "approval-status status-pending";
+  status.textContent = "결재를 요청하는 중…";
+  try {
+    const { data } = await postJSON("/api/v1/approvals", actionBody(action, el));
+    if (!el.isConnected || (selectedIncidentId && selectedIncidentId !== incidentId)) return;
+    if (data.approval && ["pending", "already_pending"].includes(data.status)) {
+      currentApprovals = [data.approval, ...currentApprovals.filter(item => item.approval_id !== data.approval.approval_id)];
+      el.executionPending = false;
+      applyApprovalState(el, scriptId);
+      status.textContent = (data.status === "already_pending" ? "이미 결재 대기중인 요청이 있습니다. " : "결재 요청 완료 — ") + "관리자 결재 승인 후 조치가 실행됩니다.";
+      setClientStatus("결재 요청 — 관리자 승인 대기");
+      await loadIncidents();
+      if (!IS_CLIENT) loadApprovals();
+      return;
+    }
+    status.className = "approval-status status-err";
+    status.textContent = approvalBlockReason(data).replace("실행 차단", "결재 요청 차단");
+    unlockOtherRunbooks();
+  } catch (error) {
+    status.className = "approval-status status-err";
+    status.textContent = "결재 요청 실패 — 연결 상태를 확인하고 다시 시도하세요.";
+    unlockOtherRunbooks();
+  } finally {
+    el.executionPending = false;
+    setRunbookButtonsDisabled(el, false);
+  }
 }
 
 async function decideRunbook(scriptId, action, el, decision) {
@@ -1500,6 +1641,8 @@ async function decideRunbook(scriptId, action, el, decision) {
     el.querySelector(".decision").textContent = "최신 Incident 추천을 다시 불러오세요.";
     return;
   }
+  // 운영자의 '결재 요청'은 실행하지 않고 결재 대기열에 올린다. 실행은 관리자 결재 승인 시점.
+  if (decision === "approve") return requestApproval(scriptId, action, el);
   const incidentId = currentRecommendation.incident_id;
   el.executionPending = true;
   setRunbookButtonsDisabled(el, true);
@@ -1571,6 +1714,255 @@ async function decideRunbook(scriptId, action, el, decision) {
     el.executionPending = false;
     setRunbookButtonsDisabled(el, false);
   }
+}
+
+// ---------------------------------------------------------------- 장애 이력
+const METHOD_LABELS = {script: "등록 스크립트", learned_script: "학습된 첨부 스크립트", manual: "수동 조치", hold: "보류(킵)", unknown: "기록"};
+const CONFIRMATION_LABELS = {operator_report: "운영자 확인", business_probe: "서비스 복구 검사", simulation: "스크립트 결과 확인", exception_rule: "예외 처리 규칙", manual: "운영자 보류"};
+function renderIncidentHistory(history, status) {
+  currentHistory = history || null;
+  const entries = (history && history.entries) || [];
+  const summary = history && history.summary;
+  $("incident-history-summary").classList.toggle("hidden", !summary);
+  $("incident-history-summary").textContent = summary
+    ? "같은 오류 처리 완료 " + summary.resolved_count + "회 · 가장 많이 사용한 조치: " + summary.most_common_method
+      + " (" + summary.most_common_count + "회) · 최근 조치: " + summary.latest_method + " (" + formatDateTime(summary.latest_resolved_at) + ")"
+    : "";
+  if (status === "unavailable") {
+    $("incident-history").innerHTML = '<p class="muted">장애 이력 조회 실패 — 잠시 후 자동으로 다시 확인합니다.</p>';
+    return;
+  }
+  $("incident-history").innerHTML = entries.length
+    ? '<table class="workflow-table"><thead><tr><th>일시</th><th>구분</th><th>단위시스템 / 환경</th><th>조치 방법</th><th>운영자</th><th>확인 방식</th></tr></thead><tbody>'
+      + entries.map(item => '<tr><td>' + esc(formatDateTime(item.resolved_at)) + (item.same_incident ? '<span class="badge hold">이 장애</span>' : '') + '</td><td>'
+        + esc(METHOD_LABELS[item.method_type] || item.method_type) + '</td><td>' + esc((item.service || "-") + " / " + environmentLabel(item.environment)) + '</td><td>'
+        + esc(item.method) + (item.script_id ? '<div class="muted">' + esc(item.script_id) + '</div>' : '') + (item.attachment ? '<div class="muted">첨부: ' + esc(item.attachment) + '</div>' : '')
+        + (item.kind === "hold" && item.released_at ? '<div class="muted">해제: ' + esc(formatDateTime(item.released_at)) + '</div>' : '')
+        + '</td><td>' + esc(item.operator || "-") + '</td><td>' + esc(CONFIRMATION_LABELS[item.confirmation] || item.confirmation || "-") + '</td></tr>').join("")
+      + '</tbody></table>'
+    : '<p class="muted">같은 오류의 과거 조치 이력이 없습니다. 이번 조치가 완료되면 이력으로 남습니다.</p>';
+}
+
+// ---------------------------------------------------------------- 보류(킵)
+function renderHoldControls(incident, data) {
+  const held = incident.status === "ON_HOLD";
+  const pending = (data.approvals || []).some(item => ["PENDING", "EXECUTING"].includes(item.status));
+  const holdable = !held && !["RESOLVED", "REMEDIATING"].includes(incident.status) && !incident.active_execution_id;
+  $("hold-controls").classList.toggle("hidden", !held && !holdable);
+  $("hold-reason").classList.toggle("hidden", held);
+  $("hold-button").classList.toggle("hidden", held);
+  $("release-button").classList.toggle("hidden", !held);
+  $("hold-button").disabled = holdPending || pending;
+  $("release-button").disabled = holdPending;
+  const ruleBtn = $("rule-from-incident");
+  ruleBtn.classList.toggle("hidden", Boolean(data.exception_rule) || incident.error_code === "UNKNOWN_ERROR");
+  ruleBtn.disabled = holdPending;
+  if (!holdPending) {
+    $("hold-status").className = "muted";
+    $("hold-status").textContent = data.exception_rule
+      ? "예외 처리 규칙 적용 대상: " + data.exception_rule.reason
+      : pending ? "결재 대기 중에는 보류할 수 없습니다. 결재 반려 후 보류하세요." : "";
+  }
+}
+async function changeHold(kind) {
+  if (!selectedIncidentId || holdPending) return;
+  const incidentId = selectedIncidentId;
+  const reason = $("hold-reason").value.trim();
+  if (kind === "hold" && !reason) {
+    $("hold-status").className = "status-err";
+    $("hold-status").textContent = "보류 사유를 입력하세요.";
+    return;
+  }
+  holdPending = true;
+  $("hold-button").disabled = $("release-button").disabled = true;
+  $("hold-status").className = "status-pending";
+  $("hold-status").textContent = kind === "hold" ? "보류 처리 중…" : "보류 해제 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/incidents/" + encodeURIComponent(incidentId) + "/" + kind,
+      {operator: IS_CLIENT ? "operator" : ($("approver").value.trim() || "admin"), reason});
+    if (selectedIncidentId !== incidentId) return;
+    $("hold-status").className = ok ? "status-ok" : "status-err";
+    $("hold-status").textContent = ok ? (kind === "hold" ? "보류했습니다. ‘보류(킵)’ 탭에서 계속 확인할 수 있습니다." : "보류를 해제했습니다. 조치를 진행하세요.")
+      : ({"approval pending; reject the approval before holding": "결재 대기 중입니다. 결재 반려 후 보류하세요.",
+          "incident cannot be held in its current state": "조치 실행 중이거나 완료된 장애는 보류할 수 없습니다.",
+          "incident changed; reload details": "장애 정보가 갱신되었습니다. 다시 시도하세요."}[data.reason] || "처리 실패: " + (data.reason || data.status));
+    if (ok) $("hold-reason").value = "";
+  } catch (error) {
+    $("hold-status").className = "status-err";
+    $("hold-status").textContent = "요청 실패 — 연결 상태를 확인하세요.";
+  } finally {
+    holdPending = false;
+    await loadIncidents();
+  }
+}
+$("hold-button").addEventListener("click", () => changeHold("hold"));
+$("release-button").addEventListener("click", () => changeHold("release"));
+$("rule-from-incident").addEventListener("click", async () => {
+  const incident = currentDetailedIncident;
+  if (!incident) return;
+  const reason = $("hold-reason").value.trim() || "즉시 해결이 어려운 오류 — 보류 후 발생 알림";
+  holdPending = true;
+  $("hold-status").className = "status-pending";
+  $("hold-status").textContent = "예외 처리 규칙을 등록하는 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/exception-rules", {
+      error_code: incident.error_code, service: incident.service, environment: incident.environment,
+      reason, notify_interval_seconds: 300, created_by: $("approver").value.trim() || "admin", incident_id: incident.incident_id,
+    });
+    $("hold-status").className = ok ? "status-ok" : "status-err";
+    $("hold-status").textContent = ok ? "예외 처리 규칙을 등록했습니다." + ((data.held_incidents || []).length ? " 이 장애를 보류했습니다." : "") : "등록 실패: " + (data.reason || data.status);
+    loadRules();
+  } catch (error) {
+    $("hold-status").className = "status-err";
+    $("hold-status").textContent = "요청 실패 — 연결 상태를 확인하세요.";
+  } finally {
+    holdPending = false;
+    await loadIncidents();
+  }
+});
+
+// ------------------------------------------------------- 결재 대기 (admin)
+let approvalDecisionPending = false;
+function approvalTarget(item) {
+  const target = item.target || {};
+  return [environmentLabel(target.environment), target.service, target.host, target.instance].filter(Boolean).join(" / ");
+}
+async function loadApprovals() {
+  if (IS_CLIENT) return;
+  try {
+    const [pending, recent] = await Promise.all([
+      getJSON("/api/v1/approvals?status=PENDING,EXECUTING"),
+      getJSON("/api/v1/approvals?status=APPROVED,REJECTED,FAILED&limit=10"),
+    ]);
+    const items = pending.approvals || [];
+    $("approval-count").textContent = items.length + "건";
+    $("approval-list").innerHTML = items.length
+      ? '<table class="workflow-table"><thead><tr><th>요청 시각</th><th>장애</th><th>조치 / 대상</th><th>요청자</th><th>결재</th></tr></thead><tbody>'
+        + items.map(item => '<tr><td>' + esc(formatDateTime(item.requested_at)) + '</td><td><strong>' + esc(item.error_code) + '</strong><div class="muted">' + esc(item.service) + ' · ' + esc(item.incident_id) + '</div></td><td>'
+          + esc(item.script_id) + '<div class="muted">' + esc(approvalTarget(item)) + '</div>' + (item.last_error ? '<div class="status-err">직전 시도 차단: ' + esc(approvalBlockReason({reason: item.last_error}).replace("실행 차단 — ", "")) + '</div>' : '')
+          + '</td><td>' + esc(item.requested_by) + (item.comment ? '<div class="muted">' + esc(item.comment) + '</div>' : '') + '</td><td><div class="workflow-actions">'
+          + (item.status === "EXECUTING" ? '<span class="status-pending">실행 중…</span>' : '<button type="button" class="approval-approve" data-id="' + esc(item.approval_id) + '">승인</button><button type="button" class="danger approval-reject" data-id="' + esc(item.approval_id) + '">반려</button>')
+          + '</div></td></tr>').join("") + '</tbody></table>'
+      : '<p class="muted">결재 대기 중인 조치가 없습니다.</p>';
+    $("approval-list").querySelectorAll(".approval-approve").forEach(button => button.addEventListener("click", () => decideApproval(button.dataset.id, "approve")));
+    $("approval-list").querySelectorAll(".approval-reject").forEach(button => button.addEventListener("click", () => decideApproval(button.dataset.id, "reject")));
+    $("approval-list").querySelectorAll("button").forEach(button => button.disabled = approvalDecisionPending);
+    const done = recent.approvals || [];
+    $("approval-history").innerHTML = done.length
+      ? '<table class="workflow-table"><tbody>' + done.map(item => '<tr><td>' + esc(formatDateTime(item.decided_at)) + '</td><td>' + esc(APPROVAL_LABELS[item.status] || item.status)
+        + '</td><td>' + esc(item.error_code) + ' · ' + esc(item.script_id) + '</td><td>' + esc(item.decided_by || "-") + '</td><td>' + esc(item.result_status || item.decision_reason || item.last_error || "") + '</td></tr>').join("") + '</tbody></table>'
+      : '<p class="muted">처리된 결재가 없습니다.</p>';
+  } catch (error) {
+    $("approval-status").textContent = "결재 목록 조회 실패 — 자동으로 다시 확인합니다.";
+    return false;
+  }
+}
+async function decideApproval(approvalId, decision) {
+  if (approvalDecisionPending) return;
+  const approver = $("approver").value.trim();
+  if (!approver) { $("approval-status").className = "status-err"; $("approval-status").textContent = "결재자를 입력하세요."; return; }
+  let reason = "";
+  if (decision === "reject") {
+    reason = (globalThis.prompt ? globalThis.prompt("반려 사유를 입력하세요.", "") : "") || "";
+  }
+  approvalDecisionPending = true;
+  $("approval-list").querySelectorAll("button").forEach(button => button.disabled = true);
+  $("approval-status").className = "status-pending";
+  $("approval-status").textContent = decision === "approve" ? "결재 승인 — 조치를 실행하는 중…" : "반려 처리 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/approvals/" + encodeURIComponent(approvalId) + "/" + decision, {approver, reason});
+    const approval = data.approval || {};
+    if (decision === "reject") {
+      $("approval-status").className = ok ? "status-ok" : "status-err";
+      $("approval-status").textContent = ok ? "반려했습니다." : "반려 실패: " + (data.reason || data.status);
+    } else if (approval.status === "APPROVED") {
+      $("approval-status").className = data.status === "success" ? "status-ok" : "status-err";
+      $("approval-status").textContent = "결재 승인 · 조치 실행 결과: " + (data.status === "success" ? "명령 실행 완료" : data.status) + (data.execution_mode === "simulation" ? " (등록 스크립트)" : "");
+    } else {
+      $("approval-status").className = "status-err";
+      $("approval-status").textContent = (approval.status === "FAILED" ? "결재 종료 — " : "실행 차단 · 결재 대기 유지 — ") + approvalBlockReason(data).replace("실행 차단 — ", "");
+    }
+    if (approval.incident_id && approval.incident_id === selectedIncidentId) detailRecommendationKey = null;
+  } catch (error) {
+    $("approval-status").className = "status-err";
+    $("approval-status").textContent = "결재 요청 처리 실패 — 연결 상태를 확인하세요.";
+  } finally {
+    approvalDecisionPending = false;
+    await Promise.all([loadApprovals(), loadIncidents(), loadNotifications()]);
+  }
+}
+
+// ------------------------------------------------ 에러별 예외 처리 규칙 (admin)
+async function loadRules() {
+  if (IS_CLIENT) return;
+  try {
+    const data = await getJSON("/api/v1/exception-rules");
+    const rules = data.rules || [];
+    $("rule-list").innerHTML = rules.length
+      ? '<table class="workflow-table"><thead><tr><th>오류 코드</th><th>적용 범위</th><th>사유</th><th>알림 간격</th><th>등록</th><th></th></tr></thead><tbody>'
+        + rules.map(rule => '<tr><td><strong>' + esc(rule.error_code) + '</strong></td><td>' + esc((rule.service || "전체 단위시스템") + " / " + (rule.environment ? environmentLabel(rule.environment) : "전체 환경"))
+          + '</td><td>' + esc(rule.reason) + '</td><td>' + (rule.notify_interval_seconds ? esc(rule.notify_interval_seconds) + "초" : "매 발생") + '</td><td>' + esc(rule.created_by) + '<div class="muted">' + esc(formatDateTime(rule.created_at))
+          + '</div></td><td><button type="button" class="danger rule-delete" data-id="' + esc(rule.rule_id) + '">삭제</button></td></tr>').join("") + '</tbody></table>'
+      : '<p class="muted">등록된 예외 처리 규칙이 없습니다.</p>';
+    $("rule-list").querySelectorAll(".rule-delete").forEach(button => button.addEventListener("click", async () => {
+      button.disabled = true;
+      await fetch("/api/v1/exception-rules/" + encodeURIComponent(button.dataset.id), {method: "DELETE"});
+      loadRules();
+    }));
+  } catch (error) {
+    $("rule-list").innerHTML = '<p class="muted">규칙 조회 실패 — 자동으로 다시 확인합니다.</p>';
+    return false;
+  }
+}
+$("rule-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  $("rule-submit").disabled = true;
+  $("rule-status").className = "status-pending";
+  $("rule-status").textContent = "등록 중…";
+  try {
+    const { ok, data } = await postJSON("/api/v1/exception-rules", {
+      error_code: $("rule-code").value.trim(), service: $("rule-service").value.trim() || null,
+      environment: $("rule-environment").value.trim() || null, reason: $("rule-reason").value.trim(),
+      notify_interval_seconds: Number.parseInt($("rule-interval").value || "0", 10), created_by: $("approver").value.trim() || "admin",
+    });
+    $("rule-status").className = ok ? "status-ok" : "status-err";
+    $("rule-status").textContent = ok ? (data.status === "exists" ? "같은 범위의 규칙이 이미 있습니다." : "등록했습니다. 이후 감지되는 같은 오류는 자동 보류·알림됩니다.") : "등록 실패: " + (data.reason || data.status);
+    if (ok) ["rule-code", "rule-service", "rule-environment", "rule-reason"].forEach(id => $(id).value = "");
+    loadRules();
+  } catch (error) {
+    $("rule-status").className = "status-err";
+    $("rule-status").textContent = "요청 실패 — 연결 상태를 확인하세요.";
+  } finally {
+    $("rule-submit").disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------- 알림
+const NOTIFICATION_KINDS = {exception_hold: "예외 처리 보류", exception_occurrence: "예외 오류 재발생", approval_requested: "결재 요청", approval_decided: "결재 처리", incident_held: "보류"};
+async function loadNotifications() {
+  try {
+    const data = await getJSON("/api/v1/notifications?limit=8");
+    const items = data.notifications || [];
+    $("notification-count").classList.toggle("hidden", !data.unread);
+    $("notification-count").textContent = "새 알림 " + data.unread + "건";
+    $("notification-list").className = items.length ? "" : "muted";
+    $("notification-list").innerHTML = items.length
+      ? items.map(item => '<div class="notification' + (item.read ? '' : ' unread') + '"><strong>' + esc(item.title) + '</strong>'
+        + '<span class="muted">' + esc(formatDateTime(item.created_at)) + ' · ' + esc(NOTIFICATION_KINDS[item.kind] || item.kind) + (item.delivery && item.delivery !== "ui" ? ' · ' + esc(item.delivery) : '') + '</span><div>' + esc(item.message) + '</div></div>').join("")
+      : "새 알림이 없습니다.";
+  } catch (error) {
+    $("notification-list").textContent = "알림 조회 실패 — 자동으로 다시 확인합니다.";
+    return false;
+  }
+}
+$("notification-read").addEventListener("click", async () => {
+  await postJSON("/api/v1/notifications/read", {});
+  loadNotifications();
+});
+schedulePoll(loadNotifications, 3000);
+if (!IS_CLIENT) {
+  schedulePoll(loadApprovals, 2000);
+  loadRules();
 }
 
 

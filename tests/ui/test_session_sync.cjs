@@ -21,7 +21,7 @@ function server() {
   return {incident:{incident_id:'INC-SHARED',version:2,status:'ACTION_REQUIRED',service:'orders',environment:'prod',
     error_code:'MEMORY_LEAK',affected_hosts:['orders-01'],occurrence_count:1,
     first_seen:'2026-10-09T15:15:00Z',last_seen:'2026-10-09T15:15:00Z',latest_recommendation:rec},
-    listMissing:false, listStale:null, execution:null, posts:[], reads:[], scenarios:[]};
+    listMissing:false, listStale:null, execution:null, posts:[], reads:[], scenarios:[], approvals:[]};
 }
 function processing(s) {
   const i=s.incident, completed=i.status==='RESOLVED', done=i.status==='MONITORING';
@@ -52,6 +52,26 @@ async function mount(mode, s) {
           body={status:'triggered',scenario,error_code:scenario.error_code,triggered_at:'2026-10-09T15:15:00Z',events:[{level:'ERROR',message:'new error'}]};
         }
         else if(url==='/api/v1/log-generator/latest-run') body={status:'none'};
+        else if(url.startsWith('/api/v1/notifications')) body={status:'ready',notifications:[],unread:0,updated:0};
+        else if(url==='/api/v1/exception-rules') body={status:'ready',rules:[]};
+        else if(url.startsWith('/api/v1/approvals?')) {
+          const wanted=new URL(url,'http://x').searchParams.get('status').split(',');
+          body={status:'ready',approvals:s.approvals.filter(a=>wanted.includes(a.status))};
+        } else if(url==='/api/v1/approvals') {
+          // Operator approval request: queue only, never execute.
+          const input=JSON.parse(options.body);
+          const approval={approval_id:'APR-SHARED',incident_id:input.incident_id,script_id:'restart_application',status:'PENDING',
+            target:input.target,requested_by:input.requested_by,requested_at:'2026-10-09T15:15:11Z',error_code:'MEMORY_LEAK',service:'orders'};
+          s.approvals=[approval];
+          body={status:'pending',approval};
+        } else if(url==='/api/v1/approvals/APR-SHARED/approve') {
+          const approval=s.approvals[0];
+          body={execution_id:'EXEC-SHARED',status:'success',returncode:0,stdout:'restarted'};
+          s.execution={incident_id:approval.incident_id,target:approval.target,approved_by:'admin',execution_id:body.execution_id,script_id:'restart_application',result:body};
+          s.incident={...s.incident,status:'MONITORING',version:3,recovery_confirmation:'pending_execution',last_execution:s.execution};
+          s.approvals=[{...approval,status:'APPROVED',decided_by:'admin',execution_id:'EXEC-SHARED',result_status:'success'}];
+          body={...body,approval:s.approvals[0]};
+        }
         else if(url.startsWith('/api/v1/log-generator/activity?')) body={};
         else if(url.startsWith('/api/v1/log-generator/latest-recommendation?'))
           body={status:'ready',recommendation:s.incident.latest_recommendation,processing:processing(s),decisions:[]};
@@ -60,7 +80,8 @@ async function mount(mode, s) {
           body={incidents:s.listMissing?[]:[s.listStale||s.incident],server_time:'2026-10-09T15:15:10Z'};
         } else if(url==='/api/v1/log-generator/incidents/INC-SHARED') {
           body={incident:s.incident,processing:processing(s),logs:[],logs_status:'ready',execution:s.execution,
-            decisions:s.execution?[{...s.execution,decision:'approve'}]:[],executions_status:'ready',
+            decisions:s.execution?[{...s.execution,decision:'approve'}]:[],executions_status:'ready',approvals:s.approvals,
+            history:{summary:null,entries:[]},history_status:'ready',exception_rule:null,
             manual_action_available:!s.incident.latest_recommendation.targets.length && s.incident.status==='ACTION_REQUIRED'};
           body=JSON.parse(JSON.stringify(body));
           if(controls.holdDetail) await controls.holdDetail;
@@ -113,7 +134,23 @@ function completed(m) {
       assert.equal(element(observer.w,'incident-detail-panel').classList.contains('hidden'),false);
     } else await open(observer);
     const card=actor.w.document.querySelector('.runbook'), select=card.querySelector('.target-select');
+    assert.equal(card.querySelector('.approve').textContent,'결재 요청');
     select.value='0';select.dispatchEvent(new actor.w.Event('change'));card.querySelector('.approve').click();await settle();
+    // The request is only queued: nothing runs before an admin approves it.
+    assert.equal(s.execution,null);
+    assert.match(card.querySelector('.approval-status').textContent,/결재/);
+    await tickDetails(observer);
+    assert.match(observer.w.document.querySelector('.runbook .approval-status').textContent,/결재 대기/);
+    assert.equal(observer.w.document.querySelector('.runbook .approve').disabled,true);
+    // Approve from an admin console's approval queue.
+    const approver=await mount('admin',s);
+    await approver.w.loadApprovals();
+    assert.equal(element(approver.w,'approval-count').textContent,'1건');
+    approver.w.document.querySelector('.approval-approve').click();await settle();await settle();
+    assert.match(element(approver.w,'approval-status').textContent,/결재 승인/);
+    assert.equal(s.execution.execution_id,'EXEC-SHARED');
+    approver.dom.window.close();
+    await tickDetails(actor);
     await tickDetails(observer);
     assert.equal(element(observer.w,'incident-processing-title').textContent,'조치 완료 · 복구 확인 대기');
     assert.equal(element(observer.w,'verify-execution').classList.contains('hidden'),false);

@@ -164,6 +164,28 @@ SCENARIO_REGISTRY = {
     ),
 }
 
+from scenario.legacy_interface_timeout_scenario import (  # noqa: E402
+    LegacyInterfaceTimeoutScenario,
+)
+from scenario.disk_full_recurrence_scenario import (  # noqa: E402
+    DiskFullRecurrenceScenario,
+)
+
+# 장애 이력·결재·보류·예외 처리 기능 검증용 시나리오.
+# 기본 20개 장애(SCENARIO_REGISTRY)와 분리해 기존 시나리오 집계에는 포함하지 않는다.
+VERIFICATION_SCENARIOS = {
+    "disk_full_recurrence": (
+        DiskFullRecurrenceScenario,
+        "[검증] 디스크 부족 재발 — 장애 이력 확인 (DISK_FULL)",
+        "DISK_FULL",
+    ),
+    "legacy_interface_timeout": (
+        LegacyInterfaceTimeoutScenario,
+        "[검증] 레거시 연동 타임아웃 — 예외 처리·보류·알림 (LEGACY_INTERFACE_TIMEOUT)",
+        "LEGACY_INTERFACE_TIMEOUT",
+    ),
+}
+
 
 def get_scenarios():
     """Include persisted scenarios without modifying Python source or restarting."""
@@ -172,6 +194,7 @@ def get_scenarios():
     from scenario.custom_error_scenario import CustomErrorScenario
 
     scenarios = dict(SCENARIO_REGISTRY)
+    scenarios.update(VERIFICATION_SCENARIOS)
     for item in CustomScenarioStore().list():
         scenarios[item["key"]] = (
             partial(CustomErrorScenario, item["error_code"]), item["label"], item["error_code"],

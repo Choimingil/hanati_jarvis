@@ -282,6 +282,19 @@ def recent_incidents():
             status="unavailable", incidents=[], error=type(exc).__name__
         ), 503
 
+    # 보류된 장애는 최근 10분이 지나도 목록에 남긴다.
+    try:
+        held = getattr(repository, "list_held_incidents", lambda: [])() or []
+    except Exception:
+        held = []
+    seen = {document.get("incident_id") for document in documents}
+    documents = list(documents) + [item for item in held if item.get("incident_id") not in seen]
+    try:
+        from operations.incident_workflow import WorkflowStore
+        pending = WorkflowStore().pending_incident_ids()
+    except Exception:
+        pending = set()
+
     incidents = []
     for document in documents:
         if is_context_only_incident(document):
@@ -293,6 +306,7 @@ def recent_incidents():
         incident["count"] = incident.get("occurrence_count", 0)
         incident["recommendation"] = incident.get("latest_recommendation") or {}
         incident["processing"] = processing_summary(incident)
+        incident["pending_approval"] = incident.get("incident_id") in pending
         incidents.append(incident)
 
     incidents.sort(
@@ -332,8 +346,23 @@ def incident_detail(incident_id):
         executions_status = "ready"
     except Exception:
         decisions, execution, executions_status = [], None, "unavailable"
+    try:
+        from operations.incident_history import similar_history
+        history = similar_history(repository, incident)
+        history_status = "ready"
+    except Exception:
+        history, history_status = {"summary": None, "entries": []}, "unavailable"
+    try:
+        from operations.incident_workflow import WorkflowStore
+        store = WorkflowStore()
+        approvals = store.list_approvals(incident_id=incident_id, limit=10)
+        exception_rule = store.match_rule(incident)
+    except Exception:
+        approvals, exception_rule = [], None
     return jsonify(redact({
         "status": "ready", "incident": incident,
+        "history": history, "history_status": history_status,
+        "approvals": approvals, "exception_rule": exception_rule,
         "logs": logs, "logs_status": logs_status,
         "manual_action_available": manual_action_available(incident),
         "processing": processing_summary(incident, execution_summary(execution)),

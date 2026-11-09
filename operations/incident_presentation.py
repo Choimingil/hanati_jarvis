@@ -40,6 +40,17 @@ def processing_summary(incident, execution=None):
                 "operator_report": "운영자가 서비스 복구를 확인하고 처리를 완료했습니다.",
             }.get(confirmation, "복구 확인이 완료된 장애입니다."),
         }
+    if status == "ON_HOLD":
+        hold = incident.get("hold") or {}
+        rule_hold = hold.get("source") == "exception_rule"
+        return {
+            "state": "on_hold", "label": "예외 처리 · 보류" if rule_hold else "보류(킵)",
+            "completed_at": hold.get("held_at"), "operator": hold.get("operator"),
+            "method": hold.get("reason"), "confirmation": hold.get("source"),
+            "rule_id": hold.get("rule_id"),
+            "message": ("에러별 예외 처리 규칙에 따라 보류되었습니다. 재발생 시 알림만 보냅니다."
+                        if rule_hold else "즉시 조치가 어려워 보류된 장애입니다. 보류 해제 후 조치를 진행하세요."),
+        }
     if status == "MONITORING":
         return {
             "state": "action_completed", "label": "조치 완료 · 복구 확인 대기",

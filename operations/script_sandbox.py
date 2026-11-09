@@ -107,7 +107,9 @@ def main():
     docker_client = docker.from_env()
     while True:
         redis.set(PREFIX + "heartbeat", "ready", ex=45)
-        item = redis.blpop(QUEUE, timeout=5)
+        # Keep the blocking wait shorter than the client's 5s socket timeout;
+        # an equal value raises TimeoutError on an idle queue and crash-loops the executor.
+        item = redis.blpop(QUEUE, timeout=2)
         if not item:
             continue
         job_id = item[1]

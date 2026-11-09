@@ -259,6 +259,42 @@ class ElasticLogRepository(LogRepository):
         )
         return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])]
 
+    def list_held_incidents(self) -> list[dict[str, Any]]:
+        """보류(ON_HOLD) 장애는 최근 10분 범위와 관계없이 계속 표시한다."""
+        response = self.client.search(
+            index=ELASTIC_INCIDENT_INDEX,
+            query={"bool": {"should": [
+                {"term": {"status.keyword": "ON_HOLD"}},
+                {"term": {"status": "on_hold"}},
+            ], "minimum_should_match": 1}},
+            sort=[{"last_seen": {"order": "desc", "unmapped_type": "date"}}],
+            size=200,
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])
+                if hit["_source"].get("status") == "ON_HOLD"]
+
+    def search_similar_incidents(self, error_code: str | None, normalized_message: str | None = None,
+                                 limit: int = 50) -> list[dict[str, Any]]:
+        """같은 오류 코드(미등록 오류는 같은 정규화 메시지)를 가진 Incident를 기간 제한 없이 찾는다."""
+        should = []
+        if error_code and error_code != "UNKNOWN_ERROR":
+            should += [{"term": {"error_code.keyword": error_code}},
+                       {"match_phrase": {"error_code": error_code}}]
+        elif normalized_message:
+            should += [{"match_phrase": {"normalized_message": normalized_message}}]
+        if not should:
+            return []
+        response = self.client.search(
+            index=ELASTIC_INCIDENT_INDEX,
+            query={"bool": {"should": should, "minimum_should_match": 1}},
+            sort=[{"last_seen": {"order": "desc", "unmapped_type": "date"}}],
+            size=limit,
+            source_excludes=["ingestion_ids", "latest_recommendation"],
+            ignore_unavailable=True,
+        )
+        return [hit["_source"] for hit in response.get("hits", {}).get("hits", [])]
+
     def recent_incident_logs(self, incident_id: str, minutes: int = 10):
         response = self.client.search(
             index=ELASTIC_LOG_INDEX,

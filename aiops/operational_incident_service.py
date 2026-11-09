@@ -21,6 +21,7 @@ OPEN_STATUSES = {
     "REMEDIATING",
     "MONITORING",
     "REOPENED",
+    "ON_HOLD",
 }
 
 
@@ -143,7 +144,8 @@ class OperationalIncidentService:
             ).total_seconds() < int(os.getenv("INCIDENT_REANALYSIS_SECONDS", "300"))
         except (ValueError, TypeError):
             cached = False
-        observing = status in {"REMEDIATING", "MONITORING"}
+        # 보류(ON_HOLD) 중에는 발생 집계만 하고 재분석·버전 증가를 하지 않는다.
+        observing = status in {"REMEDIATING", "MONITORING", "ON_HOLD"}
         suppress = observing or (
             cached
             and status in {"ACTION_REQUIRED", "INVESTIGATING"}
@@ -251,8 +253,53 @@ class OperationalIncidentService:
             "updated_at": now_iso(),
             **(extra or {}),
         }
+        if status == "RESOLVED" and incident.get("status") != "RESOLVED":
+            from operations.incident_history import with_resolution
+
+            changes = with_resolution(incident, changes)
         return self.repository.update_operational_incident(
             incident["incident_id"],
             changes,
             expected_version=current_version,
+        )
+
+    def hold(self, incident, operator, reason, source="manual", rule=None):
+        """즉시 조치할 수 없는 장애를 보류(킵)한다.
+
+        추천의 incident_version을 유지해야 보류 해제 후 같은 추천으로 결재·조치할 수
+        있으므로 버전은 올리지 않고 현재 버전 조건으로만 갱신한다.
+        """
+        if incident.get("status") == "ON_HOLD":
+            return incident
+        if incident.get("status") in {"RESOLVED", "REMEDIATING"} or incident.get("active_execution_id"):
+            raise ValueError("incident cannot be held in its current state")
+        version = int(incident.get("version", 1))
+        entry = {
+            "held_at": now_iso(), "operator": operator, "reason": reason, "source": source,
+            "rule_id": (rule or {}).get("rule_id"), "previous_status": incident.get("status"),
+        }
+        history = list(incident.get("hold_history") or []) + [entry]
+        return self.repository.update_operational_incident(
+            incident["incident_id"],
+            {"status": "ON_HOLD", "hold": entry, "hold_history": history[-50:], "updated_at": now_iso()},
+            expected_version=version,
+        )
+
+    def release(self, incident, operator):
+        if incident.get("status") != "ON_HOLD":
+            raise ValueError("incident is not on hold")
+        hold = dict(incident.get("hold") or {})
+        previous = hold.get("previous_status")
+        if previous not in {"ACTION_REQUIRED", "INVESTIGATING", "REOPENED", "MONITORING", "DETECTED", "ANALYZING"}:
+            previous = "ACTION_REQUIRED"
+        if previous == "ANALYZING" and incident.get("latest_recommendation"):
+            previous = "ACTION_REQUIRED"
+        history = list(incident.get("hold_history") or [])
+        if history:
+            history[-1] = {**history[-1], "released_at": now_iso(), "released_by": operator}
+        return self.repository.update_operational_incident(
+            incident["incident_id"],
+            {"status": previous, "hold": None, "hold_history": history, "updated_at": now_iso(),
+             "last_released_at": now_iso()},
+            expected_version=int(incident.get("version", 1)),
         )

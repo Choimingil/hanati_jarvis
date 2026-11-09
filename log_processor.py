@@ -75,6 +75,69 @@ class LogProcessor:
             }
         )
 
+        if incident and incident.get("status") == "ON_HOLD":
+            # 보류된 장애는 재분석하지 않는다. 예외 처리 규칙으로 보류된 경우 간격을 두고 알린다.
+            self._notify_held(incident)
+            return {"status": "held", "incident_id": incident["incident_id"],
+                    "occurrence_count": incident.get("occurrence_count"),
+                    "reason": "incident is on hold"}
+
+        result = self._analyze(log, error_code, incident)
+        if incident is not None:
+            self._apply_exception_rule(incident["incident_id"])
+        return result
+
+    def _workflow(self):
+        from operations.incident_workflow import WorkflowStore
+
+        return WorkflowStore()
+
+    def _notify_held(self, incident):
+        hold = incident.get("hold") or {}
+        if hold.get("source") != "exception_rule":
+            return
+        try:
+            store = self._workflow()
+            rule = next((r for r in store.list_rules() if r["rule_id"] == hold.get("rule_id")), None)
+            if rule is None:
+                return
+            store.notify(
+                "exception_occurrence", incident,
+                f"[예외 처리] {incident.get('error_code')} 재발생 ({incident.get('occurrence_count')}건)",
+                f"{incident.get('service')} / {', '.join(incident.get('affected_hosts') or [])} — 보류 중인 오류가 다시 발생했습니다. 사유: {rule['reason']}",
+                rule=rule, interval_seconds=int(rule.get("notify_interval_seconds") or 0),
+            )
+        except Exception:
+            # 알림 실패가 로그 수집·분석을 막지 않는다.
+            pass
+
+    def _apply_exception_rule(self, incident_id):
+        """분석을 마친 뒤 예외 처리 규칙에 해당하면 보류하고 알린다."""
+        if self.incident_service is None:
+            return
+        try:
+            store = self._workflow()
+            incident = self.repository.get_operational_incident(incident_id)
+            if not incident or incident.get("status") in {"ON_HOLD", "RESOLVED", "REMEDIATING"}:
+                return
+            if incident.get("active_execution_id") or incident_id in store.pending_incident_ids():
+                return
+            rule = store.match_rule(incident)
+            if rule is None:
+                return
+            held = self.incident_service.hold(
+                incident, "exception-rule", rule["reason"], source="exception_rule", rule=rule,
+            )
+            store.notify(
+                "exception_hold", held,
+                f"[예외 처리] {held.get('error_code')} 자동 보류",
+                f"{held.get('service')} / {', '.join(held.get('affected_hosts') or [])} — 즉시 조치가 어려운 오류로 등록되어 보류했습니다. 사유: {rule['reason']}",
+                rule=rule,
+            )
+        except Exception:
+            pass
+
+    def _analyze(self, log, error_code, incident):
         if (incident and incident.get("synthetic") is True
             and error_code is not None and not ERROR_RULES.get(error_code, {}).get("remediation_candidates")
             and incident.get("status") not in {"REMEDIATING", "MONITORING"}):

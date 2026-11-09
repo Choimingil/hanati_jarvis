@@ -14,6 +14,7 @@ from routes.remediation_routes import (
     remediation_blueprint,
 )
 from routes.web_routes import web_blueprint
+from routes.workflow_routes import workflow_blueprint
 from routes.operations_routes import operations_blueprint
 from operations.health import cached_service_status as service_status
 from operations.privacy import redact
@@ -29,6 +30,7 @@ def create_app() -> Flask:
     app.register_blueprint(metrics_blueprint)
     app.register_blueprint(remediation_blueprint)
     app.register_blueprint(log_generator_blueprint)
+    app.register_blueprint(workflow_blueprint)
     app.register_blueprint(web_blueprint)
 
     @app.after_request

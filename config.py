@@ -162,6 +162,12 @@ ERROR_RULES = {
         "diagnostic_scripts": [],
         "remediation_candidates": [],
     },
+    "LEGACY_INTERFACE_TIMEOUT": {
+        # 대외기관 레거시 연동 지연 - 자체 조치 스크립트가 없고 기본 예외 처리
+        # 규칙(보류 + 알림) 검증에 사용한다.
+        "diagnostic_scripts": [],
+        "remediation_candidates": [],
+    },
     "AUTH_TOKEN_VALIDATION_FAILURE": {
         "diagnostic_scripts": [
             "check_auth_service_health",

@@ -138,6 +138,10 @@ ERROR_PATTERNS = {
         r"Clock skew detected against NTP server",
         re.IGNORECASE,
     ),
+    "LEGACY_INTERFACE_TIMEOUT": re.compile(
+        r"Legacy interface timeout from external institution",
+        re.IGNORECASE,
+    ),
     "POD_CRASHLOOP_BACKOFF": re.compile(
         r"Pod entered CrashLoopBackOff state",
         re.IGNORECASE,
