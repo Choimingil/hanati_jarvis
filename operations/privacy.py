@@ -37,6 +37,11 @@ OPAQUE_KEYS = {
     "image_id",
     "stream_id",
     "registration_id",
+    # 결재·알림·예외 규칙 ID는 무작위 hex라 숫자가 13자리 이상 이어지면 카드번호
+    # 패턴으로 마스킹되어 화면이 바뀐 ID로 승인 요청을 보내게 된다.
+    "approval_id",
+    "notification_id",
+    "rule_id",
     "fingerprint",
     "sha256",
 }

@@ -16,8 +16,9 @@ from aiops.recommendation_quality_gate import RecommendationQualityGate
 from log_processor import LogProcessor
 from operations.execution import ExecutionCoordinator
 from operations.incident_workflow import WorkflowStore
-from registry import SCENARIO_REGISTRY, VERIFICATION_SCENARIOS, get_scenarios
-from routes import log_generator_routes, remediation_routes, workflow_routes
+from operations.privacy import redact
+from routes import log_generator_routes, remediation_routes, workflow_routes  # adds log_generator to sys.path
+from registry import SCENARIO_REGISTRY, VERIFICATION_SCENARIOS, get_scenarios  # noqa: E402
 import trigger
 from support import MemoryRepository
 
@@ -83,6 +84,14 @@ class IncidentWorkflowTests(unittest.TestCase):
             item.start()
             self.addCleanup(item.stop)
         app = Flask(__name__)
+
+        # app.py와 같이 모든 JSON 응답을 마스킹한다.
+        @app.after_request
+        def redact_json_output(response):
+            if response.is_json:
+                response.set_data(app.json.dumps(redact(response.get_json())))
+            return response
+
         app.register_blueprint(remediation_routes.remediation_blueprint)
         app.register_blueprint(workflow_routes.workflow_blueprint)
         app.register_blueprint(log_generator_routes.log_generator_blueprint)
@@ -148,6 +157,19 @@ class IncidentWorkflowTests(unittest.TestCase):
         kinds = [item["kind"] for item in WorkflowStore().list_notifications()[0]]
         self.assertIn("approval_requested", kinds)
         self.assertIn("approval_decided", kinds)
+
+    def test_digit_heavy_approval_id_survives_response_redaction(self):
+        # 무작위 hex ID에 숫자가 13자리 이상 이어지면 카드번호로 마스킹되던 문제.
+        rec = self.emit_and_analyze("disk_full")
+        with patch("operations.incident_workflow.uuid.uuid4",
+                   return_value=Mock(hex="5454640746474091ffff")):
+            approval = self.request_approval(rec)
+        self.assertEqual(approval["approval_id"], "APR-5454640746474091")
+        listed = self.api.get("/api/v1/approvals?status=PENDING").get_json()["approvals"]
+        self.assertEqual(listed[0]["approval_id"], "APR-5454640746474091")
+        result = self.approve(listed[0]["approval_id"]).get_json()
+        self.assertEqual(result["status"], "success", result)
+        self.assertEqual(result["approval"]["approval_id"], "APR-5454640746474091")
 
     def test_rejected_approval_never_executes_and_can_be_requested_again(self):
         rec = self.emit_and_analyze("disk_full")

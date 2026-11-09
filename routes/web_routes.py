@@ -1399,6 +1399,7 @@ function approvalBlockReason(data) {
     "action not allowed for incident":"최신 분석 결과에 이 조치·대상이 없습니다. 다시 결재를 요청하세요.",
     "recommendation does not belong to incident":"장애의 최신 추천이 바뀌었습니다. 다시 결재를 요청하세요.",
     "invalid requested_by":"결재 요청자를 확인하세요.",
+    "not_found":"결재 건을 찾을 수 없습니다. 목록을 새로 불러온 뒤 다시 시도하세요.",
     "host is executing or waiting for business recovery confirmation":"대상이 다른 조치를 실행 중이거나 복구 확인을 기다리고 있습니다.",
     "dependency unavailable; inspect service status":"실행 Agent 또는 저장소에 연결할 수 없습니다. 기동·연결 상태를 확인하세요.",
     "container is not the registered Compose service":"등록한 Compose 프로젝트·서비스와 실제 컨테이너가 다릅니다.",
@@ -1407,7 +1408,7 @@ function approvalBlockReason(data) {
   const failed = (data.checks || []).filter(check => !check.passed);
   let message = "실행 차단 — " + (failed.length
       ? failed.map(check => (checks[check.name] || check.name) + " 조건 미충족").join(" / ")
-      : (reasons[data.reason] || data.reason || data.status || "응답 상세를 확인하세요."));
+      : (reasons[data.reason] || data.reason || reasons[data.status] || data.status || "응답 상세를 확인하세요."));
   if (failed.some(check => check.name === "redundancy")) message += " 건강한 별도 이중화 컨테이너가 필요합니다. 기본 단일 구성에서는 재시작이 차단됩니다.";
   return message;
 }
