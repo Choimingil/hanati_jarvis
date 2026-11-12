@@ -281,6 +281,22 @@ class IncidentWorkflowTests(unittest.TestCase):
         result = self.approve(self.request_approval(rec)["approval_id"]).get_json()
         self.assertEqual(result["status"], "success", result)
 
+    def test_new_occurrence_after_quiet_period_releases_manual_hold_by_default(self):
+        rec = self.emit_and_analyze("disk_full")
+        self.api.post(f"/api/v1/incidents/{rec['incident_id']}/hold",
+                      json={"operator": "operator", "reason": "변경 작업 일정 대기"})
+        incident = self.repo.get_operational_incident(rec["incident_id"])
+        # 마지막 발생 후 조용한 시간이 지나 같은 오류가 다시 발생하면 보류가 풀린 상태로 새로 분석한다.
+        old = (datetime.now(UTC) - timedelta(minutes=5)).isoformat()
+        self.repo.incidents[rec["incident_id"]] = {**incident, "last_seen": old}
+        results = self.emit("disk_full")
+        self.assertNotIn("held", [item["status"] for item in results])
+        after = self.repo.get_operational_incident(rec["incident_id"])
+        self.assertNotEqual(after["status"], "ON_HOLD")
+        self.assertIsNone(after.get("hold"))
+        self.assertEqual(after["hold_history"][-1]["released_by"], "recurrence")
+        self.assertNotEqual(after["latest_recommendation_id"], rec["recommendation_id"])
+
     def test_hold_is_blocked_while_approval_is_pending(self):
         rec = self.emit_and_analyze("disk_full")
         self.request_approval(rec)
@@ -290,14 +306,24 @@ class IncidentWorkflowTests(unittest.TestCase):
         self.assertNotEqual(self.repo.get_operational_incident(rec["incident_id"])["status"], "ON_HOLD")
 
     # ------------------------------------------------------ 에러별 예외 처리
-    def test_default_exception_rule_holds_legacy_timeout_and_throttles_notifications(self):
+    def test_errors_are_not_held_by_default(self):
+        self.assertEqual(WorkflowStore().list_rules(), [])
+        results = self.emit("legacy_interface_timeout")
+        self.assertNotIn("held", [item["status"] for item in results])
+        incident = next(iter(self.repo.incidents.values()))
+        self.assertNotEqual(incident["status"], "ON_HOLD")
+
+    def test_exception_rule_holds_legacy_timeout_and_throttles_notifications(self):
+        WorkflowStore().create_rule({"rule_id": None, "error_code": "LEGACY_INTERFACE_TIMEOUT", "environment": "simulation",
+                                     "reason": "대외기관 개선 전까지 즉시 조치 불가", "notify_interval_seconds": 60,
+                                     "created_by": "admin"})
         results = self.emit("legacy_interface_timeout")
         self.assertEqual([item["status"] for item in results if item["status"] != "ignored"], ["recommended", "held"])
         incident = next(iter(self.repo.incidents.values()))
         self.assertEqual(incident["error_code"], "LEGACY_INTERFACE_TIMEOUT")
         self.assertEqual(incident["status"], "ON_HOLD")
         self.assertEqual(incident["hold"]["source"], "exception_rule")
-        self.assertEqual(incident["hold"]["rule_id"], "RULE-LEGACY-INTERFACE-TIMEOUT")
+        self.assertTrue(incident["hold"]["rule_id"].startswith("RULE-"))
         kinds = [item["kind"] for item in WorkflowStore().list_notifications()[0]]
         self.assertEqual(sorted(kinds), ["exception_hold", "exception_occurrence"])
         # 알림 간격(60초) 안에 다시 발생하면 보류를 유지하고 알림은 늘지 않는다.

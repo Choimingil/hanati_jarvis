@@ -203,15 +203,19 @@ _PAGE = """<!doctype html>
   .feedback-grid .full { grid-column: 1 / -1; }
   .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   .check-row input { width: auto; }
-  .console-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+  .console-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:20px; }
+  .console-head h1 { margin:0; }
+  .head-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .head-right #log-toggle { padding:8px 14px; }
   .console-actions { display:flex; gap:8px; flex-wrap:wrap; }
-  .incident-stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-bottom:16px; }
-  .incident-stat { background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:13px; text-align:left; }
+  .incident-stats { display:flex; gap:8px; flex-wrap:wrap; }
+  .incident-stat { background:var(--card); color:var(--fg); border:1px solid var(--border); border-radius:999px; padding:6px 14px; display:inline-flex; align-items:baseline; gap:6px; font-weight:600; }
   .incident-stat:hover { border-color:var(--accent); }
   .incident-stat.selected { border-color:var(--accent); background:var(--bar); }
   .incident-stat:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-  .incident-stat span { display:block; color:var(--muted); font-size:12px; }
-  .incident-stat strong { display:block; margin-top:3px; }
+  .incident-stat span { color:var(--muted); font-size:13px; }
+  .incident-stat.selected span { color:var(--accent); }
+  .incident-stat strong { font-size:14px; }
   .incident-table-wrap { overflow-x:auto; margin-top:12px; }
   .incident-table { width:100%; border-collapse:collapse; font-size:14px; }
   .incident-table th, .incident-table td { padding:10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
@@ -253,14 +257,12 @@ _PAGE = """<!doctype html>
   .notification { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
   .notification.unread { background:var(--bar); }
   .notification strong { display:block; }
-  .title-row { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
-  .title-row h1 { margin:0; }
   .bell-wrap { position:relative; }
   button.bell { position:relative; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:999px; width:38px; height:38px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   button.bell:hover, button.bell[aria-expanded="true"] { background:var(--bar); border-color:var(--accent); color:var(--accent); }
   button.bell svg { width:19px; height:19px; flex:0 0 19px; }
   .bell-count { position:absolute; top:-5px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--err); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
-  #notification-panel { position:absolute; top:calc(100% + 8px); left:0; z-index:20; width:min(380px, calc(100vw - 32px)); margin:0; padding:14px; box-shadow:0 10px 28px rgba(0,0,0,.18); }
+  #notification-panel { position:absolute; top:calc(100% + 8px); right:0; z-index:20; width:min(380px, calc(100vw - 32px)); margin:0; padding:14px; box-shadow:0 10px 28px rgba(0,0,0,.18); }
   #notification-list { max-height:360px; overflow-y:auto; margin-top:8px; }
   #incident-detail-panel:focus { outline:none; }
   #incident-detail-load-status:not(:empty) { margin:0 0 12px; }
@@ -291,6 +293,8 @@ _PAGE = """<!doctype html>
   .scenario-row .confidence-bar > span { display:block; height:100%; background:var(--accent); }
   .scenario-row .rollback { color:var(--err); }
   .scenario-actions { padding:0 10px 14px 34px; }
+  .scenario-manual { display:none; align-items:center; justify-content:space-between; gap:12px; padding:12px 10px; flex-wrap:wrap; }
+  .wrap.manual-switchable .scenario-manual { display:flex; }
   .runbook.scenario-row:not(.selected) .scenario-actions { display:none; }
   .scenario-actions .target-row label { margin:0 0 4px; }
   .scenario-actions .buttons { margin-top:10px; }
@@ -323,7 +327,6 @@ _PAGE = """<!doctype html>
   .wrap.manual-switched #result, .wrap.manual-switched #guidance-result { display:none; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
-  @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
     .feedback-grid .full { grid-column: auto; }
@@ -342,7 +345,14 @@ _PAGE = """<!doctype html>
     </div>
   </div>
   <div class="console-head">
-    <div class="title-row"><h1>Jarvis__TITLE_SUFFIX__</h1>
+    <h1>Jarvis__TITLE_SUFFIX__</h1>
+    <div class="incident-stats" role="tablist" aria-label="장애 상태">
+      <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
+      <button id="incident-tab-approval" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="approval"><span>결재 대기</span><strong id="stat-approval">0건</strong></button>
+      <button id="incident-tab-hold" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="hold"><span>보류</span><strong id="stat-hold">0건</strong></button>
+    </div>
+    <div class="head-right">
+      <button id="log-toggle" class="admin-only" type="button">로그 조회</button>
       <div class="bell-wrap">
         <button id="notification-bell" class="bell" type="button" aria-label="알림" aria-haspopup="true" aria-expanded="false" aria-controls="notification-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span id="notification-count" class="bell-count hidden"></span></button>
         <div id="notification-panel" class="card hidden" role="dialog" aria-label="알림">
@@ -351,7 +361,6 @@ _PAGE = """<!doctype html>
         </div>
       </div>
     </div>
-    <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
   <div id="approval-panel" class="card admin-only">
     <div class="card-head"><div><strong>결재 대기</strong><span id="approval-count" class="badge approval">0건</span><span class="muted"> 운영자 결재 요청 → 관리자 승인 시 조치 실행</span></div>
@@ -361,7 +370,7 @@ _PAGE = """<!doctype html>
     <details id="approval-history-box"><summary>최근 결재 처리 이력</summary><div id="approval-history"></div></details>
   </div>
   <div id="rule-panel" class="card admin-only">
-    <div class="card-head"><div><strong>에러별 예외 처리 규칙</strong><span class="muted"> 즉시 해결이 어려운 오류는 자동 보류(킵)하고 발생 시 알림만 보냅니다</span></div></div>
+    <div class="card-head"><div><strong>에러별 예외 처리 규칙</strong><span class="muted"> 즉시 해결이 어려운 오류는 자동 보류하고 발생 시 알림만 보냅니다</span></div></div>
     <div id="rule-list"></div>
     <form id="rule-form" class="feedback-grid" style="margin-top:12px">
       <div><label for="rule-code">오류 코드</label><input id="rule-code" required maxlength="120" placeholder="예: LEGACY_INTERFACE_TIMEOUT"></div>
@@ -373,18 +382,10 @@ _PAGE = """<!doctype html>
     </form>
   </div>
   <div id="operations-panel" class="card admin-only"><strong>수집·분석 상태</strong><div id="operations-status" role="status">상태 확인 중…</div><div id="operations-components" class="component-status"></div></div>
-  <div class="incident-stats" role="tablist" aria-label="장애 상태">
-    <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
-    <button id="incident-tab-critical" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="critical"><span>긴급</span><strong id="stat-critical">0건</strong></button>
-    <button id="incident-tab-unack" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="unack"><span>미확인</span><strong id="stat-unack">0건</strong></button>
-    <button id="incident-tab-analyzing" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="analyzing"><span>분석중</span><strong id="stat-analyzing">0건</strong></button>
-    <button id="incident-tab-approval" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="approval"><span>결재 대기</span><strong id="stat-approval">0건</strong></button>
-    <button id="incident-tab-hold" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="hold"><span>보류(킵)</span><strong id="stat-hold">0건</strong></button>
-  </div>
   <div id="incident-list-panel" class="card" role="tabpanel" aria-labelledby="incident-tab-open" tabindex="0">
     <div class="card-head"><strong id="incident-list-title">진행중 장애</strong><span class="muted">최근 10분</span></div>
     <div id="incident-list-status" class="muted" role="status">장애 목록을 불러오는 중…</div>
-    <div id="incident-sync-status" class="muted client-only" role="status"></div>
+    <div id="incident-sync-status" class="hidden" role="status"></div>
     <div id="incident-list" class="incident-table-wrap"></div>
     <details id="completed-incidents" class="hidden"><summary id="completed-incidents-title">처리 완료 이력</summary><div id="completed-incidents-list"></div></details>
   </div>
@@ -472,7 +473,10 @@ _PAGE = """<!doctype html>
       <div><strong>조치 시나리오 리스트</strong> <span class="muted">(같은 오류에 대한 조치 방법 · 신뢰도 높은 순 · 하나를 선택해 결재 요청)</span></div>
       <div class="scenario-cols scenario-head" aria-hidden="true"><span>시나리오</span><span>신뢰도</span><span>조치</span><span>예상 영향</span><span>과거 실행</span><span>실패 시</span></div>
       <div id="actions" role="radiogroup" aria-label="조치 시나리오 리스트"></div>
-      <p class="muted" style="margin:10px 0 0">시나리오 선택 → 결재 요청 → 관리자 결재 승인 → 명령 실행 → 복구 확인</p>
+      <div class="scenario-manual manual-only-row">
+        <div><strong>수동 조치</strong><div class="muted">위 시나리오 대신 서버에서 직접 조치한 뒤 조치 방법과 호출한 셸(서버·경로·실행 계정)을 등록합니다.</div></div>
+        <button class="manual-switch secondary" type="button">수동 조치 선택</button>
+      </div>
     </div>
     <div id="exec" class="exec-section hidden">
       <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
@@ -583,11 +587,8 @@ let manualSelectionVersion = 0;
 let activityLoadInFlight = null;
 const incidentFilters = {
   open: {label: "진행중", matches: (item) => item.status !== "RESOLVED" && item.status !== "ON_HOLD"},
-  critical: {label: "긴급", matches: (item) => item.severity === "CRITICAL"},
-  unack: {label: "미확인", matches: (item) => item.status === "ACTION_REQUIRED"},
-  analyzing: {label: "분석중", matches: (item) => item.status === "ANALYZING"},
   approval: {label: "결재 대기", matches: (item) => item.pending_approval === true},
-  hold: {label: "보류(킵)", matches: (item) => item.status === "ON_HOLD"},
+  hold: {label: "보류", matches: (item) => item.status === "ON_HOLD"},
 };
 let currentApprovals = [];
 let currentHistory = null;
@@ -736,7 +737,7 @@ function renderIncidentProcessing(incident, processing = null) {
   $("incident-processing").classList.toggle("on-hold", held);
   if (held) {
     const hold = incident.hold || {};
-    $("incident-processing-title").textContent = state.label || "보류(킵)";
+    $("incident-processing-title").textContent = state.label || "보류";
     $("incident-processing-message").textContent = state.message || "보류된 장애입니다.";
     $("incident-processing-meta").textContent = ["보류 시각: " + formatDateTime(hold.held_at), "보류자: " + (hold.operator || "-"), "사유: " + (hold.reason || "-")].join(" · ");
     return;
@@ -896,6 +897,7 @@ $("manual-form").addEventListener("submit", async event => {
     updateManualRegisterButton();
   }
 });
+const REANALYZING_STATUSES = new Set(["DETECTED", "ANALYZING", "REOPENED"]);
 function refreshSelectedIncident() {
   if (!selectedIncidentId) return Promise.resolve(true);
   return loadIncidentDetails({incident_id: selectedIncidentId}, false, true);
@@ -942,7 +944,10 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
     currentApprovals = data.approvals || [];
     renderHoldControls(latest, data);
     renderIncidentHistory(data.history, data.history_status);
-    renderManualRemediation(latest, data.manual_action_available === true && latest.status !== "ON_HOLD");
+    // 같은 오류가 다시 발생해 재분석 중이면 이전 발생분의 추천·결재·실행 결과(처리 완료 등)를 보여주지 않는다.
+    const reanalyzing = REANALYZING_STATUSES.has(latest.status);
+    renderManualRemediation(latest, !reanalyzing && data.manual_action_available === true && latest.status !== "ON_HOLD");
+    if (reanalyzing) $("manual-remediation").classList.add("hidden");
     $("incident-detail-load-status").textContent = "";
     $("incident-detail-logs-status").textContent = data.logs_status === "unavailable"
       ? "관련 로그 조회 실패 — 장애 정보는 조회되었습니다."
@@ -951,7 +956,7 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
       `[${formatDateTime(log.timestamp || log.received_at)}] ${log.service || latest.service} / ${log.host || "unknown"} / ${log.source || log.raw?.source || "log"}\\n${log.message || ""}`
     ).join("\\n\\n");
     clientRunPrefix = latest.service + " / " + latest.incident_id;
-    const rec = latest.latest_recommendation;
+    const rec = reanalyzing ? null : latest.latest_recommendation;
     const recommendationKey = JSON.stringify([latest.incident_id, latest.status, latest.version, rec?.recommendation_id, (data.decisions || []).map(d => [d.execution_id, d.result?.status]), currentApprovals.map(a => [a.approval_id, a.status, a.last_error])]);
     if (detailRecommendationKey !== recommendationKey) {
       $("result").classList.add("hidden");
@@ -969,11 +974,15 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
       }
       detailRecommendationKey = recommendationKey;
     }
-    if (data.execution && rec && data.execution.recommendation_id === rec.recommendation_id
+    if (reanalyzing) {
+      $("exec").classList.add("hidden");
+      lastExecutionId = null;
+    } else if (data.execution && rec && data.execution.recommendation_id === rec.recommendation_id
         && (data.decisions || []).some(d => d.decision === "approve" && d.execution_id === data.execution.execution_id)) {
       showExecResult(data.execution.script_id || "실행 결과", {...data.execution.result,execution_id:data.execution.execution_id}, 200, data.processing);
     }
     if (data.executions_status === "unavailable") $("incident-detail-load-status").textContent = "조치 이력 조회 지연 — 저장된 장애 상태를 표시합니다.";
+    else if (reanalyzing) $("incident-detail-load-status").textContent = "장애가 발생해 분석하는 중입니다. 분석이 끝나면 조치 시나리오가 표시됩니다.";
     else if (!rec && latest.status !== "RESOLVED" && latest.status !== "MONITORING") $("incident-detail-load-status").textContent = "분석 중이거나 조치 추천이 아직 없습니다.";
     setClientStatus(latest.status === "RESOLVED" ? "처리 완료" : latest.status === "MONITORING" ? "조치 완료 — 복구 확인 대기" : "장애 상세 조회: " + latest.status);
     return true;
@@ -1000,7 +1009,7 @@ function renderIncidentList() {
         <td>${esc(item.occurrence_count)}</td><td>${esc(formatTime(item.last_seen))}</td>
       </tr>`
     ).join("") + "</tbody></table>"
-    : (incidentsLoaded ? '<p class="muted">' + esc(filter.label) + ' 조건에 해당하는 장애가 없습니다.</p>' : "");
+    : "";
   $("incident-list").querySelectorAll(".incident-detail").forEach(button => button.addEventListener("click", () => {
     manualSelectionVersion += 1;
     autoSelectedIncidentId = null;
@@ -1408,7 +1417,6 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
           <button class="approve" disabled>결재 요청</button>
           <button class="reject">거부</button>
           <button class="hold-open secondary" type="button">보류</button>
-          <button class="manual-switch secondary" type="button">수동 조치</button>
         </div>
         <div class="hold-form hidden">
           <input class="hold-form-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)" aria-label="보류 사유">
@@ -1944,7 +1952,7 @@ async function decideRunbook(scriptId, action, el, decision) {
 }
 
 // ---------------------------------------------------------------- 장애 이력
-const METHOD_LABELS = {script: "등록 스크립트", learned_script: "학습된 첨부 스크립트", manual: "수동 조치", hold: "보류(킵)", unknown: "기록"};
+const METHOD_LABELS = {script: "등록 스크립트", learned_script: "학습된 첨부 스크립트", manual: "수동 조치", hold: "보류", unknown: "기록"};
 const CONFIRMATION_LABELS = {operator_report: "운영자 확인", business_probe: "서비스 복구 검사", simulation: "스크립트 결과 확인", exception_rule: "예외 처리 규칙", manual: "운영자 보류"};
 function renderIncidentHistory(history, status) {
   currentHistory = history || null;
@@ -1973,7 +1981,7 @@ function renderIncidentHistory(history, status) {
     : '<p class="muted">같은 오류의 과거 조치 이력이 없습니다. 이번 조치가 완료되면 이력으로 남습니다.</p>';
 }
 
-// ---------------------------------------------------------------- 보류(킵)
+// ---------------------------------------------------------------- 보류
 function renderHoldControls(incident, data) {
   const held = incident.status === "ON_HOLD";
   const pending = (data.approvals || []).some(item => ["PENDING", "EXECUTING"].includes(item.status));
@@ -2014,7 +2022,7 @@ async function changeHold(kind, reasonInput = null, statusEl = $("hold-status"))
       {operator: IS_CLIENT ? "operator" : ($("approver").value.trim() || "admin"), reason});
     if (selectedIncidentId !== incidentId) return;
     statusEl.className = (statusEl.dataset.baseClass || "") + " " + (ok ? "status-ok" : "status-err");
-    statusEl.textContent = ok ? (kind === "hold" ? "보류했습니다. ‘보류(킵)’ 탭에서 계속 확인할 수 있습니다." : "보류를 해제했습니다. 조치를 진행하세요.")
+    statusEl.textContent = ok ? (kind === "hold" ? "보류했습니다. ‘보류’ 탭에서 계속 확인할 수 있습니다." : "보류를 해제했습니다. 조치를 진행하세요.")
       : ({"approval pending; reject the approval before holding": "결재 대기 중입니다. 결재 반려 후 보류하세요.",
           "incident cannot be held in its current state": "조치 실행 중이거나 완료된 장애는 보류할 수 없습니다.",
           "incident changed; reload details": "장애 정보가 갱신되었습니다. 다시 시도하세요."}[data.reason] || "처리 실패: " + (data.reason || data.status));

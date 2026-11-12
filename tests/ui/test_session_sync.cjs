@@ -144,6 +144,10 @@ function completed(m) {
     assert.equal(element(actor.w,'result').classList.contains('incident-open'),true);
     assert.equal(element(actor.w,'exec').classList.contains('hidden'),true);
     assert.equal(card.querySelector('.hold-form').classList.contains('hidden'),true);
+    // Manual action is one option below the scenario list, not a button per scenario; only three status tabs remain.
+    assert.equal(card.querySelector('.manual-switch'),null);
+    assert.ok(actor.w.document.querySelector('.scenario-manual .manual-switch'));
+    assert.deepEqual([...actor.w.document.querySelectorAll('.incident-stat span')].map(e=>e.textContent),['진행중','결재 대기','보류']);
     assert.equal(card.querySelector('.approve').textContent,'결재 요청');
     select.value='0';select.dispatchEvent(new actor.w.Event('change'));card.querySelector('.approve').click();await settle();
     // The request is only queued: nothing runs before an admin approves it.
@@ -238,6 +242,9 @@ function completed(m) {
   race.incident={...race.incident,status:'REOPENED',version:5};
   view.w.document.dispatchEvent(new view.w.Event('visibilitychange'));await settle();
   assert.equal(element(view.w,'incident-processing').classList.contains('hidden'),true);
+  // While a recurrence is re-analyzed, the previous occurrence's completed recommendation is not shown.
+  assert.equal(element(view.w,'result').classList.contains('hidden'),true);
+  assert.match(element(view.w,'incident-detail-load-status').textContent,/분석하는 중/);
   assert.deepEqual(view.errors,[]);view.dom.window.close();
   // Script-less results hide resource guidance and send the called shell's host/path/account.
   const attachmentServer=server();

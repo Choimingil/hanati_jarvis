@@ -25,17 +25,10 @@ from utils.time_utils import now_iso
 
 HOLD_STATUS = "ON_HOLD"
 # 시뮬레이션 검증용 기본 예외 규칙. 삭제하면 다시 생성하지 않는다.
-DEFAULT_RULES = [
-    {
-        "rule_id": "RULE-LEGACY-INTERFACE-TIMEOUT",
-        "error_code": "LEGACY_INTERFACE_TIMEOUT",
-        "service": None,
-        "environment": "simulation",
-        "reason": "대외기관 레거시 전문 연동 지연 — 기관 측 개선 전까지 즉시 조치 불가, 보류 후 발생 알림",
-        "notify_interval_seconds": 60,
-        "created_by": "system",
-    },
-]
+# 장애는 기본적으로 보류하지 않는다. 예외 처리(자동 보류)는 관리자가 규칙을 등록한 오류에만 적용한다.
+DEFAULT_RULES = []
+# 이전 버전이 기본으로 등록하던 자동 보류 규칙. 기존 저장소에서도 비활성화한다.
+RETIRED_DEFAULT_RULE_IDS = ("RULE-LEGACY-INTERFACE-TIMEOUT",)
 
 
 def _parse(value):
@@ -84,6 +77,11 @@ class WorkflowStore:
                          rule["reason"], rule["notify_interval_seconds"], rule["created_by"], now_iso()),
                     )
                 db.execute("INSERT INTO meta VALUES ('default_rules_seeded', ?)", (now_iso(),))
+            if not db.execute("SELECT 1 FROM meta WHERE key='default_rules_retired'").fetchone():
+                db.execute(
+                    "UPDATE exception_rules SET enabled=0 WHERE created_by='system' AND rule_id IN ("
+                    + ",".join("?" * len(RETIRED_DEFAULT_RULE_IDS)) + ")", RETIRED_DEFAULT_RULE_IDS)
+                db.execute("INSERT INTO meta VALUES ('default_rules_retired', ?)", (now_iso(),))
 
     @contextmanager
     def connect(self):

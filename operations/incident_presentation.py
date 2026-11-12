@@ -44,7 +44,7 @@ def processing_summary(incident, execution=None):
         hold = incident.get("hold") or {}
         rule_hold = hold.get("source") == "exception_rule"
         return {
-            "state": "on_hold", "label": "예외 처리 · 보류" if rule_hold else "보류(킵)",
+            "state": "on_hold", "label": "예외 처리 · 보류" if rule_hold else "보류",
             "completed_at": hold.get("held_at"), "operator": hold.get("operator"),
             "method": hold.get("reason"), "confirmation": hold.get("source"),
             "rule_id": hold.get("rule_id"),

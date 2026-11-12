@@ -130,6 +130,24 @@ class OperationalIncidentService:
         )
         if status == "RESOLVED" or completed_sandbox:
             status = "REOPENED"
+        # 운영자가 직접 보류(킵)한 장애는 해당 발생 회차에만 적용한다. 일정 시간 조용하다가 같은 오류가
+        # 새로 발생하면 보류를 풀고 새 장애로 다시 분석한다 (보류 해제가 기본 상태).
+        # 예외 처리 규칙으로 보류된 장애는 규칙이 있는 동안 계속 보류한다.
+        hold_release = {}
+        hold = existing.get("hold") or {}
+        retired_rule = hold.get("rule_id") in {"RULE-LEGACY-INTERFACE-TIMEOUT"}
+        if status == "ON_HOLD" and (hold.get("source") != "exception_rule" or retired_rule):
+            try:
+                last_seen = datetime.fromisoformat(str(existing.get("last_seen", "")).replace("Z", "+00:00"))
+                quiet = (datetime.now(UTC) - last_seen).total_seconds()
+            except (ValueError, TypeError):
+                quiet = None
+            if quiet is None or quiet >= int(os.getenv("HOLD_RELEASE_ON_RECURRENCE_SECONDS", "60")):
+                status = "REOPENED"
+                history = list(existing.get("hold_history") or [])
+                if history:
+                    history[-1] = {**history[-1], "released_at": timestamp, "released_by": "recurrence"}
+                hold_release = {"hold": None, "hold_history": history[-50:], "last_released_at": timestamp}
         priority = business_priority(log, count, existing)
         recommendation = existing.get("latest_recommendation") or {}
         try:
@@ -176,6 +194,7 @@ class OperationalIncidentService:
                     + ([ingestion_id] if ingestion_id else [])
                 )[-1000:],
                 "version": int(existing.get("version", 1)) + (0 if suppress else 1),
+                **hold_release,
             },
             expected_version=int(existing.get("version", 1)),
             **(
