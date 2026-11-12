@@ -60,7 +60,14 @@ _PAGE = """<!doctype html>
     margin: 0; background: var(--bg); color: var(--fg);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     line-height: 1.5;
+    /* 한글은 어절(띄어쓰기) 단위로 줄바꿈하고, 칸을 넘는 긴 영문·경로만 쪼갠다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    -webkit-text-size-adjust: 100%;
   }
+  pre { word-break: normal; overflow-wrap: anywhere; }
+  .pill, .incident-detail strong, .scenario-pick strong, .scenario-summary dd, .incident-fields dd,
+  #manual-target, .notification, .history-summary, #exec-title { overflow-wrap: anywhere; }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
@@ -160,8 +167,10 @@ _PAGE = """<!doctype html>
   .status-pending { color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); font-size: 13px; }
   .card-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
   }
+  .card-head > :first-child { min-width: 0; }
+  label[for="approver"] { white-space: nowrap; }
   .panel-toggle {
     background: transparent; border: 0; color: var(--muted); cursor: pointer;
     padding: 4px 6px; font-size: 13px; border-radius: 6px; flex: 0 0 auto;
@@ -266,7 +275,7 @@ _PAGE = """<!doctype html>
   #notification-list { max-height:360px; overflow-y:auto; margin-top:8px; }
   #incident-detail-panel:focus { outline:none; }
   #incident-detail-load-status:not(:empty) { margin:0 0 12px; }
-  .banner-tools { display:flex; gap:8px; align-items:center; }
+  .banner-tools { display:flex; gap:8px; align-items:center; margin-left:auto; flex:0 0 auto; }
   .banner-tools > button.secondary { padding:6px 12px; font-size:13px; }
   #result .hold-controls { margin:0 0 12px; }
   #result.incident-open { border:2px solid var(--err); }
@@ -298,7 +307,7 @@ _PAGE = """<!doctype html>
   .runbook.scenario-row:not(.selected) .scenario-actions { display:none; }
   .scenario-actions .target-row label { margin:0 0 4px; }
   .scenario-actions .buttons { margin-top:10px; }
-  @media (max-width:760px) {
+  @media (max-width:900px) {
     .scenario-head { display:none; }
     .scenario-cols { grid-template-columns:1fr 1fr; }
     .scenario-cols > :first-child { grid-column:1 / -1; }
@@ -319,7 +328,9 @@ _PAGE = """<!doctype html>
   .hold-form button { padding:8px 12px; font-size:13px; }
 
   pre.log-scroll { max-height: calc(13px * 1.5 * 5 + 28px); overflow-y: auto; line-height: 1.5; }
-  .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px 12px; flex-wrap:wrap; }
+  .banner-head > :first-child { min-width:0; flex:1 1 auto; }
+  .banner-head .pill { max-width:100%; }
   .banner-head button { padding:6px 12px; font-size:13px; }
   .manual-switch, #manual-back { display:none; }
   .wrap.manual-switchable .manual-switch, .wrap.manual-switchable #manual-back { display:inline-block; }
@@ -330,6 +341,44 @@ _PAGE = """<!doctype html>
   @media (max-width: 620px) {
     .feedback-grid { grid-template-columns: 1fr; }
     .feedback-grid .full { grid-column: auto; }
+  }
+  /* ---- 태블릿·모바일: 넓은 표는 카드형으로 쌓는다 ---- */
+  @media (max-width: 900px) {
+    .workflow-table, .incident-table { display: block; }
+    .workflow-table thead, .incident-table thead { display: none; }
+    .workflow-table tbody, .incident-table tbody { display: block; }
+    .workflow-table tr, .incident-table tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .workflow-table td, .incident-table td { display: block; padding: 3px 0; border: 0; overflow-wrap: anywhere; }
+    .workflow-table td[data-label], .incident-table td[data-label] { display: grid; grid-template-columns: 72px minmax(0, 1fr); column-gap: 10px; }
+    .workflow-table td[data-label] > *, .incident-table td[data-label] > * { grid-column: 2; min-width: 0; justify-self: start; max-width: 100%; }
+    .workflow-table td[data-label] > .badge { margin-left: 0; }
+    .workflow-table td[data-label]::before, .incident-table td[data-label]::before {
+      content: attr(data-label); grid-column: 1; grid-row: 1 / span 20; color: var(--muted); font-size: 12px; padding-top: 2px;
+    }
+    .workflow-table td:empty { display: none; }
+    .incident-table td.incident-message { display: block; }
+    .incident-table td.incident-message::before { display: none; }
+    .incident-table tr.recent-incident { border: 2px solid var(--err); border-radius: 8px; padding: 8px 10px; background: rgba(209,54,74,.08); margin-bottom: 8px; }
+    .incident-table tr.recent-incident td { border: 0 !important; background: transparent; }
+    .incident-table-wrap { overflow-x: visible; }
+  }
+  /* ---- 모바일: 화면 밖으로 넘치지 않게 표는 카드형으로 쌓고, 제목·종 아이콘을 한 줄에 둔다 ---- */
+  @media (max-width: 640px) {
+    .wrap { padding: 18px 14px 48px; }
+    .card { padding: 16px 14px; }
+    h1 { font-size: 20px; }
+    .console-head { gap: 10px; }
+    .console-head h1 { order: 1; }
+    .head-right { order: 2; }
+    .incident-stats { order: 3; width: 100%; }
+    .incident-stat { padding: 6px 12px; }
+    .head-right #log-toggle { padding: 7px 12px; font-size: 14px; }
+    .workflow-actions button { flex: 1 1 auto; }
+    .scenario-summary { grid-template-columns: 72px 1fr; }
+    .scenario-actions .buttons button { flex: 1 1 auto; }
+    .hold-form button { flex: 1 1 auto; }
+    .runbook dl, .incident-fields { grid-template-columns: 72px 1fr; }
+    .history-panel { padding: 10px; }
   }
 </style>
 </head>
@@ -696,6 +745,21 @@ document.addEventListener("click", event => {
 });
 $("manual-back").addEventListener("click", () => setManualView(false));
 
+// 표의 각 칸에 열 제목(data-label)을 붙여, 모바일에서 카드형으로 쌓아도 항목명을 보여준다.
+function labelTableCells(root) {
+  root.querySelectorAll("table").forEach(table => {
+    const heads = [...table.querySelectorAll("thead th")].map(th => th.textContent.trim());
+    if (!heads.length) return;
+    table.querySelectorAll("tbody tr").forEach(row => [...row.children].forEach((cell, index) => {
+      if (heads[index] && !cell.hasAttribute("data-label")) cell.setAttribute("data-label", heads[index]);
+    }));
+  });
+}
+new MutationObserver(records => {
+  if (records.some(record => [...record.addedNodes].some(node => node.nodeType === 1 && (node.matches("table, tr") || node.querySelector("table"))))) {
+    labelTableCells(document);
+  }
+}).observe(document.body, {childList: true, subtree: true});
 function esc(value) {
   const div = document.createElement("div");
   div.textContent = value == null ? "" : String(value);
