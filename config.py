@@ -7,6 +7,13 @@ load_dotenv(override=False)
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8080"))
 
+# 관리자 화면 경로. 추측하기 쉬운 `/admin` 대신 임의 경로를 쓰고,
+# 운영 환경에서는 ADMIN_PAGE_PATH 환경변수로 별도 값을 지정한다.
+ADMIN_PAGE_PATH = "/" + (
+    os.getenv("ADMIN_PAGE_PATH", "").strip().strip("/")
+    or "ops-console-ee6bdb251722"
+)
+
 METRICS_API_URL = os.getenv(
     "METRICS_API_URL", "http://127.0.0.1:8080/api/v1/metrics"
 )

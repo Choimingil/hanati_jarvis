@@ -2,8 +2,10 @@
 
 같은 페이지를 두 모드로 제공한다.
 
-- `GET /`, `GET /admin` (어드민): 아래 흐름 전체 + 장애 시나리오/수집·분석 로그
-- `GET /client` (클라이언트): 오류 내용(원인·Runbook/리소스 가이드)만 표시.
+- `GET <ADMIN_PAGE_PATH>` (어드민, 기본값 `/ops-console-ee6bdb251722`):
+  아래 흐름 전체 + 장애 시나리오/수집·분석 로그/수집·분석 상태.
+  추측하기 쉬운 `/admin` 경로는 제공하지 않는다.
+- `GET /`, `GET /client` (클라이언트): 오류 내용(원인·Runbook/리소스 가이드)만 표시.
   어드민이 시나리오를 실행하면 `/api/v1/log-generator/latest-run` 폴링으로
   같은 장애의 분석 결과를 따라 보여준다.
 
@@ -19,13 +21,15 @@
 3. LLM이 준 "오류 원인"과 신뢰도 높은 순 조치 제안을 Runbook 카드로 보여준다
    (장애/추정 원인/신뢰도/조치/예상 영향/과거 실행 이력/실패 시 대응)
 4. 각 Runbook에서 "결재 요청"하면 `POST /api/v1/approvals`로 결재 대기열에 올리고,
-   관리자가 admin 화면 "결재 대기"에서 승인하면 기존 승인 실행 경로로 해당
+   관리자가 어드민 화면 "결재 대기"에서 승인하면 기존 승인 실행 경로로 해당
    스크립트를 실제로 호출하고 결과(stdout)를 보여준다. "거부"는 스크립트를
    실행하지 않고 감사 기록만 남긴다. 시나리오 스크립트의 정상 종료와 파일
    검증이 확인되면 자동으로 시뮬레이션 처리를 완료한다.
 """
 
 from flask import Blueprint, Response
+
+from config import ADMIN_PAGE_PATH
 
 
 web_blueprint = Blueprint("web", __name__)
@@ -250,6 +254,13 @@ _PAGE = """<!doctype html>
   .notification.unread { background:var(--bar); }
   .notification strong { display:block; }
   #notification-count { margin-left:6px; }
+  pre.log-scroll { max-height: calc(13px * 1.5 * 5 + 28px); overflow-y: auto; line-height: 1.5; }
+  .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .banner-head button { padding:6px 12px; font-size:13px; }
+  .manual-switch, #manual-back { display:none; }
+  .wrap.manual-switchable .manual-switch, .wrap.manual-switchable #manual-back { display:inline-block; }
+  .wrap.manual-switchable:not(.manual-switched) #manual-remediation { display:none; }
+  .wrap.manual-switched #result, .wrap.manual-switched #guidance-result, .wrap.manual-switched #exec { display:none; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
   @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
@@ -274,9 +285,10 @@ _PAGE = """<!doctype html>
     <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
     <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
   </div>
-  <div id="notification-panel" class="card">
-    <div class="card-head"><div><strong>알림</strong><span id="notification-count" class="badge rule hidden"></span><span class="muted"> 예외 처리·결재·보류 알림</span></div><button id="notification-read" class="secondary" type="button">모두 읽음</button></div>
-    <div id="notification-list" class="muted">알림을 불러오는 중…</div>
+  <div id="notification-panel" class="card collapsed">
+    <div class="card-head"><div><strong>알림</strong><span id="notification-count" class="badge rule hidden"></span><span class="muted"> 예외 처리·결재·보류 알림</span></div>
+      <div style="display:flex;gap:6px;align-items:center"><button id="notification-read" class="secondary" type="button">모두 읽음</button><button id="notification-toggle" class="panel-toggle" type="button" aria-controls="notification-body" aria-expanded="false" aria-label="알림 접기/펼치기"><span class="chev">▾</span> <span class="toggle-label">펼치기</span></button></div></div>
+    <div id="notification-body" class="panel-body"><div id="notification-list" class="muted">알림을 불러오는 중…</div></div>
   </div>
   <div id="approval-panel" class="card admin-only">
     <div class="card-head"><div><strong>결재 대기</strong><span id="approval-count" class="badge approval">0건</span><span class="muted"> 운영자 결재 요청 → 관리자 승인 시 조치 실행</span></div>
@@ -297,7 +309,7 @@ _PAGE = """<!doctype html>
       <div class="full"><button id="rule-submit" type="submit">예외 처리 규칙 등록</button> <span id="rule-status" class="muted" role="status"></span></div>
     </form>
   </div>
-  <div class="card"><strong>수집·분석 상태</strong><div id="operations-status" role="status">상태 확인 중…</div><div id="operations-components" class="component-status"></div></div>
+  <div id="operations-panel" class="card admin-only"><strong>수집·분석 상태</strong><div id="operations-status" role="status">상태 확인 중…</div><div id="operations-components" class="component-status"></div></div>
   <div class="incident-stats" role="tablist" aria-label="장애 상태">
     <button id="incident-tab-open" type="button" class="incident-stat selected" role="tab" aria-selected="true" aria-controls="incident-list-panel" data-filter="open"><span>진행중</span><strong id="stat-open">0건</strong></button>
     <button id="incident-tab-critical" type="button" class="incident-stat" role="tab" aria-selected="false" aria-controls="incident-list-panel" tabindex="-1" data-filter="critical"><span>긴급</span><strong id="stat-critical">0건</strong></button>
@@ -331,7 +343,7 @@ _PAGE = """<!doctype html>
     <div id="incident-history"></div>
     <div class="guidance-section"><strong>해당 장애의 최근 10분 로그 (최대 20건)</strong></div>
     <div id="incident-detail-logs-status" class="muted"></div>
-    <pre id="incident-detail-logs"></pre>
+    <pre id="incident-detail-logs" class="log-scroll"></pre>
   </div>
   <div id="log-tabs-panel" class="card hidden admin-only">
     <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
@@ -350,7 +362,7 @@ _PAGE = """<!doctype html>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
-      <pre id="log-output"></pre>
+      <pre id="log-output" class="log-scroll"></pre>
       <div id="wait-status" class="muted" style="margin-top:8px"></div>
     </div>
   </div>
@@ -362,7 +374,7 @@ _PAGE = """<!doctype html>
       <button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button>
     </div>
     <div class="panel-body">
-      <pre id="fluentbit-output"></pre>
+      <pre id="fluentbit-output" class="log-scroll"></pre>
     </div>
   </div>
 
@@ -374,23 +386,23 @@ _PAGE = """<!doctype html>
     </div>
     <div class="panel-body">
       <div class="sub-label">Qdrant (incident_cases 컬렉션)</div>
-      <pre id="qdrant-output" class="src-qdrant"></pre>
+      <pre id="qdrant-output" class="src-qdrant log-scroll"></pre>
       <div class="sub-label">Elasticsearch (진단·추천)</div>
-      <pre id="es-output" class="src-elasticsearch"></pre>
+      <pre id="es-output" class="src-elasticsearch log-scroll"></pre>
     </div>
   </div>
 
   <div id="redis-panel" class="card hidden logs-section admin-only">
     <div class="card-head"><strong>Redis 큐 로그</strong><button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button></div>
-    <div class="panel-body"><p class="muted">현재 큐 상태와 조회 구간의 접수·재시도·실패 보관 기록</p><pre id="redis-output"></pre></div>
+    <div class="panel-body"><p class="muted">현재 큐 상태와 조회 구간의 접수·재시도·실패 보관 기록</p><pre id="redis-output" class="log-scroll"></pre></div>
   </div>
   <div id="worker-panel" class="card hidden logs-section admin-only">
     <div class="card-head"><strong>Worker 처리 로그</strong><button class="panel-toggle" type="button" aria-label="접기/펼치기"><span class="chev">▾</span></button></div>
-    <div class="panel-body"><p class="muted">현재 생존 신호와 조회 구간의 작업별 분석 시작·완료·오류 기록</p><pre id="worker-output"></pre></div>
+    <div class="panel-body"><p class="muted">현재 생존 신호와 조회 구간의 작업별 분석 시작·완료·오류 기록</p><pre id="worker-output" class="log-scroll"></pre></div>
   </div>
 
   <div id="result" class="card hidden">
-    <span id="errcode" class="pill"></span>
+    <div class="banner-head"><span id="errcode" class="pill"></span><button type="button" class="secondary manual-switch">수동 조치</button></div>
     <div><strong>현재 오류 원인</strong></div>
     <div id="cause" class="cause"></div>
     <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
@@ -399,7 +411,7 @@ _PAGE = """<!doctype html>
   </div>
 
   <div id="manual-remediation" class="card hidden">
-    <strong>수동 조치 등록</strong>
+    <div class="banner-head"><strong>수동 조치 등록</strong><button id="manual-back" type="button" class="secondary">← 뒤로 가기</button></div>
     <p id="manual-flow" class="muted">수동 조치 → 조치 방법과 스크립트 첨부 → 복구 확인 후 학습</p>
     <p id="manual-target" class="muted"></p>
     <form id="manual-form" class="feedback-grid hidden">
@@ -414,19 +426,19 @@ _PAGE = """<!doctype html>
   </div>
 
   <div id="guidance-result" class="card hidden">
-    <span id="guidance-code" class="pill">RESOURCE GUIDANCE</span>
+    <div class="banner-head"><span id="guidance-code" class="pill">RESOURCE GUIDANCE</span><button type="button" class="secondary manual-switch">수동 조치</button></div>
     <div><strong>리소스 기반 문제 제안</strong></div>
     <div id="guidance-summary" class="guidance-summary"></div>
 
     <div class="guidance-section"><strong>발생 로그</strong></div>
-    <pre id="guidance-log"></pre>
+    <pre id="guidance-log" class="log-scroll"></pre>
 
     <div class="guidance-section"><strong>발견된 문제 가능성</strong>
       <span class="muted">(신뢰도 높은 순)</span></div>
     <div id="hypotheses"></div>
 
     <div class="guidance-section"><strong>같은 호스트의 최근 ERROR 로그</strong></div>
-    <pre id="guidance-related-logs"></pre>
+    <pre id="guidance-related-logs" class="log-scroll"></pre>
 
     <div class="guidance-section"><strong>운영자 판단</strong>
       <div class="muted">확인과 복구가 완료된 결과만 과거 장애 사례로 학습됩니다.</div>
@@ -548,7 +560,7 @@ async function loadOperationsStatus() {
     ).join("");
   } catch (error) { $("operations-status").textContent = "상태 조회 실패 — 현재 표시된 데이터가 최신인지 확인하세요."; return false; }
 }
-schedulePoll(loadOperationsStatus,15000);
+if (!IS_CLIENT) schedulePoll(loadOperationsStatus,15000);
 $("refresh-execution").addEventListener("click", async () => {
   if (!lastExecutionId) return;
   const executionId = lastExecutionId;
@@ -578,9 +590,39 @@ $("verify-execution").addEventListener("click", async () => {
 
 document.querySelectorAll(".panel-toggle").forEach((btn) => {
   btn.addEventListener("click", () => {
-    btn.closest(".card").classList.toggle("collapsed");
+    const collapsed = btn.closest(".card").classList.toggle("collapsed");
+    if (btn.hasAttribute("aria-expanded")) btn.setAttribute("aria-expanded", String(!collapsed));
+    const label = btn.querySelector(".toggle-label");
+    if (label) label.textContent = collapsed ? "펼치기" : "접기";
   });
 });
+
+// 에러 배너(Runbook/리소스 가이드) ↔ 수동 조치 화면 전환.
+// 배너와 수동 조치 영역이 함께 표시 가능할 때만 전환 버튼을 노출하고,
+// 수동 조치 화면에서는 "뒤로 가기"로 이전 조치 제안 화면으로 돌아간다.
+let manualViewActive = false;
+const pageWrap = document.querySelector(".wrap");
+function syncManualView() {
+  const banner = !$("result").classList.contains("hidden") || !$("guidance-result").classList.contains("hidden");
+  const manual = !$("manual-remediation").classList.contains("hidden");
+  const switchable = banner && manual;
+  if (!switchable) manualViewActive = false;
+  pageWrap.classList.toggle("manual-switchable", switchable);
+  pageWrap.classList.toggle("manual-switched", switchable && manualViewActive);
+}
+function setManualView(active) {
+  manualViewActive = active;
+  syncManualView();
+  const target = active ? $("manual-remediation")
+    : (!$("result").classList.contains("hidden") ? $("result") : $("guidance-result"));
+  target.scrollIntoView({behavior: "smooth", block: "start"});
+}
+const manualViewObserver = new MutationObserver(syncManualView);
+["result", "guidance-result", "manual-remediation"].forEach(id =>
+  manualViewObserver.observe($(id), {attributes: true, attributeFilter: ["class"]}));
+document.querySelectorAll(".manual-switch").forEach(button =>
+  button.addEventListener("click", () => setManualView(true)));
+$("manual-back").addEventListener("click", () => setManualView(false));
 
 function esc(value) {
   const div = document.createElement("div");
@@ -1982,13 +2024,16 @@ def _render(mode: str, title_suffix: str) -> Response:
     return Response(page, mimetype="text/html")
 
 
-@web_blueprint.get("/")
-@web_blueprint.get("/admin")
+@web_blueprint.get(ADMIN_PAGE_PATH)
 def admin() -> Response:
-    """장애 시나리오 실행·수집/분석 로그까지 보이는 운영자(어드민) 화면."""
+    """장애 시나리오 실행·수집/분석 로그까지 보이는 운영자(어드민) 화면.
+
+    경로는 config.ADMIN_PAGE_PATH(환경변수 ADMIN_PAGE_PATH)로 정한다.
+    """
     return _render("admin", " (Admin)")
 
 
+@web_blueprint.get("/")
 @web_blueprint.get("/client")
 def client() -> Response:
     """오류 내용(원인·Runbook/리소스 가이드)만 보이는 클라이언트 화면.

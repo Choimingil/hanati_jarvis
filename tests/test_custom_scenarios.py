@@ -19,6 +19,7 @@ from operations.learned_scripts import ScriptLibrary
 from operations.script_sandbox import PREFIX
 from operations.settings import manual_action_available
 from routes import log_generator_routes, remediation_routes
+from config import ADMIN_PAGE_PATH
 from routes.web_routes import web_blueprint
 from registry import SCENARIO_REGISTRY, get_scenarios
 from scenario.scenario_runner import ScenarioRunner
@@ -146,8 +147,10 @@ class CustomScenarioTests(unittest.TestCase):
         generator.generate.assert_not_called()
 
     def test_create_button_exists_only_in_admin_html(self):
-        self.assertIn('id="create-error"', self.api.get("/admin").get_data(as_text=True))
+        self.assertIn('id="create-error"', self.api.get(ADMIN_PAGE_PATH).get_data(as_text=True))
         self.assertNotIn('id="create-error"', self.api.get("/client").get_data(as_text=True))
+        self.assertNotIn('id="create-error"', self.api.get("/").get_data(as_text=True))
+        self.assertEqual(self.api.get("/admin").status_code, 404)
 
 
 if __name__ == "__main__":

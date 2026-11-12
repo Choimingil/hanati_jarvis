@@ -5,6 +5,7 @@ from flask import Flask
 
 from operations.incident_presentation import processing_summary
 from routes import log_generator_routes
+from config import ADMIN_PAGE_PATH
 from routes.web_routes import web_blueprint
 from support import MemoryRepository
 
@@ -110,8 +111,8 @@ class IncidentCompletionTests(unittest.TestCase):
     def test_list_preserves_completed_status_and_both_pages_use_operational_wording(self):
         data = self.api.get("/api/v1/log-generator/incidents").get_json()
         self.assertEqual(data["incidents"][0]["processing"]["state"], "completed")
-        for mode in ("admin", "client"):
-            html = self.api.get("/" + mode).get_data(as_text=True)
+        for path in (ADMIN_PAGE_PATH, "/client"):
+            html = self.api.get(path).get_data(as_text=True)
             self.assertIn('id="incident-processing"', html)
             self.assertIn('id="completed-incidents"', html)
             self.assertIn("처리 완료", html)
