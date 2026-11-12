@@ -177,8 +177,20 @@ function completed(m) {
     element(actor.w,id).value=value;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
   }
   assert.equal(element(actor.w,'manual-register').disabled,true);
-  element(actor.w,'manual-performed').checked=true;
-  element(actor.w,'manual-performed').dispatchEvent(new actor.w.Event('input'));
+  // The shell called on the failing server (host / absolute path / account) is required instead of an attachment.
+  assert.equal(element(actor.w,'manual-performed'),null);
+  assert.equal(element(actor.w,'manual-script'),null);
+  assert.equal(element(actor.w,'manual-host').value,'orders-01');
+  for(const [id,value] of [['manual-shell-path','relative.sh'],['manual-account','appuser']]) {
+    element(actor.w,id).value=value;element(actor.w,id).dispatchEvent(new actor.w.Event('input'));
+  }
+  element(actor.w,'manual-recovered').checked=true;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
+  assert.equal(element(actor.w,'manual-register').disabled,true);
+  element(actor.w,'manual-shell-path').value='/app/scripts/restart_orders.sh';
+  element(actor.w,'manual-shell-path').dispatchEvent(new actor.w.Event('input'));
+  element(actor.w,'manual-recovered').checked=false;
+  element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
   assert.equal(element(actor.w,'manual-register').disabled,true);
   element(actor.w,'manual-recovered').checked=true;
   element(actor.w,'manual-recovered').dispatchEvent(new actor.w.Event('input'));
@@ -215,7 +227,7 @@ function completed(m) {
   view.w.document.dispatchEvent(new view.w.Event('visibilitychange'));await settle();
   assert.equal(element(view.w,'incident-processing').classList.contains('hidden'),true);
   assert.deepEqual(view.errors,[]);view.dom.window.close();
-  // Script-less results hide resource guidance and send the actual attachment as multipart.
+  // Script-less results hide resource guidance and send the called shell's host/path/account.
   const attachmentServer=server();
   attachmentServer.incident.error_code='CONFIGURATION_MISMATCH';
   attachmentServer.incident.latest_recommendation={...attachmentServer.incident.latest_recommendation,
@@ -224,19 +236,17 @@ function completed(m) {
   assert.equal(element(attachmentUi.w,'guidance-result').classList.contains('hidden'),true);
   assert.equal(element(attachmentUi.w,'result').classList.contains('hidden'),true);
   assert.equal(element(attachmentUi.w,'manual-form').classList.contains('hidden'),false);
-  const file=new attachmentUi.w.File(['#!/bin/bash\necho fixed\n'],'restore.sh',{type:'text/x-shellscript'});
-  Object.defineProperty(element(attachmentUi.w,'manual-script'),'files',{value:[file],configurable:true});
-  for(const [id,value] of [['manual-method','설정 복원'],['manual-operator','tester']]) {
+  for(const [id,value] of [['manual-method','설정 복원'],['manual-operator','tester'],['manual-shell-path','/opt/orders/bin/restore.sh'],['manual-account','orders']]) {
     element(attachmentUi.w,id).value=value;
     element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
   }
-  for(const id of ['manual-performed','manual-recovered']) {
-    element(attachmentUi.w,id).checked=true;
-    element(attachmentUi.w,id).dispatchEvent(new attachmentUi.w.Event('input'));
-  }
+  element(attachmentUi.w,'manual-recovered').checked=true;
+  element(attachmentUi.w,'manual-recovered').dispatchEvent(new attachmentUi.w.Event('input'));
   element(attachmentUi.w,'manual-form').dispatchEvent(new attachmentUi.w.Event('submit',{cancelable:true})); await settle();
-  assert.equal(attachmentServer.posts.at(-1).file,'restore.sh');
+  assert.equal(attachmentServer.posts.at(-1).file,null);
   assert.equal(attachmentServer.posts.at(-1).body.method,'설정 복원');
+  assert.equal(attachmentServer.posts.at(-1).body.performed,true);
+  assert.deepEqual(attachmentServer.posts.at(-1).body.executed_shell,{host:'orders-01',path:'/opt/orders/bin/restore.sh',account:'orders'});
   assert.equal(attachmentUi.errors.length,0);
   attachmentUi.dom.window.close();
   // Learned errors hide manual history as well as the form, even without a bound target.

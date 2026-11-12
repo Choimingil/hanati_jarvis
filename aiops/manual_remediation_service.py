@@ -2,11 +2,40 @@
 
 import hashlib
 import json
+import posixpath
 import re
 
 from operations.privacy import redact
 from operations.settings import manual_action_available
 from utils.time_utils import now_iso
+
+
+_ACCOUNT = re.compile(r"[A-Za-z_][A-Za-z0-9_.-]{0,63}")
+_SHELL_PATH = re.compile(r"/[A-Za-z0-9_./+@%=,:-]{0,1023}")
+
+
+def executed_shell(value, incident):
+    """수동 조치 시 오류 발생 서버에서 호출한 셸 정보(서버·절대경로·실행 계정)를 검증한다.
+
+    기록만 하며 이 값으로 어떤 명령도 실행하지 않는다.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("invalid executed_shell")
+    host = value.get("host")
+    path = value.get("path")
+    account = value.get("account")
+    if not isinstance(host, str) or not host.strip() or len(host) > 200:
+        raise ValueError("invalid executed_shell host")
+    hosts = [str(item) for item in incident.get("affected_hosts") or []]
+    if hosts and host.strip() not in hosts:
+        raise ValueError("executed_shell host must be an affected host")
+    if not isinstance(path, str) or not _SHELL_PATH.fullmatch(path.strip()) or ".." in path.split("/"):
+        raise ValueError("invalid executed_shell path")
+    if not isinstance(account, str) or not _ACCOUNT.fullmatch(account.strip()):
+        raise ValueError("invalid executed_shell account")
+    return {"host": host.strip(), "path": posixpath.normpath(path.strip()), "account": account.strip()}
 
 
 class ManualRemediationService:
@@ -42,11 +71,15 @@ class ManualRemediationService:
             ):
                 raise ValueError("incident changed; reload details before registering")
             script = ScriptLibrary().attach(incident, attachment[0], attachment[1])
+        shell = executed_shell(body.get("executed_shell"), incident)
         content = redact({
             "operator": body["operator"].strip(), "method": body["method"].strip(),
             "performed": True, "recovered": body["recovered"],
             **({"attachment": metadata(script)} if script else {}),
         })
+        if shell:
+            # 경로·계정은 식별 정보라 마스킹하지 않고 그대로 기록한다 (형식은 위에서 제한).
+            content["executed_shell"] = shell
         fingerprint = hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()
         history = list(incident.get("manual_actions") or [])
         existing = next((item for item in history if item["registration_id"] == body["registration_id"]), None)

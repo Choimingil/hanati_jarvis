@@ -44,6 +44,7 @@ def resolution_entry(incident, changes=None, manual_action=None):
         "confirmation": merged.get("recovery_confirmation"),
         "execution_id": None if manual_action else execution.get("execution_id"),
         "attachment": (manual_action or {}).get("attachment", {}).get("filename") if manual_action else None,
+        "executed_shell": (manual_action or {}).get("executed_shell") if manual_action else None,
     }
 
 

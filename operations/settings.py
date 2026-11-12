@@ -107,8 +107,8 @@ def manual_action_available(incident):
     bound = with_execution_targets(incident)
     recommendation = bound.get("latest_recommendation") or {}
     return (
+        # 등록 스크립트(조치 제안)가 있어도 운영자가 직접 수동 조치를 선택해 등록할 수 있다.
         not any(action.get("learned_script") for action in recommendation.get("actions", []))
-        and not recommendation.get("targets")
         and bound.get("status") in {"ACTION_REQUIRED", "INVESTIGATING", "REOPENED", "MONITORING"}
         and not bound.get("active_execution_id")
         and (bound.get("status") != "MONITORING" or bound.get("recovery_confirmation") == "pending_manual")

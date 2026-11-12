@@ -310,11 +310,31 @@ class ManualActionTests(unittest.TestCase):
         self.repo.incidents["INC-MANUAL"].update(status="INVESTIGATING", active_execution_id="EXEC-ACTIVE")
         with self.assertRaises(ValueError): self.service.submit(self.body)
 
-    def test_target_available_blocks_manual_registration(self):
+    def test_operator_can_choose_manual_action_even_when_runbook_target_exists(self):
         incident = self.repo.incidents["INC-MANUAL"]
         incident["latest_recommendation"] = {"actions": [{"script_id": "restart_application"}]}
         with patch("operations.settings.registry", return_value=[{"host": "orders-01", "environment": "prod", "service": "orders", "instance": "one"}]):
-            with self.assertRaises(ValueError): self.service.submit(self.body)
+            self.assertTrue(manual_action_available(incident))
+            result = self.service.submit(self.body)
+        self.assertEqual(result["incident"]["status"], "MONITORING")
+
+    def test_manual_action_records_shell_path_and_account_on_affected_server(self):
+        shell = {"host": "orders-01", "path": "/opt/orders/bin/./restart.sh", "account": "appuser"}
+        result = self.service.submit({**self.body, "executed_shell": shell})
+        self.assertEqual(result["manual_action"]["executed_shell"],
+                         {"host": "orders-01", "path": "/opt/orders/bin/restart.sh", "account": "appuser"})
+        self.assertEqual(self.repo.incidents["INC-MANUAL"]["manual_actions"][-1]["executed_shell"]["account"], "appuser")
+
+    def test_invalid_shell_info_is_rejected_without_changing_incident(self):
+        for shell in ({"host": "other-host", "path": "/opt/a.sh", "account": "app"},
+                      {"host": "orders-01", "path": "relative.sh", "account": "app"},
+                      {"host": "orders-01", "path": "/opt/../etc/x.sh", "account": "app"},
+                      {"host": "orders-01", "path": "/opt/a.sh; rm -rf /", "account": "app"},
+                      {"host": "orders-01", "path": "/opt/a.sh", "account": "root user"}, "text"):
+            with self.subTest(shell=shell):
+                with self.assertRaises(ValueError):
+                    self.service.submit({**self.body, "executed_shell": shell})
+                self.assertEqual(self.repo.incidents["INC-MANUAL"]["version"], 2)
 
     def test_registration_keeps_text_as_data_redacts_and_never_runs_a_command(self):
         method = '<script>alert(1)</script> $(touch /tmp/never) password=private'

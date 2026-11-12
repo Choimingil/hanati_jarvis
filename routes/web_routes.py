@@ -262,20 +262,35 @@ _PAGE = """<!doctype html>
   .bell-count { position:absolute; top:-5px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--err); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
   #notification-panel { position:absolute; top:calc(100% + 8px); left:0; z-index:20; width:min(380px, calc(100vw - 32px)); margin:0; padding:14px; box-shadow:0 10px 28px rgba(0,0,0,.18); }
   #notification-list { max-height:360px; overflow-y:auto; margin-top:8px; }
-  .detail-section { border-top:1px solid var(--border); padding:10px 0 2px; }
-  .detail-section > summary { cursor:pointer; font-weight:700; padding:2px 0; }
-  .detail-section > summary .muted { font-weight:400; }
-  .detail-section[open] > summary { margin-bottom:6px; }
+  .selected-incident { border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; background:var(--card); padding:10px 14px; margin-bottom:18px; }
+  .selected-incident:focus { outline:none; }
+  .selected-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .selected-head strong { flex:1 1 auto; }
+  .selected-head button { padding:6px 12px; font-size:13px; }
+  .selected-incident .incident-processing { margin:10px 0 0; }
+  .selected-incident .hold-controls { margin:10px 0 0; }
+  button.icon-btn { position:relative; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:8px; width:36px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  button.icon-btn:hover, button.icon-btn[aria-expanded="true"] { color:var(--accent); border-color:var(--accent); background:var(--bar); }
+  button.icon-btn svg { width:18px; height:18px; }
+  .icon-count { position:absolute; top:-6px; right:-7px; min-width:17px; height:17px; padding:0 4px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; font-weight:700; line-height:17px; text-align:center; }
+  .history-panel { border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:4px 0 14px; background:var(--bg); }
+  .history-panel .workflow-table { margin-top:6px; }
+  .exec-section { border-top:1px solid var(--border); margin-top:16px; padding-top:14px; }
+  .exec-section .exec-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .exec-section .exec-actions button { padding:7px 12px; font-size:13px; }
+  .hold-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .hold-form input { flex:1 1 240px; width:auto; padding:8px 10px; }
+  .hold-form button { padding:8px 12px; font-size:13px; }
   .runbook-pager { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:12px; }
   .runbook-pager button { padding:6px 12px; font-size:13px; }
-  .runbook-pager .page-info { font-size:13px; color:var(--muted); min-width:48px; text-align:center; }
+  .runbook-pager .page-info { font-size:13px; color:var(--muted); min-width:96px; text-align:center; }
   pre.log-scroll { max-height: calc(13px * 1.5 * 5 + 28px); overflow-y: auto; line-height: 1.5; }
   .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .banner-head button { padding:6px 12px; font-size:13px; }
   .manual-switch, #manual-back { display:none; }
   .wrap.manual-switchable .manual-switch, .wrap.manual-switchable #manual-back { display:inline-block; }
   .wrap.manual-switchable:not(.manual-switched) #manual-remediation { display:none; }
-  .wrap.manual-switched #result, .wrap.manual-switched #guidance-result, .wrap.manual-switched #exec { display:none; }
+  .wrap.manual-switched #result, .wrap.manual-switched #guidance-result { display:none; }
   body.mode-client .admin-only { display:none !important; }
   body.mode-admin .client-only { display:none !important; }
   @media (max-width:760px) { .incident-stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
@@ -343,29 +358,6 @@ _PAGE = """<!doctype html>
     <div id="incident-list" class="incident-table-wrap"></div>
     <details id="completed-incidents" class="hidden"><summary id="completed-incidents-title">처리 완료 이력</summary><div id="completed-incidents-list"></div></details>
   </div>
-  <div id="incident-detail-panel" class="card hidden collapsed" aria-labelledby="incident-detail-title" tabindex="-1">
-    <div class="card-head"><strong id="incident-detail-title">에러 메시지</strong>
-      <div style="display:flex;gap:6px;align-items:center"><button id="incident-detail-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-label="에러 메시지 접기/펼치기"><span class="chev">▾</span> <span class="toggle-label">펼치기</span></button><button id="incident-detail-close" class="secondary" type="button">닫기</button></div></div>
-    <div class="panel-body">
-    <div id="incident-detail-load-status" class="muted" role="status"></div>
-    <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
-    <details class="detail-section"><summary>장애 상세</summary><dl id="incident-detail-fields" class="incident-fields"></dl></details>
-    <div id="hold-controls" class="hold-controls hidden">
-      <input id="hold-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)">
-      <button id="hold-button" type="button" class="secondary">보류(킵)</button>
-      <button id="release-button" type="button" class="secondary hidden">보류 해제</button>
-      <button id="rule-from-incident" type="button" class="danger admin-only">이 오류 예외 처리 등록</button>
-      <span id="hold-status" class="muted" role="status"></span>
-    </div>
-    <details class="detail-section"><summary>발생 내용</summary><pre id="incident-detail-message"></pre></details>
-    <details class="detail-section"><summary>과거 유사 장애 조치 이력 <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></summary>
-      <div id="incident-history-summary" class="history-summary hidden"></div>
-      <div id="incident-history"></div></details>
-    <details class="detail-section"><summary>해당 장애의 최근 10분 로그 <span class="muted">(최대 20건)</span></summary>
-      <div id="incident-detail-logs-status" class="muted"></div>
-      <pre id="incident-detail-logs" class="log-scroll"></pre></details>
-    </div>
-  </div>
   <div id="log-tabs-panel" class="card hidden admin-only">
     <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
     <div class="log-tabs" style="margin-top:12px">
@@ -422,31 +414,63 @@ _PAGE = """<!doctype html>
     <div class="panel-body"><p class="muted">현재 생존 신호와 조회 구간의 작업별 분석 시작·완료·오류 기록</p><pre id="worker-output" class="log-scroll"></pre></div>
   </div>
 
+  <div id="incident-detail-panel" class="selected-incident hidden" aria-labelledby="incident-detail-title" tabindex="-1">
+    <div class="selected-head"><strong id="incident-detail-title">선택한 장애</strong><span id="incident-detail-load-status" class="muted" role="status"></span><button id="incident-detail-close" class="secondary" type="button">닫기</button></div>
+    <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
+    <div id="hold-controls" class="hold-controls hidden">
+      <input id="hold-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)">
+      <button id="hold-button" type="button" class="secondary">보류(킵)</button>
+      <button id="release-button" type="button" class="secondary hidden">보류 해제</button>
+      <button id="rule-from-incident" type="button" class="danger admin-only">이 오류 예외 처리 등록</button>
+      <span id="hold-status" class="muted" role="status"></span>
+    </div>
+  </div>
+
   <div id="result" class="card hidden">
-    <div class="banner-head"><span id="errcode" class="pill"></span><button type="button" class="secondary manual-switch">수동 조치</button></div>
+    <div class="banner-head"><span id="errcode" class="pill"></span>
+      <button id="history-toggle" class="icon-btn" type="button" aria-expanded="false" aria-controls="history-panel" aria-label="과거 유사 장애 조치 이력" title="과거 유사 장애 조치 이력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span id="history-count" class="icon-count hidden"></span></button></div>
+    <div id="history-panel" class="history-panel hidden">
+      <div><strong>과거 유사 장애 조치 이력</strong> <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></div>
+      <div id="incident-history-summary" class="history-summary hidden"></div>
+      <div id="incident-history"></div>
+    </div>
     <div><strong>현재 오류 원인</strong></div>
     <div id="cause" class="cause"></div>
+    <div class="guidance-section"><strong>해당 장애의 최근 10분 로그</strong> <span class="muted">(최대 20건)</span></div>
+    <div id="incident-detail-logs-status" class="muted"></div>
+    <pre id="incident-detail-logs" class="log-scroll"></pre>
     <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
-      <span class="muted">(신뢰도 높은 순)</span></div>
+      <span class="muted">(같은 오류에 대한 조치 방법 · 신뢰도 높은 순)</span></div>
     <div id="actions"></div>
     <div id="runbook-pager" class="runbook-pager hidden">
-      <button id="runbook-prev" type="button" class="secondary">← 이전</button>
+      <button id="runbook-prev" type="button" class="secondary">← 이전 조치사항</button>
       <span id="runbook-page-info" class="page-info" aria-live="polite"></span>
-      <button id="runbook-next" type="button" class="secondary">다음 →</button>
+      <button id="runbook-next" type="button" class="secondary">다음 조치사항 →</button>
     </div>
+    <div id="exec" class="exec-section hidden">
+      <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
+      <div id="exec-status"></div>
+      <pre id="exec-output" class="log-scroll"></pre>
+      <div class="exec-actions">
+        <button id="refresh-execution" class="secondary hidden" type="button">실행 결과 다시 확인</button>
+        <button id="verify-execution" class="secondary hidden" type="button">업무 복구 확인</button>
+      </div>
+    </div>
+    <div id="result-autoclose" class="muted hidden" role="status" style="margin-top:10px"></div>
   </div>
 
   <div id="manual-remediation" class="card hidden">
     <div class="banner-head"><strong>수동 조치 등록</strong><button id="manual-back" type="button" class="secondary">← 뒤로 가기</button></div>
-    <p id="manual-flow" class="muted">수동 조치 → 조치 방법과 스크립트 첨부 → 복구 확인 후 학습</p>
+    <p id="manual-flow" class="muted">수동 조치 → 조치 방법과 호출한 셸(서버·경로·실행 계정) 등록 → 복구 확인</p>
     <p id="manual-target" class="muted"></p>
     <form id="manual-form" class="feedback-grid hidden">
-      <div class="check-row full"><input id="manual-performed" type="checkbox" required><label for="manual-performed" style="margin:0">서비스 밖에서 수동 조치를 수행했습니다.</label></div>
       <div class="full"><label for="manual-method">수행한 조치 방법</label><textarea id="manual-method" required maxlength="8000" placeholder="어떤 단위시스템에서 무엇을 확인하고 어떻게 조치했는지 입력하세요."></textarea></div>
-      <div class="full"><label for="manual-script">재사용할 조치 스크립트 첨부 (.sh, UTF-8, 최대 64KB)</label><input id="manual-script" type="file" accept=".sh"><p class="muted">복구 확인 후 같은 오류·서비스·환경에 연결해 학습합니다. 재발 시 파일을 불러와 승인 후 격리된 테스트 컨테이너에서 실행합니다.</p></div>
+      <div><label for="manual-host">셸을 호출한 서버 (에러 발생 서버)</label><select id="manual-host" required></select></div>
+      <div><label for="manual-account">실행 계정</label><input id="manual-account" required maxlength="64" placeholder="예: appuser" autocomplete="off"></div>
+      <div class="full"><label for="manual-shell-path">호출한 셸 경로 (절대 경로)</label><input id="manual-shell-path" required maxlength="1024" placeholder="예: /app/scripts/restart_orders.sh" autocomplete="off" spellcheck="false"><p class="muted">기록용 정보입니다. 이 화면에서 셸을 실행하지 않습니다.</p></div>
       <div><label for="manual-operator">조치 운영자</label><input id="manual-operator" required maxlength="200" value="web-ui"></div>
       <div class="check-row"><input id="manual-recovered" type="checkbox" required><label for="manual-recovered" style="margin:0">운영자가 서비스 복구를 확인했습니다.</label></div>
-      <div class="full"><p class="muted">수행 완료와 서비스 복구 확인을 모두 체크해야 등록할 수 있습니다. 등록하면 해당 오류가 처리 완료되고 이 등록 영역은 닫힙니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
+      <div class="full"><p class="muted">서비스 복구 확인을 체크해야 등록할 수 있습니다. 등록하면 해당 오류가 처리 완료되고 이 등록 영역은 닫힙니다.</p><button id="manual-register" type="submit" disabled>조치 방법 등록</button><span id="manual-register-status" class="muted" role="status"></span></div>
     </form>
     <div id="manual-history"></div>
   </div>
@@ -499,13 +523,6 @@ _PAGE = """<!doctype html>
     </div>
   </div>
 
-  <div id="exec" class="card hidden">
-    <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
-    <div id="exec-status"></div>
-    <pre id="exec-output"></pre>
-    <button id="refresh-execution" class="secondary hidden">실행 결과 다시 확인</button>
-    <button id="verify-execution" class="secondary hidden">업무 복구 확인</button>
-  </div>
 </div>
 
 <script>
@@ -646,8 +663,9 @@ function setManualView(active) {
 const manualViewObserver = new MutationObserver(syncManualView);
 ["result", "guidance-result", "manual-remediation"].forEach(id =>
   manualViewObserver.observe($(id), {attributes: true, attributeFilter: ["class"]}));
-document.querySelectorAll(".manual-switch").forEach(button =>
-  button.addEventListener("click", () => setManualView(true)));
+document.addEventListener("click", event => {
+  if (event.target.closest(".manual-switch")) setManualView(true);
+});
 $("manual-back").addEventListener("click", () => setManualView(false));
 
 function esc(value) {
@@ -718,36 +736,18 @@ function renderIncidentDetails(incident, processing = null) {
   $("incident-detail-panel").classList.toggle("held-incident", incident.status === "ON_HOLD");
   currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
   const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발", ON_HOLD: (incident.hold?.source === "exception_rule" ? "예외 처리 · 보류" : "보류(킵)")};
-  const origin = incident.synthetic === true ? "장애 시나리오" : incident.source_type === "metric" ? "리소스 감지" : "수집 로그";
-  const fields = [
-    ["단위시스템", incident.service || "unknown"],
-    ["환경", environmentLabel(incident.environment)],
-    ["영향 호스트", (incident.affected_hosts || incident.hosts || []).join(", ") || "-"],
-    ["발생 구간", (incident.sources || []).join(", ") || "-"],
-    ["감지 유형", origin],
-    ["장애 코드", incident.error_code || "UNKNOWN_ERROR"],
-    ["장애 상태", statuses[incident.status] || incident.status || "-"],
-    ["심각도", incident.severity || "-"],
-    ["발생 수", String(incident.occurrence_count || 0) + "건"],
-    ["최초 발생", formatDateTime(incident.first_seen)],
-    ["최근 발생", formatDateTime(incident.last_seen)],
-    ["장애 ID", incident.incident_id],
-  ];
-  $("incident-detail-title").textContent = "에러 메시지 · " + (incident.error_code || "UNKNOWN_ERROR");
-  $("incident-detail-fields").innerHTML = fields.map(([label, value]) => '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd>').join("");
-  $("incident-detail-message").textContent = incident.latest_message || incident.representative_message || incident.normalized_message || "발생 내용 없음";
+  $("incident-detail-title").textContent = (incident.error_code || "UNKNOWN_ERROR") + " · " + (incident.service || "unknown")
+    + " · " + (statuses[incident.status] || incident.status || "-") + " · 발생 " + (incident.occurrence_count || 0) + "건";
   $("incident-detail-panel").dataset.lastSeen = incident.last_seen || "";
   renderIncidentProcessing(incident, processing);
   refreshRecentIncidents();
 }
-// 에러 메시지 배너와 하위 항목은 새 장애를 열 때마다 접힌 상태로 시작한다.
-function collapseIncidentDetails() {
-  const panel = $("incident-detail-panel");
-  panel.classList.add("collapsed");
-  $("incident-detail-toggle").setAttribute("aria-expanded", "false");
-  $("incident-detail-toggle").querySelector(".toggle-label").textContent = "펼치기";
-  panel.querySelectorAll("details.detail-section").forEach(section => section.open = false);
+// 과거 유사 장애 조치 이력은 "현재 오류 원인" 배너 우측 상단 아이콘으로 연다.
+function setHistoryOpen(open) {
+  $("history-panel").classList.toggle("hidden", !open);
+  $("history-toggle").setAttribute("aria-expanded", String(open));
 }
+$("history-toggle").addEventListener("click", () => setHistoryOpen($("history-panel").classList.contains("hidden")));
 function closeIncidentDetails() {
   selectedIncidentId = null;
   currentDetailedIncident = null;
@@ -771,10 +771,29 @@ function closeIncidentDetails() {
 function newManualRegistrationId() {
   return "MANUAL-" + (globalThis.crypto?.randomUUID?.() || Date.now() + "-" + Math.random().toString(36).slice(2));
 }
+const SHELL_PATH_PATTERN = new RegExp("^/[A-Za-z0-9_./+@%=,:-]{0,1023}$");
+const ACCOUNT_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
+function manualShell() {
+  return {host: $("manual-host").value, path: $("manual-shell-path").value.trim(), account: $("manual-account").value.trim()};
+}
+function manualShellValid() {
+  const shell = manualShell();
+  return Boolean(shell.host) && SHELL_PATH_PATTERN.test(shell.path) && !shell.path.split("/").includes("..") && ACCOUNT_PATTERN.test(shell.account);
+}
 function updateManualRegisterButton() {
   $("manual-register").disabled = manualRegisterPending || !currentManualIncident?.manualAllowed
-    || !$("manual-performed").checked || !$("manual-recovered").checked || !$("manual-method").value.trim() || !$("manual-operator").value.trim();
-  $("manual-form").querySelectorAll("input, textarea").forEach(input => input.disabled = manualRegisterPending);
+    || !$("manual-recovered").checked || !$("manual-method").value.trim() || !$("manual-operator").value.trim() || !manualShellValid();
+  $("manual-form").querySelectorAll("input, textarea, select").forEach(input => input.disabled = manualRegisterPending);
+}
+const MANUAL_REASONS = {
+  "incident changed; reload details before registering": "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요.",
+  "manual registration unavailable for this incident": "현재 장애 상태에서는 수동 조치를 등록할 수 없습니다.",
+  "invalid executed_shell path": "셸 경로는 /로 시작하는 절대 경로로 입력하세요.",
+  "invalid executed_shell account": "실행 계정 형식을 확인하세요.",
+  "executed_shell host must be an affected host": "에러가 발생한 서버를 선택하세요.",
+};
+function shellLabel(shell) {
+  return shell ? shell.host + ":" + shell.path + " (실행 계정 " + shell.account + ")" : "";
 }
 function renderManualRemediation(incident, available) {
   const changed = currentManualIncident?.incident_id !== incident.incident_id;
@@ -783,24 +802,31 @@ function renderManualRemediation(incident, available) {
   if (changed) {
     manualRegistrationId = newManualRegistrationId();
     $("manual-method").value = "";
-    $("manual-script").value = "";
-    $("manual-performed").checked = false;
+    $("manual-shell-path").value = "";
+    $("manual-account").value = "";
     $("manual-recovered").checked = false;
     $("manual-register-status").textContent = "";
+  }
+  const hosts = incident.affected_hosts || incident.hosts || [];
+  const selectedHost = $("manual-host").value;
+  if ($("manual-host").dataset.hosts !== JSON.stringify(hosts)) {
+    $("manual-host").dataset.hosts = JSON.stringify(hosts);
+    $("manual-host").replaceChildren(...hosts.map(host => { const o = document.createElement("option"); o.value = o.textContent = host; return o; }));
+    if (hosts.includes(selectedHost)) $("manual-host").value = selectedHost;
   }
   const history = incident.manual_actions || [];
   $("manual-remediation").classList.toggle("hidden", learned || incident.status === "RESOLVED" || (!available && !history.length));
   $("manual-form").classList.toggle("hidden", !available);
-  $("manual-flow").textContent = available ? "수동 조치 후 방법과 스크립트를 등록하세요. 복구를 확인하면 같은 오류 재발 시 첨부 파일을 조치로 불러옵니다." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
+  $("manual-flow").textContent = available ? "수동 조치 후 조치 방법과, 에러 발생 서버에서 호출한 셸의 경로·실행 계정을 등록하세요. 복구를 확인하면 처리 완료되고 과거 조치 이력에 남습니다." : "이 장애에 등록된 수동 조치 방법과 복구 확인 이력입니다.";
   $("manual-target").textContent = [environmentLabel(incident.environment), incident.service, ...(incident.affected_hosts || [])].join(" / ");
   $("manual-history").innerHTML = history.length
     ? '<strong>등록된 수동 조치 이력</strong>' + history.slice().reverse().map(item =>
       '<details><summary>' + esc(formatDateTime(item.registered_at)) + ' · ' + esc(item.operator)
-      + ' · ' + (item.recovered ? '운영자 복구 확인' : '복구 확인 대기') + '</summary><pre>' + esc(item.method) + '</pre>' + (item.attachment ? '<a href="/api/v1/remediations/scripts/' + encodeURIComponent(item.attachment.script_id) + '?incident_id=' + encodeURIComponent(incident.incident_id) + '">첨부 스크립트: ' + esc(item.attachment.filename) + '</a>' : '') + '</details>'
+      + ' · ' + (item.recovered ? '운영자 복구 확인' : '복구 확인 대기') + '</summary><pre>' + esc(item.method) + '</pre>' + (item.executed_shell ? '<div class="muted">호출한 셸: ' + esc(shellLabel(item.executed_shell)) + '</div>' : '') + (item.attachment ? '<a href="/api/v1/remediations/scripts/' + encodeURIComponent(item.attachment.script_id) + '?incident_id=' + encodeURIComponent(incident.incident_id) + '">첨부 스크립트: ' + esc(item.attachment.filename) + '</a>' : '') + '</details>'
     ).join("") : "";
   updateManualRegisterButton();
 }
-["manual-method", "manual-script", "manual-operator", "manual-performed", "manual-recovered"].forEach(id => $(id).addEventListener("input", () => {
+["manual-method", "manual-host", "manual-shell-path", "manual-account", "manual-operator", "manual-recovered"].forEach(id => $(id).addEventListener("input", () => {
   manualRegistrationId = newManualRegistrationId();
   $("manual-register-status").textContent = "";
   updateManualRegisterButton();
@@ -814,29 +840,20 @@ $("manual-form").addEventListener("submit", async event => {
   $("manual-register-status").className = "status-pending";
   $("manual-register-status").textContent = "등록 중…";
   try {
-    const upload = $("manual-script").files[0];
-    if (upload && (upload.size > 65536 || !upload.name.endsWith(".sh") || upload.name.length > 128)) {
-      throw new Error(".sh 파일(최대 64KB, 파일명 최대 128자)을 첨부하세요.");
-    }
-    const metadata = {
+    // 화면에서 수동 조치를 등록하는 것 자체가 "수행 완료" 신고이므로 performed는 항상 true로 보낸다.
+    const {ok, data} = await postJSON("/api/v1/remediations/manual", {
       incident_id: incident.incident_id, incident_version: incident.version,
       registration_id: manualRegistrationId, operator: $("manual-operator").value.trim(),
-      method: $("manual-method").value.trim(), performed: $("manual-performed").checked,
-      recovered: $("manual-recovered").checked,
-    };
-    const form = new FormData();
-    form.append("metadata", JSON.stringify(metadata));
-    if (upload) form.append("script", upload);
-    const response = await fetch("/api/v1/remediations/manual", {method: "POST", body: form});
-    const data = await response.json();
-    const ok = response.ok;
+      method: $("manual-method").value.trim(), performed: true,
+      recovered: $("manual-recovered").checked, executed_shell: manualShell(),
+    });
     if (currentManualIncident?.incident_id === incident.incident_id) {
       $("manual-register-status").className = ok ? "status-ok" : "status-err";
-      $("manual-register-status").textContent = ok ? "조치가 등록되었습니다. 복구 확인된 첨부 스크립트는 같은 오류에 재사용됩니다." : (data.reason === "incident changed; reload details before registering" ? "장애 정보가 갱신되었습니다. 최신 상세를 확인한 뒤 다시 등록하세요." : "등록 실패: " + (data.reason || data.status));
+      $("manual-register-status").textContent = ok ? "조치가 등록되었습니다." : ("등록 실패: " + (MANUAL_REASONS[data.reason] || data.reason || data.status));
       if (ok && !isOlderIncident(data.incident)) {
         $("manual-method").value = "";
-        $("manual-script").value = "";
-        $("manual-performed").checked = false;
+        $("manual-shell-path").value = "";
+        $("manual-account").value = "";
         $("manual-recovered").checked = false;
         manualRegistrationId = newManualRegistrationId();
         renderManualRemediation(data.incident, data.incident.status === "MONITORING");
@@ -872,7 +889,7 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
   selectedIncidentId = incident.incident_id;
   $("incident-detail-panel").classList.remove("hidden");
   if (!refresh) {
-    collapseIncidentDetails();
+    setHistoryOpen(false);
     $("result").classList.add("hidden");
     $("guidance-result").classList.add("hidden");
     $("exec").classList.add("hidden");
@@ -1361,6 +1378,14 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
       <div class="buttons">
         <button class="approve" disabled>결재 요청</button>
         <button class="reject">거부</button>
+        <button class="hold-open secondary" type="button">보류</button>
+        <button class="manual-switch secondary" type="button">수동 조치</button>
+      </div>
+      <div class="hold-form hidden">
+        <input class="hold-form-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)" aria-label="보류 사유">
+        <button class="hold-confirm" type="button">보류 확정</button>
+        <button class="hold-cancel secondary" type="button">취소</button>
+        <span class="hold-form-status muted" data-base-class="hold-form-status" role="status"></span>
       </div>`;
 
     const action = (rec.actions || []).find(
@@ -1402,6 +1427,16 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
     el.querySelector(".reject").addEventListener(
       "click", () => decideRunbook(rb.script_id, action, el, "reject")
     );
+    el.querySelector(".hold-open").addEventListener("click", () => {
+      el.querySelector(".hold-form").classList.remove("hidden");
+      el.querySelector(".hold-form-reason").focus();
+    });
+    el.querySelector(".hold-cancel").addEventListener("click", () => {
+      el.querySelector(".hold-form").classList.add("hidden");
+      el.querySelector(".hold-form-status").textContent = "";
+    });
+    el.querySelector(".hold-confirm").addEventListener("click", () =>
+      changeHold("hold", el.querySelector(".hold-form-reason"), el.querySelector(".hold-form-status")));
 
     // 이미 승인/거부한 Runbook은 새로고침해도 처리된 상태로 보여준다.
     const decided = action && decisions.find(
@@ -1433,10 +1468,7 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   if (focusEl) runbookPage = runbookEls.indexOf(focusEl);
   showRunbookPage(runbookPage);
 
-  // 결재 승인 후 조치가 완료되면 "현재 오류 원인" 배너는 자동으로 닫는다 (실행 결과 카드만 남긴다).
-  const actionDone = ["completed", "action_completed"].includes(processing?.state)
-    || decisions.some((d) => d.decision === "approve" && d.result?.status === "success");
-  if (actionDone) result.classList.add("hidden");
+  updateResultAutoClose(rec.incident_id, processing);
 
   if (decisions.length) {
     const last = decisions[decisions.length - 1];
@@ -1447,6 +1479,37 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   ) ? "명령 실행 완료 — 업무 복구 확인 필요" : "분석 완료");
 }
 
+// 결재 승인 → 스크립트 실행 결과는 배너 하단에 보여준다. 처리 완료되면 배너를 자동으로 닫되,
+// 이 화면에서 실행을 지켜본 경우에는 실행 결과를 확인할 수 있도록 잠시 뒤에 닫는다.
+const RESULT_AUTOCLOSE_MS = 15000;
+let liveResultIncidentId = null;
+const closedResultIncidents = new Set();
+let resultAutoCloseTimer = null;
+function updateResultAutoClose(incidentId, processing) {
+  const completed = processing?.state === "completed";
+  const notice = $("result-autoclose");
+  if (!completed) {
+    liveResultIncidentId = incidentId;
+    closedResultIncidents.delete(incidentId);
+    notice.classList.add("hidden");
+    return;
+  }
+  if (liveResultIncidentId !== incidentId || closedResultIncidents.has(incidentId)) {
+    $("result").classList.add("hidden");
+    return;
+  }
+  notice.textContent = "조치가 완료되었습니다. 실행 결과 확인 후 " + (RESULT_AUTOCLOSE_MS / 1000) + "초 뒤 이 배너는 자동으로 닫힙니다.";
+  notice.classList.remove("hidden");
+  if (resultAutoCloseTimer?.incidentId === incidentId) return;
+  if (resultAutoCloseTimer) clearTimeout(resultAutoCloseTimer.id);
+  resultAutoCloseTimer = {incidentId, id: setTimeout(() => {
+    resultAutoCloseTimer = null;
+    closedResultIncidents.add(incidentId);
+    liveResultIncidentId = null;
+    if (currentRecommendation?.incident_id === incidentId) $("result").classList.add("hidden");
+  }, RESULT_AUTOCLOSE_MS)};
+}
+
 let runbookPage = 0;
 let runbookPageKey = null;
 function showRunbookPage(index) {
@@ -1454,7 +1517,7 @@ function showRunbookPage(index) {
   runbookPage = Math.max(0, Math.min(els.length - 1, index));
   els.forEach((el, i) => el.classList.toggle("hidden", i !== runbookPage));
   $("runbook-pager").classList.toggle("hidden", els.length < 2);
-  $("runbook-page-info").textContent = els.length ? (runbookPage + 1) + " / " + els.length : "";
+  $("runbook-page-info").textContent = els.length ? "조치 제안 " + (runbookPage + 1) + " / " + els.length : "";
   $("runbook-prev").disabled = runbookPage <= 0;
   $("runbook-next").disabled = runbookPage >= els.length - 1;
 }
@@ -1525,6 +1588,16 @@ function approvalBlockReason(data) {
   return message;
 }
 
+// 보류는 결재 요청과 별개로 장애 단위로 가능 여부를 판단한다.
+let holdState = {holdable: false, pending: false, held: false};
+function updateRunbookHoldButton(el) {
+  const blocked = holdPending || !holdState.holdable || holdState.pending || holdState.held;
+  el.querySelector(".hold-open").disabled = blocked;
+  el.querySelectorAll(".hold-confirm, .hold-form-reason").forEach(input => input.disabled = blocked);
+  el.querySelector(".hold-open").title = holdState.pending ? "결재 대기 중에는 보류할 수 없습니다. 결재 반려 후 보류하세요."
+    : holdState.held ? "이미 보류된 장애입니다." : !holdState.holdable ? "조치 실행 중이거나 완료된 장애는 보류할 수 없습니다." : "";
+  if (blocked && !holdPending) el.querySelector(".hold-form").classList.add("hidden");
+}
 function setDecisionButtonsDisabled(el, disabled) {
   if (!disabled) {
     setRunbookButtonsDisabled(el, false);
@@ -1704,7 +1777,8 @@ $("feedback-submit").addEventListener("click", async () => {
 });
 
 function setRunbookButtonsDisabled(el, disabled) {
-  el.querySelectorAll(".buttons button").forEach((b) => {
+  updateRunbookHoldButton(el);
+  el.querySelectorAll(".buttons .approve, .buttons .reject").forEach((b) => {
     const targetRequired = b.matches(".approve");
     b.disabled = disabled || el.actionable === false || !el.action || el.executionPending
       || el.classList.contains("decided") || el.approvalPending
@@ -1836,6 +1910,9 @@ function renderIncidentHistory(history, status) {
   currentHistory = history || null;
   const entries = (history && history.entries) || [];
   const summary = history && history.summary;
+  $("history-count").classList.toggle("hidden", !entries.length);
+  $("history-count").textContent = entries.length > 9 ? "9+" : String(entries.length);
+  $("history-toggle").setAttribute("aria-label", "과거 유사 장애 조치 이력" + (entries.length ? " " + entries.length + "건" : ""));
   $("incident-history-summary").classList.toggle("hidden", !summary);
   $("incident-history-summary").textContent = summary
     ? "같은 오류 처리 완료 " + summary.resolved_count + "회 · 가장 많이 사용한 조치: " + summary.most_common_method
@@ -1849,7 +1926,7 @@ function renderIncidentHistory(history, status) {
     ? '<table class="workflow-table"><thead><tr><th>일시</th><th>구분</th><th>단위시스템 / 환경</th><th>조치 방법</th><th>운영자</th><th>확인 방식</th></tr></thead><tbody>'
       + entries.map(item => '<tr><td>' + esc(formatDateTime(item.resolved_at)) + (item.same_incident ? '<span class="badge hold">이 장애</span>' : '') + '</td><td>'
         + esc(METHOD_LABELS[item.method_type] || item.method_type) + '</td><td>' + esc((item.service || "-") + " / " + environmentLabel(item.environment)) + '</td><td>'
-        + esc(item.method) + (item.script_id ? '<div class="muted">' + esc(item.script_id) + '</div>' : '') + (item.attachment ? '<div class="muted">첨부: ' + esc(item.attachment) + '</div>' : '')
+        + esc(item.method) + (item.script_id ? '<div class="muted">' + esc(item.script_id) + '</div>' : '') + (item.attachment ? '<div class="muted">첨부: ' + esc(item.attachment) + '</div>' : '') + (item.executed_shell ? '<div class="muted">호출한 셸: ' + esc(shellLabel(item.executed_shell)) + '</div>' : '')
         + (item.kind === "hold" && item.released_at ? '<div class="muted">해제: ' + esc(formatDateTime(item.released_at)) + '</div>' : '')
         + '</td><td>' + esc(item.operator || "-") + '</td><td>' + esc(CONFIRMATION_LABELS[item.confirmation] || item.confirmation || "-") + '</td></tr>').join("")
       + '</tbody></table>'
@@ -1861,9 +1938,13 @@ function renderHoldControls(incident, data) {
   const held = incident.status === "ON_HOLD";
   const pending = (data.approvals || []).some(item => ["PENDING", "EXECUTING"].includes(item.status));
   const holdable = !held && !["RESOLVED", "REMEDIATING"].includes(incident.status) && !incident.active_execution_id;
+  holdState = {holdable, pending, held};
+  document.querySelectorAll("#actions .runbook").forEach(updateRunbookHoldButton);
+  // 조치 제안 카드가 있으면 카드의 "보류" 버튼을 쓰고, 없을 때만 여기서 보류한다.
+  const runbookHold = (incident.latest_recommendation?.runbooks || []).length > 0;
   $("hold-controls").classList.toggle("hidden", !held && !holdable);
-  $("hold-reason").classList.toggle("hidden", held);
-  $("hold-button").classList.toggle("hidden", held);
+  $("hold-reason").classList.toggle("hidden", held || runbookHold);
+  $("hold-button").classList.toggle("hidden", held || runbookHold);
   $("release-button").classList.toggle("hidden", !held);
   $("hold-button").disabled = holdPending || pending;
   $("release-button").disabled = holdPending;
@@ -1877,34 +1958,37 @@ function renderHoldControls(incident, data) {
       : pending ? "결재 대기 중에는 보류할 수 없습니다. 결재 반려 후 보류하세요." : "";
   }
 }
-async function changeHold(kind) {
+async function changeHold(kind, reasonInput = $("hold-reason"), statusEl = $("hold-status")) {
   if (!selectedIncidentId || holdPending) return;
   const incidentId = selectedIncidentId;
-  const reason = $("hold-reason").value.trim();
+  const reason = reasonInput.value.trim();
   if (kind === "hold" && !reason) {
-    $("hold-status").className = "status-err";
-    $("hold-status").textContent = "보류 사유를 입력하세요.";
+    statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-err";
+    statusEl.textContent = "보류 사유를 입력하세요.";
+    reasonInput.focus();
     return;
   }
   holdPending = true;
   $("hold-button").disabled = $("release-button").disabled = true;
-  $("hold-status").className = "status-pending";
-  $("hold-status").textContent = kind === "hold" ? "보류 처리 중…" : "보류 해제 중…";
+  document.querySelectorAll("#actions .runbook").forEach(updateRunbookHoldButton);
+  statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-pending";
+  statusEl.textContent = kind === "hold" ? "보류 처리 중…" : "보류 해제 중…";
   try {
     const { ok, data } = await postJSON("/api/v1/incidents/" + encodeURIComponent(incidentId) + "/" + kind,
       {operator: IS_CLIENT ? "operator" : ($("approver").value.trim() || "admin"), reason});
     if (selectedIncidentId !== incidentId) return;
-    $("hold-status").className = ok ? "status-ok" : "status-err";
-    $("hold-status").textContent = ok ? (kind === "hold" ? "보류했습니다. ‘보류(킵)’ 탭에서 계속 확인할 수 있습니다." : "보류를 해제했습니다. 조치를 진행하세요.")
+    statusEl.className = (statusEl.dataset.baseClass || "") + " " + (ok ? "status-ok" : "status-err");
+    statusEl.textContent = ok ? (kind === "hold" ? "보류했습니다. ‘보류(킵)’ 탭에서 계속 확인할 수 있습니다." : "보류를 해제했습니다. 조치를 진행하세요.")
       : ({"approval pending; reject the approval before holding": "결재 대기 중입니다. 결재 반려 후 보류하세요.",
           "incident cannot be held in its current state": "조치 실행 중이거나 완료된 장애는 보류할 수 없습니다.",
           "incident changed; reload details": "장애 정보가 갱신되었습니다. 다시 시도하세요."}[data.reason] || "처리 실패: " + (data.reason || data.status));
-    if (ok) $("hold-reason").value = "";
+    if (ok) reasonInput.value = "";
   } catch (error) {
-    $("hold-status").className = "status-err";
-    $("hold-status").textContent = "요청 실패 — 연결 상태를 확인하세요.";
+    statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-err";
+    statusEl.textContent = "요청 실패 — 연결 상태를 확인하세요.";
   } finally {
     holdPending = false;
+    document.querySelectorAll("#actions .runbook").forEach(updateRunbookHoldButton);
     await loadIncidents();
   }
 }
