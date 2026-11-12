@@ -94,7 +94,7 @@ _PAGE = """<!doctype html>
     border: 1px solid var(--accent);
   }
   button:disabled { opacity: .55; cursor: default; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .incident-processing { border-left: 4px solid var(--accent); padding: 12px 16px; margin: 12px 0; background: var(--bar); border-radius: 8px; }
   .incident-processing.completed { border-color: var(--ok); }
   .incident-processing strong { display: block; }
@@ -258,20 +258,52 @@ _PAGE = """<!doctype html>
   .bell-wrap { position:relative; }
   button.bell { position:relative; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:999px; width:38px; height:38px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   button.bell:hover, button.bell[aria-expanded="true"] { background:var(--bar); border-color:var(--accent); color:var(--accent); }
-  button.bell svg { width:19px; height:19px; }
+  button.bell svg { width:19px; height:19px; flex:0 0 19px; }
   .bell-count { position:absolute; top:-5px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--err); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
   #notification-panel { position:absolute; top:calc(100% + 8px); left:0; z-index:20; width:min(380px, calc(100vw - 32px)); margin:0; padding:14px; box-shadow:0 10px 28px rgba(0,0,0,.18); }
   #notification-list { max-height:360px; overflow-y:auto; margin-top:8px; }
-  .selected-incident { border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:10px; background:var(--card); padding:10px 14px; margin-bottom:18px; }
-  .selected-incident:focus { outline:none; }
-  .selected-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .selected-head strong { flex:1 1 auto; }
-  .selected-head button { padding:6px 12px; font-size:13px; }
-  .selected-incident .incident-processing { margin:10px 0 0; }
-  .selected-incident .hold-controls { margin:10px 0 0; }
+  #incident-detail-panel:focus { outline:none; }
+  #incident-detail-load-status:not(:empty) { margin:0 0 12px; }
+  .banner-tools { display:flex; gap:8px; align-items:center; }
+  .banner-tools > button.secondary { padding:6px 12px; font-size:13px; }
+  #result .hold-controls { margin:0 0 12px; }
+  #result.incident-open { border:2px solid var(--err); }
+  #result.incident-open #errcode { background:rgba(209,54,74,.12); color:var(--err); }
+  #result.incident-resolved { border:2px solid var(--ok); }
+  #result.incident-resolved #errcode { background:rgba(23,145,90,.14); color:var(--ok); }
+  .state-badge { display:inline-block; font-size:12px; font-weight:700; border-radius:999px; padding:3px 10px; margin-left:6px; vertical-align:top; }
+  #result.incident-open .state-badge { background:var(--err); color:#fff; }
+  #result.incident-resolved .state-badge { background:var(--ok); color:#fff; }
+  .scenario-card { border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:12px; }
+  .scenario-summary { display:grid; grid-template-columns:88px 1fr; gap:6px 12px; margin:0 0 14px; font-size:14px; }
+  .scenario-summary dt { color:var(--muted); font-size:13px; }
+  .scenario-summary dd { margin:0; }
+  .scenario-cols { display:grid; grid-template-columns:minmax(170px,1.3fr) 92px minmax(120px,1.3fr) minmax(100px,1fr) 124px minmax(100px,1fr); gap:10px; align-items:start; }
+  .scenario-head { font-size:12px; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); margin-top:8px; }
+  .runbook.scenario-row { border:0; border-bottom:1px solid var(--border); border-radius:0; padding:0; margin:0; }
+  .runbook.scenario-row.selected { background:var(--bar); }
+  .scenario-row .scenario-cols { padding:10px; font-size:14px; }
+  .scenario-pick { display:flex; gap:8px; align-items:flex-start; margin:0; color:var(--fg); font-size:14px; cursor:pointer; }
+  .scenario-pick input { width:auto; margin-top:3px; }
+  .scenario-pick .scenario-kind { display:block; font-size:11px; font-weight:700; color:var(--accent); }
+  .scenario-pick .decision { font-size:12px; margin-top:4px; }
+  .scenario-row .confidence-bar { height:6px; background:var(--card); border-radius:999px; overflow:hidden; margin-top:4px; }
+  .scenario-row .confidence-bar > span { display:block; height:100%; background:var(--accent); }
+  .scenario-row .rollback { color:var(--err); }
+  .scenario-actions { padding:0 10px 14px 34px; }
+  .runbook.scenario-row:not(.selected) .scenario-actions { display:none; }
+  .scenario-actions .target-row label { margin:0 0 4px; }
+  .scenario-actions .buttons { margin-top:10px; }
+  @media (max-width:760px) {
+    .scenario-head { display:none; }
+    .scenario-cols { grid-template-columns:1fr 1fr; }
+    .scenario-cols > :first-child { grid-column:1 / -1; }
+    .scenario-row .cell::before { content:attr(data-label); display:block; font-size:11px; color:var(--muted); }
+    .scenario-actions { padding-left:10px; }
+  }
   button.icon-btn { position:relative; background:transparent; color:var(--muted); border:1px solid var(--border); border-radius:8px; width:36px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   button.icon-btn:hover, button.icon-btn[aria-expanded="true"] { color:var(--accent); border-color:var(--accent); background:var(--bar); }
-  button.icon-btn svg { width:18px; height:18px; }
+  button.icon-btn svg { width:18px; height:18px; flex:0 0 18px; }
   .icon-count { position:absolute; top:-6px; right:-7px; min-width:17px; height:17px; padding:0 4px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; font-weight:700; line-height:17px; text-align:center; }
   .history-panel { border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:4px 0 14px; background:var(--bg); }
   .history-panel .workflow-table { margin-top:6px; }
@@ -281,9 +313,7 @@ _PAGE = """<!doctype html>
   .hold-form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
   .hold-form input { flex:1 1 240px; width:auto; padding:8px 10px; }
   .hold-form button { padding:8px 12px; font-size:13px; }
-  .runbook-pager { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:12px; }
-  .runbook-pager button { padding:6px 12px; font-size:13px; }
-  .runbook-pager .page-info { font-size:13px; color:var(--muted); min-width:96px; text-align:center; }
+
   pre.log-scroll { max-height: calc(13px * 1.5 * 5 + 28px); overflow-y: auto; line-height: 1.5; }
   .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .banner-head button { padding:6px 12px; font-size:13px; }
@@ -414,21 +444,17 @@ _PAGE = """<!doctype html>
     <div class="panel-body"><p class="muted">현재 생존 신호와 조회 구간의 작업별 분석 시작·완료·오류 기록</p><pre id="worker-output" class="log-scroll"></pre></div>
   </div>
 
-  <div id="incident-detail-panel" class="selected-incident hidden" aria-labelledby="incident-detail-title" tabindex="-1">
-    <div class="selected-head"><strong id="incident-detail-title">선택한 장애</strong><span id="incident-detail-load-status" class="muted" role="status"></span><button id="incident-detail-close" class="secondary" type="button">닫기</button></div>
+  <div id="incident-detail-panel" class="hidden" tabindex="-1"><div id="incident-detail-load-status" class="muted" role="status"></div></div>
+
+  <div id="result" class="card hidden">
+    <div class="banner-head"><div><span id="errcode" class="pill"></span><span id="result-state" class="state-badge"></span></div>
+      <div class="banner-tools"><button id="history-toggle" class="icon-btn" type="button" aria-expanded="false" aria-controls="history-panel" aria-label="과거 유사 장애 조치 이력" title="과거 유사 장애 조치 이력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span id="history-count" class="icon-count hidden"></span></button><button id="incident-detail-close" class="secondary" type="button">닫기</button></div></div>
     <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
     <div id="hold-controls" class="hold-controls hidden">
-      <input id="hold-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)">
-      <button id="hold-button" type="button" class="secondary">보류(킵)</button>
       <button id="release-button" type="button" class="secondary hidden">보류 해제</button>
       <button id="rule-from-incident" type="button" class="danger admin-only">이 오류 예외 처리 등록</button>
       <span id="hold-status" class="muted" role="status"></span>
     </div>
-  </div>
-
-  <div id="result" class="card hidden">
-    <div class="banner-head"><span id="errcode" class="pill"></span>
-      <button id="history-toggle" class="icon-btn" type="button" aria-expanded="false" aria-controls="history-panel" aria-label="과거 유사 장애 조치 이력" title="과거 유사 장애 조치 이력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg><span id="history-count" class="icon-count hidden"></span></button></div>
     <div id="history-panel" class="history-panel hidden">
       <div><strong>과거 유사 장애 조치 이력</strong> <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></div>
       <div id="incident-history-summary" class="history-summary hidden"></div>
@@ -439,13 +465,14 @@ _PAGE = """<!doctype html>
     <div class="guidance-section"><strong>해당 장애의 최근 10분 로그</strong> <span class="muted">(최대 20건)</span></div>
     <div id="incident-detail-logs-status" class="muted"></div>
     <pre id="incident-detail-logs" class="log-scroll"></pre>
-    <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
-      <span class="muted">(같은 오류에 대한 조치 방법 · 신뢰도 높은 순)</span></div>
-    <div id="actions"></div>
-    <div id="runbook-pager" class="runbook-pager hidden">
-      <button id="runbook-prev" type="button" class="secondary">← 이전 조치사항</button>
-      <span id="runbook-page-info" class="page-info" aria-live="polite"></span>
-      <button id="runbook-next" type="button" class="secondary">다음 조치사항 →</button>
+    <div style="margin-top:18px"><strong>조치 제안 Runbook</strong></div>
+    <div class="scenario-card">
+      <div id="scenario-tag" class="runbook-tag">조치 제안</div>
+      <dl class="scenario-summary"><dt>장애</dt><dd id="scenario-incident"></dd><dt>추정 원인</dt><dd id="scenario-cause"></dd></dl>
+      <div><strong>조치 시나리오 리스트</strong> <span class="muted">(같은 오류에 대한 조치 방법 · 신뢰도 높은 순 · 하나를 선택해 결재 요청)</span></div>
+      <div class="scenario-cols scenario-head" aria-hidden="true"><span>시나리오</span><span>신뢰도</span><span>조치</span><span>예상 영향</span><span>과거 실행</span><span>실패 시</span></div>
+      <div id="actions" role="radiogroup" aria-label="조치 시나리오 리스트"></div>
+      <p class="muted" style="margin:10px 0 0">시나리오 선택 → 결재 요청 → 관리자 결재 승인 → 명령 실행 → 복구 확인</p>
     </div>
     <div id="exec" class="exec-section hidden">
       <div><strong>실행 결과</strong> — <span id="exec-title" class="muted"></span></div>
@@ -735,9 +762,7 @@ function renderIncidentDetails(incident, processing = null) {
   $("incident-detail-panel").classList.toggle("completed-incident", incident.status === "RESOLVED");
   $("incident-detail-panel").classList.toggle("held-incident", incident.status === "ON_HOLD");
   currentProcessing = processing || incident.processing || (incident.status === "RESOLVED" ? {state:"completed"} : null);
-  const statuses = {DETECTED: "감지됨", ANALYZING: "분석중", ACTION_REQUIRED: "미확인 · 조치 필요", INVESTIGATING: "조사중", REMEDIATING: "조치중", MONITORING: "조치 완료 · 복구 확인 대기", RESOLVED: "처리 완료", REOPENED: "재발", ON_HOLD: (incident.hold?.source === "exception_rule" ? "예외 처리 · 보류" : "보류(킵)")};
-  $("incident-detail-title").textContent = (incident.error_code || "UNKNOWN_ERROR") + " · " + (incident.service || "unknown")
-    + " · " + (statuses[incident.status] || incident.status || "-") + " · 발생 " + (incident.occurrence_count || 0) + "건";
+  paintResultState(incident.status === "RESOLVED");
   $("incident-detail-panel").dataset.lastSeen = incident.last_seen || "";
   renderIncidentProcessing(incident, processing);
   refreshRecentIncidents();
@@ -944,7 +969,10 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
       }
       detailRecommendationKey = recommendationKey;
     }
-    if (data.execution) showExecResult(data.execution.script_id || "실행 결과", {...data.execution.result,execution_id:data.execution.execution_id}, 200, data.processing);
+    if (data.execution && rec && data.execution.recommendation_id === rec.recommendation_id
+        && (data.decisions || []).some(d => d.decision === "approve" && d.execution_id === data.execution.execution_id)) {
+      showExecResult(data.execution.script_id || "실행 결과", {...data.execution.result,execution_id:data.execution.execution_id}, 200, data.processing);
+    }
     if (data.executions_status === "unavailable") $("incident-detail-load-status").textContent = "조치 이력 조회 지연 — 저장된 장애 상태를 표시합니다.";
     else if (!rec && latest.status !== "RESOLVED" && latest.status !== "MONITORING") $("incident-detail-load-status").textContent = "분석 중이거나 조치 추천이 아직 없습니다.";
     setClientStatus(latest.status === "RESOLVED" ? "처리 완료" : latest.status === "MONITORING" ? "조치 완료 — 복구 확인 대기" : "장애 상세 조회: " + latest.status);
@@ -1349,61 +1377,57 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   $("errcode").textContent = errorCode;
   $("cause").textContent = rec.cause || rec.summary || "";
 
-  const runbooks = rec.runbooks || [];
+  // 같은 오류에 대한 조치 방법들을 "조치 시나리오 리스트"로 신뢰도 높은 순으로 보여준다.
+  // 시나리오(행)마다 신뢰도·조치·예상 영향·과거 실행·실패 시가 일대일로 매핑되고, 선택한 시나리오로 결재를 요청한다.
+  const runbooks = (rec.runbooks || []).map((rb, index) => ({rb, index}))
+    .sort((a, b) => (Number(b.rb.confidence) || 0) - (Number(a.rb.confidence) || 0) || a.index - b.index)
+    .map(item => item.rb);
   const box = $("actions");
   box.innerHTML = "";
 
-  runbooks.forEach((rb) => {
+  runbooks.forEach((rb, order) => {
     const pct = Number.isFinite(Number(rb.confidence)) ? Math.max(0, Math.min(100, Number(rb.confidence))) : 0;
     const el = document.createElement("div");
-    el.className = "runbook";
+    el.className = "runbook scenario-row";
+    el.rb = rb;
     el.innerHTML = `
-      <div class="runbook-tag">조치 제안</div>
-      <dl>
-        <dt>장애</dt><dd>${esc(rb.incident)}</dd>
-        <dt>추정 원인</dt><dd>${esc(rb.estimated_cause)}</dd>
-        <dt>신뢰도</dt><dd>${rb.learned_script ? "운영자 복구 확인 후 등록된 첨부 스크립트" : rb.registered_script ? "기존 등록 스크립트 · 평가 없음" : pct + "%"}
-          <div class="confidence-bar"><span style="width:${pct}%"></span></div>
-        </dd>
-        <dt>조치</dt><dd>${esc(rb.action)}</dd>
-        <dt>예상 영향</dt><dd>${esc(rb.expected_impact)}</dd>
-        <dt>과거 실행</dt><dd>성공 ${Number(rb.history?.success || 0)}회 / 실패 ${Number(rb.history?.failure || 0)}회</dd>
-        <dt>실패 시</dt><dd class="rollback">${esc(rb.rollback)}</dd>
-      </dl>
-      <label>조치 대상 (환경 / 서비스 / 호스트 / 인스턴스)</label>
-      <select class="target-select"></select>
-      <p class="muted">대상 선택 → 결재 요청 → 관리자 결재 승인 → 명령 실행 → 복구 확인</p>
-      <div class="approval-status muted" role="status"></div>
-      <div class="decision"></div>
-      <div class="buttons">
-        <button class="approve" disabled>결재 요청</button>
-        <button class="reject">거부</button>
-        <button class="hold-open secondary" type="button">보류</button>
-        <button class="manual-switch secondary" type="button">수동 조치</button>
+      <div class="scenario-cols">
+        <label class="scenario-pick"><input type="radio" name="scenario-pick" class="scenario-radio">
+          <span><strong>${order + 1}. ${esc(rb.script_id || "조치")}</strong><span class="scenario-kind"></span><span class="decision"></span></span></label>
+        <div class="cell" data-label="신뢰도">${rb.learned_script ? "운영자 확인 스크립트" : rb.registered_script ? "등록 스크립트 · 평가 없음" : pct + "%"}
+          <div class="confidence-bar"><span style="width:${pct}%"></span></div></div>
+        <div class="cell" data-label="조치">${esc(rb.action)}</div>
+        <div class="cell" data-label="예상 영향">${esc(rb.expected_impact)}</div>
+        <div class="cell" data-label="과거 실행">성공 ${Number(rb.history?.success || 0)}회 / 실패 ${Number(rb.history?.failure || 0)}회</div>
+        <div class="cell rollback" data-label="실패 시">${esc(rb.rollback)}</div>
       </div>
-      <div class="hold-form hidden">
-        <input class="hold-form-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)" aria-label="보류 사유">
-        <button class="hold-confirm" type="button">보류 확정</button>
-        <button class="hold-cancel secondary" type="button">취소</button>
-        <span class="hold-form-status muted" data-base-class="hold-form-status" role="status"></span>
+      <div class="scenario-actions">
+        <div class="target-row"><label>실행 대상</label><select class="target-select"></select></div>
+        <div class="approval-status muted" role="status"></div>
+        <div class="buttons">
+          <button class="approve" disabled>결재 요청</button>
+          <button class="reject">거부</button>
+          <button class="hold-open secondary" type="button">보류</button>
+          <button class="manual-switch secondary" type="button">수동 조치</button>
+        </div>
+        <div class="hold-form hidden">
+          <input class="hold-form-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)" aria-label="보류 사유">
+          <button class="hold-confirm" type="button">보류 확정</button>
+          <button class="hold-cancel secondary" type="button">취소</button>
+          <span class="hold-form-status muted" data-base-class="hold-form-status" role="status"></span>
+        </div>
       </div>`;
 
     const action = (rec.actions || []).find(
       (candidate) => candidate.script_id === rb.script_id
     );
     if (action) el.dataset.actionId = action.action_id;
+    el.dataset.scriptId = rb.script_id || "";
     el.action = action;
     el.actionable = !["completed", "action_completed"].includes(processing?.state);
-    if (action?.learned_script) {
-      el.querySelector(".runbook-tag").textContent = "학습된 첨부 스크립트";
-    }
-    if (action?.execution_mode === "simulation") {
-      el.querySelector(".runbook-tag").textContent = "등록 스크립트 실행";
-      const note = document.createElement("p");
-      note.className = "muted";
-      note.textContent = action.script_path + " — 작업 메시지를 출력하는 테스트 스크립트입니다.";
-      el.querySelector("dl").after(note);
-    }
+    el.kind = action?.learned_script ? "학습된 첨부 스크립트" : action?.execution_mode === "simulation" ? "등록 스크립트 실행" : "조치 제안";
+    el.querySelector(".scenario-kind").textContent = el.kind;
+    el.querySelector(".scenario-radio").addEventListener("change", () => selectScenario(el));
     const targetSelect = el.querySelector(".target-select");
     const targets = action?.targets || rec.targets || [];
     el.targets = targets;
@@ -1416,6 +1440,9 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
       option.textContent = [environmentLabel(target.environment), target.service, target.host, target.instance].join(" / ") + (target.instance === "log-generator-scripts" ? " (등록 셸 스크립트)" : "");
       targetSelect.appendChild(option);
     });
+    // 실행 대상이 하나뿐이면 시나리오 선택만으로 결재를 요청할 수 있게 자동으로 고른다.
+    if (targets.length === 1) targetSelect.value = "0";
+    el.querySelector(".target-row").classList.toggle("hidden", targets.length < 2);
     targetSelect.addEventListener("change", () => {
       el.querySelector(".approval-status").className = "approval-status muted";
       el.querySelector(".approval-status").textContent = approvalHint(el);
@@ -1458,21 +1485,24 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   if (decisions.some((d) => d.decision === "approve")) lockOtherRunbooks();
   else if (pendingEl) lockOtherRunbooks(pendingEl);
 
-  // 조치 제안은 신뢰도 순으로 한 건씩 페이지로 보여준다.
-  // 같은 추천을 다시 그릴 때는 보던 페이지를 유지하고, 결재 대기·처리된 조치가 있으면 그 페이지를 연다.
-  const focusEl = pendingEl || runbookEls.find(el => el.classList.contains("decided"));
-  if (runbookPageKey !== rec.recommendation_id) {
-    runbookPageKey = rec.recommendation_id;
-    runbookPage = 0;
-  }
-  if (focusEl) runbookPage = runbookEls.indexOf(focusEl);
-  showRunbookPage(runbookPage);
+  // 결재 대기·처리된 시나리오가 있으면 그것을, 아니면 같은 추천에서 보던 시나리오(없으면 최고 신뢰도)를 선택한다.
+  const focusEl = pendingEl || runbookEls.find(el => el.classList.contains("decided") && !el.classList.contains("locked"))
+    || (scenarioSelectionKey?.recommendationId === rec.recommendation_id
+        && runbookEls.find(el => el.dataset.scriptId === scenarioSelectionKey.scriptId))
+    || runbookEls[0];
+  if (focusEl) selectScenario(focusEl, rec.recommendation_id);
+  paintResultState(processing?.state === "completed");
 
   updateResultAutoClose(rec.incident_id, processing);
 
-  if (decisions.length) {
-    const last = decisions[decisions.length - 1];
+  // 실행 결과는 결재 승인으로 실제 실행된 조치만 보여준다 (거부·결재 대기·이전 발생분 제외).
+  const executed = decisions.filter((d) => d.decision === "approve" && (d.execution_id || d.result?.execution_id));
+  if (executed.length) {
+    const last = executed[executed.length - 1];
     showExecResult(last.script_id, {...last.result,execution_id:last.execution_id || last.result?.execution_id}, 200, processing);
+  } else {
+    $("exec").classList.add("hidden");
+    lastExecutionId = null;
   }
   setClientStatus(processing?.state === "completed" ? "처리 완료" : decisions.some(
     (d) => d.decision === "approve" && d.result?.status === "success"
@@ -1510,19 +1540,25 @@ function updateResultAutoClose(incidentId, processing) {
   }, RESULT_AUTOCLOSE_MS)};
 }
 
-let runbookPage = 0;
-let runbookPageKey = null;
-function showRunbookPage(index) {
-  const els = [...document.querySelectorAll("#actions .runbook")];
-  runbookPage = Math.max(0, Math.min(els.length - 1, index));
-  els.forEach((el, i) => el.classList.toggle("hidden", i !== runbookPage));
-  $("runbook-pager").classList.toggle("hidden", els.length < 2);
-  $("runbook-page-info").textContent = els.length ? "조치 제안 " + (runbookPage + 1) + " / " + els.length : "";
-  $("runbook-prev").disabled = runbookPage <= 0;
-  $("runbook-next").disabled = runbookPage >= els.length - 1;
+let scenarioSelectionKey = null;
+function selectScenario(el, recommendationId = currentRecommendation?.recommendation_id) {
+  document.querySelectorAll("#actions .runbook").forEach(row => {
+    const selected = row === el;
+    row.classList.toggle("selected", selected);
+    row.querySelector(".scenario-radio").checked = selected;
+    if (!selected) row.querySelector(".hold-form").classList.add("hidden");
+  });
+  scenarioSelectionKey = {recommendationId, scriptId: el.dataset.scriptId};
+  $("scenario-tag").textContent = el.kind || "조치 제안";
+  $("scenario-incident").textContent = el.rb?.incident || "-";
+  $("scenario-cause").textContent = el.rb?.estimated_cause || "-";
 }
-$("runbook-prev").addEventListener("click", () => showRunbookPage(runbookPage - 1));
-$("runbook-next").addEventListener("click", () => showRunbookPage(runbookPage + 1));
+// 장애 진행 중에는 빨간색, 처리 완료(해결)되면 초록색으로 배너를 표시한다.
+function paintResultState(resolved) {
+  $("result").classList.toggle("incident-resolved", resolved);
+  $("result").classList.toggle("incident-open", !resolved);
+  $("result-state").textContent = resolved ? "장애 해결" : "장애 발생";
+}
 
 const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행(또는 결재 대기)되어 선택할 수 없습니다.";
 const APPROVAL_LABELS = {PENDING: "결재 대기", EXECUTING: "결재 승인 · 실행 중", APPROVED: "결재 승인", REJECTED: "결재 반려", FAILED: "결재 승인 후 실행 불가", EXPIRED: "결재 만료 (새 분석으로 대체)"};
@@ -1842,11 +1878,13 @@ async function decideRunbook(scriptId, action, el, decision) {
     ? "/api/v1/remediations/approve"
     : "/api/v1/remediations/reject";
 
-  const exec = $("exec");
-  exec.classList.remove("hidden");
-  $("exec-title").textContent = scriptId;
-  $("exec-status").textContent = "";
-  $("exec-output").textContent = "";
+  // 실행 결과 영역은 실제 실행(승인)일 때만 연다. 거부는 시나리오 행의 상태로만 표시한다.
+  if (decision === "approve") {
+    $("exec").classList.remove("hidden");
+    $("exec-title").textContent = scriptId;
+    $("exec-status").textContent = "";
+    $("exec-output").textContent = "";
+  }
 
   try {
     const { status, data } = await postJSON(endpoint, actionBody(action,el));
@@ -1854,7 +1892,7 @@ async function decideRunbook(scriptId, action, el, decision) {
       await refreshSelectedIncident();
       return;
     }
-    showExecResult(scriptId, data, status);
+    if (decision === "approve") showExecResult(scriptId, data, status);
     if (decision === "approve" && !data.execution_id) {
       el.querySelector(".approval-status").className = "approval-status status-err";
       el.querySelector(".approval-status").textContent = approvalBlockReason(data);
@@ -1893,8 +1931,10 @@ async function decideRunbook(scriptId, action, el, decision) {
     if (!el.isConnected || (selectedIncidentId && selectedIncidentId !== incidentId)) return;
     el.querySelector(".approval-status").className = "approval-status status-err";
     el.querySelector(".approval-status").textContent = "승인·조치 요청 실패 — 연결 상태와 실행 결과를 확인하세요.";
-    $("exec-status").className = "status-err";
-    $("exec-status").textContent = "요청 실패: " + e;
+    if (decision === "approve") {
+      $("exec-status").className = "status-err";
+      $("exec-status").textContent = "요청 실패: " + e;
+    }
     setRunbookButtonsDisabled(el, false);
     if (decision === "approve") unlockOtherRunbooks();
   } finally {
@@ -1940,13 +1980,9 @@ function renderHoldControls(incident, data) {
   const holdable = !held && !["RESOLVED", "REMEDIATING"].includes(incident.status) && !incident.active_execution_id;
   holdState = {holdable, pending, held};
   document.querySelectorAll("#actions .runbook").forEach(updateRunbookHoldButton);
-  // 조치 제안 카드가 있으면 카드의 "보류" 버튼을 쓰고, 없을 때만 여기서 보류한다.
-  const runbookHold = (incident.latest_recommendation?.runbooks || []).length > 0;
+  // 보류는 조치 시나리오의 "보류" 버튼(누르면 사유 입력칸 표시)으로 하고, 여기서는 해제·예외 처리만 한다.
   $("hold-controls").classList.toggle("hidden", !held && !holdable);
-  $("hold-reason").classList.toggle("hidden", held || runbookHold);
-  $("hold-button").classList.toggle("hidden", held || runbookHold);
   $("release-button").classList.toggle("hidden", !held);
-  $("hold-button").disabled = holdPending || pending;
   $("release-button").disabled = holdPending;
   const ruleBtn = $("rule-from-incident");
   ruleBtn.classList.toggle("hidden", Boolean(data.exception_rule) || incident.error_code === "UNKNOWN_ERROR");
@@ -1958,18 +1994,18 @@ function renderHoldControls(incident, data) {
       : pending ? "결재 대기 중에는 보류할 수 없습니다. 결재 반려 후 보류하세요." : "";
   }
 }
-async function changeHold(kind, reasonInput = $("hold-reason"), statusEl = $("hold-status")) {
+async function changeHold(kind, reasonInput = null, statusEl = $("hold-status")) {
   if (!selectedIncidentId || holdPending) return;
   const incidentId = selectedIncidentId;
-  const reason = reasonInput.value.trim();
+  const reason = reasonInput ? reasonInput.value.trim() : "";
   if (kind === "hold" && !reason) {
     statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-err";
     statusEl.textContent = "보류 사유를 입력하세요.";
-    reasonInput.focus();
+    reasonInput?.focus();
     return;
   }
   holdPending = true;
-  $("hold-button").disabled = $("release-button").disabled = true;
+  $("release-button").disabled = true;
   document.querySelectorAll("#actions .runbook").forEach(updateRunbookHoldButton);
   statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-pending";
   statusEl.textContent = kind === "hold" ? "보류 처리 중…" : "보류 해제 중…";
@@ -1982,7 +2018,7 @@ async function changeHold(kind, reasonInput = $("hold-reason"), statusEl = $("ho
       : ({"approval pending; reject the approval before holding": "결재 대기 중입니다. 결재 반려 후 보류하세요.",
           "incident cannot be held in its current state": "조치 실행 중이거나 완료된 장애는 보류할 수 없습니다.",
           "incident changed; reload details": "장애 정보가 갱신되었습니다. 다시 시도하세요."}[data.reason] || "처리 실패: " + (data.reason || data.status));
-    if (ok) reasonInput.value = "";
+    if (ok && reasonInput) reasonInput.value = "";
   } catch (error) {
     statusEl.className = (statusEl.dataset.baseClass || "") + " " + "status-err";
     statusEl.textContent = "요청 실패 — 연결 상태를 확인하세요.";
@@ -1992,12 +2028,14 @@ async function changeHold(kind, reasonInput = $("hold-reason"), statusEl = $("ho
     await loadIncidents();
   }
 }
-$("hold-button").addEventListener("click", () => changeHold("hold"));
 $("release-button").addEventListener("click", () => changeHold("release"));
 $("rule-from-incident").addEventListener("click", async () => {
   const incident = currentDetailedIncident;
   if (!incident) return;
-  const reason = $("hold-reason").value.trim() || "즉시 해결이 어려운 오류 — 보류 후 발생 알림";
+  const DEFAULT_RULE_REASON = "즉시 해결이 어려운 오류 — 보류 후 발생 알림";
+  const input = typeof globalThis.prompt === "function" ? globalThis.prompt("예외 처리 사유를 입력하세요.", DEFAULT_RULE_REASON) : DEFAULT_RULE_REASON;
+  if (input === null) return;
+  const reason = String(input || "").trim() || DEFAULT_RULE_REASON;
   holdPending = true;
   $("hold-status").className = "status-pending";
   $("hold-status").textContent = "예외 처리 규칙을 등록하는 중…";

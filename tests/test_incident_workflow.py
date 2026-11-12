@@ -206,6 +206,18 @@ class IncidentWorkflowTests(unittest.TestCase):
         result = self.approve(second["approval_id"]).get_json()
         self.assertEqual(result["status"], "success", result)
 
+    def test_rerun_after_executed_approval_does_not_show_previous_execution_result(self):
+        rec = self.emit_and_analyze("disk_full")
+        approval = self.request_approval(rec)
+        self.assertEqual(self.approve(approval["approval_id"]).get_json()["status"], "success")
+        detail = self.api.get(f"/api/v1/log-generator/incidents/{rec['incident_id']}").get_json()
+        self.assertIsNotNone(detail["execution"])
+        self.emit("disk_full")
+        detail = self.api.get(f"/api/v1/log-generator/incidents/{rec['incident_id']}").get_json()
+        self.assertNotEqual(detail["incident"]["latest_recommendation_id"], rec["recommendation_id"])
+        self.assertIsNone(detail["execution"])
+        self.assertEqual(detail["decisions"], [])
+
     def test_rerun_of_same_scenario_does_not_inherit_old_pending_approval(self):
         rec = self.emit_and_analyze("disk_full")
         stale = self.request_approval(rec)

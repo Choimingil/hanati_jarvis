@@ -347,6 +347,9 @@ def incident_detail(incident_id):
         execution = repository.get_remediation_execution(execution_id) if execution_id else None
         if not isinstance(execution, dict) or execution.get("incident_id") != incident_id:
             execution = None
+        elif execution.get("recommendation_id") not in (None, incident.get("latest_recommendation_id")):
+            # 같은 오류가 다시 발생해 새로 분석된 경우, 이전 발생분의 실행 결과는 현재 조치로 보여주지 않는다.
+            execution = None
         executions_status = "ready"
     except Exception:
         decisions, execution, executions_status = [], None, "unavailable"

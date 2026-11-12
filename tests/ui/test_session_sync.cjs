@@ -122,6 +122,7 @@ function completed(m) {
   assert.equal(element(m.w,'incident-processing-title').textContent,'처리 완료');
   assert.equal(element(m.w,'verify-execution').classList.contains('hidden'),true);
   assert.equal(m.w.document.querySelector('.runbook .approve').disabled,true);
+  assert.equal(element(m.w,'result').classList.contains('incident-resolved'),true);
 }
 (async()=>{
   for(const [actorMode,observerMode] of [['admin','client'],['client','admin'],['admin','admin'],['client','client']]) {
@@ -136,6 +137,13 @@ function completed(m) {
       assert.equal(element(observer.w,'incident-detail-panel').classList.contains('hidden'),false);
     } else await open(observer);
     const card=actor.w.document.querySelector('.runbook'), select=card.querySelector('.target-select');
+    // Scenario list: the top scenario is selected, no pager, red while the incident is open, no result before approval.
+    assert.equal(card.classList.contains('selected'),true);
+    assert.equal(card.querySelector('.scenario-radio').checked,true);
+    assert.equal(element(actor.w,'runbook-next'),null);
+    assert.equal(element(actor.w,'result').classList.contains('incident-open'),true);
+    assert.equal(element(actor.w,'exec').classList.contains('hidden'),true);
+    assert.equal(card.querySelector('.hold-form').classList.contains('hidden'),true);
     assert.equal(card.querySelector('.approve').textContent,'결재 요청');
     select.value='0';select.dispatchEvent(new actor.w.Event('change'));card.querySelector('.approve').click();await settle();
     // The request is only queued: nothing runs before an admin approves it.
@@ -144,6 +152,8 @@ function completed(m) {
     await tickDetails(observer);
     assert.match(observer.w.document.querySelector('.runbook .approval-status').textContent,/결재 대기/);
     assert.equal(observer.w.document.querySelector('.runbook .approve').disabled,true);
+    assert.equal(element(actor.w,'exec').classList.contains('hidden'),true);
+    assert.equal(element(observer.w,'exec').classList.contains('hidden'),true);
     // Approve from an admin console's approval queue.
     const approver=await mount('admin',s);
     await approver.w.loadApprovals();
@@ -156,6 +166,8 @@ function completed(m) {
     await tickDetails(observer);
     assert.equal(element(observer.w,'incident-processing-title').textContent,'조치 완료 · 복구 확인 대기');
     assert.equal(element(observer.w,'verify-execution').classList.contains('hidden'),false);
+    assert.equal(element(observer.w,'exec').classList.contains('hidden'),false);
+    assert.match(element(observer.w,'exec-output').textContent,/restarted/);
     // Recent-window expiry and list outage must not stop shared completion reads.
     s.listMissing=true;observer.controls.failList=true;
     element(actor.w,'verify-execution').click();await settle();
