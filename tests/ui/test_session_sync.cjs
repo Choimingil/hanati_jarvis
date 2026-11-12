@@ -6,10 +6,12 @@ const {JSDOM, VirtualConsole} = require('jsdom');
 const html = JSON.parse(execFileSync(process.env.JARVIS_TEST_PYTHON || 'python', ['-c', `
 import json
 from flask import Flask
+from config import ADMIN_PAGE_PATH
 from routes.web_routes import web_blueprint
 app = Flask(__name__)
 app.register_blueprint(web_blueprint)
-print(json.dumps({mode: app.test_client().get('/' + mode).get_data(as_text=True) for mode in ('admin', 'client')}))
+paths = {'admin': ADMIN_PAGE_PATH, 'client': '/client'}
+print(json.dumps({mode: app.test_client().get(path).get_data(as_text=True) for mode, path in paths.items()}))
 `], {cwd: path.resolve(__dirname, '../..'), encoding: 'utf8'}));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const element = (w, id) => w.document.getElementById(id);

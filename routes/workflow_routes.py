@@ -56,6 +56,7 @@ def request_approval():
         if target not in context["action"].get("targets", []):
             raise ValueError("target not bound to recommendation")
         incident = context["incident"]
+        WorkflowStore().expire_superseded(incident)
         approval, created = WorkflowStore().create_approval({
             "incident_id": incident["incident_id"], "recommendation_id": body["recommendation_id"],
             "action_id": body["action_id"], "script_id": context["script_id"],
@@ -83,10 +84,26 @@ def list_approvals():
     limit = max(1, min(request.args.get("limit", default=50, type=int) or 50, 200))
     try:
         statuses = [item for item in (status or "").split(",") if item] or None
-        approvals = WorkflowStore().list_approvals(statuses, incident_id, limit)
+        store = WorkflowStore()
+        if statuses and "PENDING" in statuses:
+            _expire_superseded_pending(store)
+        approvals = store.list_approvals(statuses, incident_id, limit)
     except Exception as exc:
         return jsonify(status="unavailable", approvals=[], error=type(exc).__name__), 503
     return jsonify(status="ready", approvals=approvals)
+
+
+def _expire_superseded_pending(store):
+    """대기 목록을 보여주기 전에 이전 분석 회차의 결재 대기를 정리한다."""
+    seen = set()
+    for item in store.list_approvals("PENDING", limit=200):
+        if item["incident_id"] in seen:
+            continue
+        seen.add(item["incident_id"])
+        try:
+            store.expire_superseded(repository.get_operational_incident(item["incident_id"]))
+        except Exception:
+            continue
 
 
 def _current_body(approval, approver):
@@ -124,6 +141,9 @@ def approve(approval_id):
     approval = store.get_approval(approval_id)
     if approval is None:
         return jsonify(status="not_found"), 404
+    if approval["status"] == "PENDING" and store.expire_superseded(
+            repository.get_operational_incident(approval["incident_id"])):
+        approval = store.get_approval(approval_id)
     if approval["status"] != "PENDING":
         return jsonify(status="already_decided", approval=approval), 409
     if not store.claim_approval(approval_id, approver):

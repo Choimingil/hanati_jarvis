@@ -127,6 +127,31 @@ class WorkflowStore:
             )
             return self._approval(db.execute("SELECT * FROM approvals WHERE approval_id=?", (approval_id,)).fetchone()), True
 
+    def expire_superseded(self, incident):
+        """이전 분석(추천)에 걸린 결재 대기를 만료시킨다.
+
+        장애 ID는 fingerprint로 결정되므로 같은 오류를 다시 발생시키면 같은 장애로 집계된다.
+        새 발생으로 재분석되어 최신 추천이 바뀌었거나 장애가 처리 완료된 경우, 이전 회차에
+        요청해 둔 결재 대기가 남아 있으면 새 조치 제안을 고르지 못하고 바로 결재 대기로
+        보인다. 이런 결재는 실행하지 않고 EXPIRED로 종료한다. (실행 중인 EXECUTING은 건드리지 않는다.)
+        """
+        incident_id = (incident or {}).get("incident_id")
+        if not incident_id:
+            return 0
+        recommendation_id = incident.get("latest_recommendation_id")
+        if incident.get("status") == "RESOLVED":
+            reason, clause, params = "incident resolved", "", []
+        elif recommendation_id:
+            reason, clause, params = "superseded by newer analysis", " AND recommendation_id<>?", [recommendation_id]
+        else:
+            return 0
+        with self.connect() as db:
+            cursor = db.execute(
+                "UPDATE approvals SET status='EXPIRED', decided_at=?, last_error=? "
+                "WHERE incident_id=? AND status='PENDING'" + clause,
+                [now_iso(), reason, incident_id] + params)
+            return cursor.rowcount
+
     def get_approval(self, approval_id):
         with self.connect() as db:
             return self._approval(db.execute("SELECT * FROM approvals WHERE approval_id=?", (approval_id,)).fetchone())

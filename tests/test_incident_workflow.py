@@ -183,17 +183,41 @@ class IncidentWorkflowTests(unittest.TestCase):
         second = self.request_approval(rec)
         self.assertNotEqual(second["approval_id"], approval["approval_id"])
 
-    def test_admin_approval_revalidates_against_latest_recommendation(self):
+    def test_reanalysis_expires_pending_approval_so_new_runbook_can_be_chosen(self):
         rec = self.emit_and_analyze("disk_full")
         approval = self.request_approval(rec)
         incident = self.repo.get_operational_incident(rec["incident_id"])
-        # 결재 대기 중 재분석으로 추천·버전이 바뀌어도 같은 스크립트·대상이면 최신 추천으로 실행한다.
+        # 같은 오류가 다시 발생해 재분석되면 이전 회차의 결재 대기는 실행하지 않고 만료한다.
         newer, _ = self.service.complete_analysis(incident, {"error_code": "DISK_FULL", "cause": "re-analysis",
                                                              "runbooks": [{"script_id": "compress_old_logs"}]})
         self.repo.recommendations[newer["recommendation_id"]] = newer
-        result = self.approve(approval["approval_id"]).get_json()
+        detail = self.api.get(f"/api/v1/log-generator/incidents/{rec['incident_id']}").get_json()
+        self.assertEqual([item["status"] for item in detail["approvals"]], ["EXPIRED"])
+        incidents = self.api.get("/api/v1/log-generator/incidents").get_json()["incidents"]
+        self.assertFalse(next(i for i in incidents if i["incident_id"] == rec["incident_id"])["pending_approval"])
+        response = self.approve(approval["approval_id"])
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.get_json()["approval"]["status"], "EXPIRED")
+        self.assertFalse(self.repo.executions)
+        # 새 분석의 조치는 다시 선택해 결재를 요청할 수 있다.
+        second = self.request_approval(newer)
+        self.assertEqual(second["status"], "PENDING")
+        self.assertEqual(second["recommendation_id"], newer["recommendation_id"])
+        result = self.approve(second["approval_id"]).get_json()
         self.assertEqual(result["status"], "success", result)
-        self.assertEqual(self.repo.executions[result["execution_id"]]["recommendation_id"], newer["recommendation_id"])
+
+    def test_rerun_of_same_scenario_does_not_inherit_old_pending_approval(self):
+        rec = self.emit_and_analyze("disk_full")
+        stale = self.request_approval(rec)
+        incident = self.repo.get_operational_incident(rec["incident_id"])
+        # 이전 회차 결재가 남은 상태에서 장애가 다른 경로로 처리 완료된 뒤 같은 시나리오를 다시 발생시킨다.
+        self.repo.update_operational_incident(incident["incident_id"], {"status": "RESOLVED"}, incident["version"])
+        self.emit("disk_full")
+        reopened = self.repo.get_operational_incident(rec["incident_id"])
+        self.assertNotEqual(reopened["latest_recommendation_id"], rec["recommendation_id"])
+        pending = self.api.get("/api/v1/approvals?status=PENDING").get_json()["approvals"]
+        self.assertEqual(pending, [])
+        self.assertEqual(WorkflowStore().get_approval(stale["approval_id"])["status"], "EXPIRED")
 
     def test_expired_recommendation_closes_the_approval_without_execution(self):
         rec = self.emit_and_analyze("disk_full")

@@ -40,7 +40,7 @@ _PAGE = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</title>
+<title>Jarvis__TITLE_SUFFIX__</title>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --fg: #1c2333; --muted: #5b6472;
@@ -253,7 +253,22 @@ _PAGE = """<!doctype html>
   .notification { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
   .notification.unread { background:var(--bar); }
   .notification strong { display:block; }
-  #notification-count { margin-left:6px; }
+  .title-row { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+  .title-row h1 { margin:0; }
+  .bell-wrap { position:relative; }
+  button.bell { position:relative; background:transparent; color:var(--fg); border:1px solid var(--border); border-radius:999px; width:38px; height:38px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  button.bell:hover, button.bell[aria-expanded="true"] { background:var(--bar); border-color:var(--accent); color:var(--accent); }
+  button.bell svg { width:19px; height:19px; }
+  .bell-count { position:absolute; top:-5px; right:-6px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--err); color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
+  #notification-panel { position:absolute; top:calc(100% + 8px); left:0; z-index:20; width:min(380px, calc(100vw - 32px)); margin:0; padding:14px; box-shadow:0 10px 28px rgba(0,0,0,.18); }
+  #notification-list { max-height:360px; overflow-y:auto; margin-top:8px; }
+  .detail-section { border-top:1px solid var(--border); padding:10px 0 2px; }
+  .detail-section > summary { cursor:pointer; font-weight:700; padding:2px 0; }
+  .detail-section > summary .muted { font-weight:400; }
+  .detail-section[open] > summary { margin-bottom:6px; }
+  .runbook-pager { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:12px; }
+  .runbook-pager button { padding:6px 12px; font-size:13px; }
+  .runbook-pager .page-info { font-size:13px; color:var(--muted); min-width:48px; text-align:center; }
   pre.log-scroll { max-height: calc(13px * 1.5 * 5 + 28px); overflow-y: auto; line-height: 1.5; }
   .banner-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .banner-head button { padding:6px 12px; font-size:13px; }
@@ -282,13 +297,16 @@ _PAGE = """<!doctype html>
     </div>
   </div>
   <div class="console-head">
-    <div><h1>Hanati Jarvis — 장애 대응 콘솔__TITLE_SUFFIX__</h1><p class="sub">로그·리소스 분석 → Runbook 추천 또는 Resource Guidance → 운영자 확인 → 안전한 조치·학습</p></div>
+    <div class="title-row"><h1>Jarvis__TITLE_SUFFIX__</h1>
+      <div class="bell-wrap">
+        <button id="notification-bell" class="bell" type="button" aria-label="알림" aria-haspopup="true" aria-expanded="false" aria-controls="notification-panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span id="notification-count" class="bell-count hidden"></span></button>
+        <div id="notification-panel" class="card hidden" role="dialog" aria-label="알림">
+          <div class="card-head"><div><strong>알림</strong><span class="muted"> 예외 처리·결재·보류</span></div><button id="notification-read" class="secondary" type="button" style="padding:6px 10px;font-size:13px">모두 읽음</button></div>
+          <div id="notification-list" class="muted">알림을 불러오는 중…</div>
+        </div>
+      </div>
+    </div>
     <div class="console-actions"><button id="log-toggle" class="admin-only">로그 조회</button></div>
-  </div>
-  <div id="notification-panel" class="card collapsed">
-    <div class="card-head"><div><strong>알림</strong><span id="notification-count" class="badge rule hidden"></span><span class="muted"> 예외 처리·결재·보류 알림</span></div>
-      <div style="display:flex;gap:6px;align-items:center"><button id="notification-read" class="secondary" type="button">모두 읽음</button><button id="notification-toggle" class="panel-toggle" type="button" aria-controls="notification-body" aria-expanded="false" aria-label="알림 접기/펼치기"><span class="chev">▾</span> <span class="toggle-label">펼치기</span></button></div></div>
-    <div id="notification-body" class="panel-body"><div id="notification-list" class="muted">알림을 불러오는 중…</div></div>
   </div>
   <div id="approval-panel" class="card admin-only">
     <div class="card-head"><div><strong>결재 대기</strong><span id="approval-count" class="badge approval">0건</span><span class="muted"> 운영자 결재 요청 → 관리자 승인 시 조치 실행</span></div>
@@ -325,11 +343,13 @@ _PAGE = """<!doctype html>
     <div id="incident-list" class="incident-table-wrap"></div>
     <details id="completed-incidents" class="hidden"><summary id="completed-incidents-title">처리 완료 이력</summary><div id="completed-incidents-list"></div></details>
   </div>
-  <div id="incident-detail-panel" class="card hidden" aria-labelledby="incident-detail-title" tabindex="-1">
-    <div class="card-head"><strong id="incident-detail-title">장애 상세</strong><button id="incident-detail-close" class="secondary" type="button">닫기</button></div>
+  <div id="incident-detail-panel" class="card hidden collapsed" aria-labelledby="incident-detail-title" tabindex="-1">
+    <div class="card-head"><strong id="incident-detail-title">에러 메시지</strong>
+      <div style="display:flex;gap:6px;align-items:center"><button id="incident-detail-toggle" class="panel-toggle" type="button" aria-expanded="false" aria-label="에러 메시지 접기/펼치기"><span class="chev">▾</span> <span class="toggle-label">펼치기</span></button><button id="incident-detail-close" class="secondary" type="button">닫기</button></div></div>
+    <div class="panel-body">
     <div id="incident-detail-load-status" class="muted" role="status"></div>
     <div id="incident-processing" class="incident-processing hidden" role="status"><strong id="incident-processing-title"></strong><div id="incident-processing-message"></div><div id="incident-processing-meta" class="muted"></div></div>
-    <dl id="incident-detail-fields" class="incident-fields"></dl>
+    <details class="detail-section"><summary>장애 상세</summary><dl id="incident-detail-fields" class="incident-fields"></dl></details>
     <div id="hold-controls" class="hold-controls hidden">
       <input id="hold-reason" maxlength="1000" placeholder="보류 사유 (예: 대외기관 조치 대기, 변경 작업 일정 필요)">
       <button id="hold-button" type="button" class="secondary">보류(킵)</button>
@@ -337,13 +357,14 @@ _PAGE = """<!doctype html>
       <button id="rule-from-incident" type="button" class="danger admin-only">이 오류 예외 처리 등록</button>
       <span id="hold-status" class="muted" role="status"></span>
     </div>
-    <strong>발생 내용</strong><pre id="incident-detail-message"></pre>
-    <div class="guidance-section"><strong>과거 유사 장애 조치 이력</strong> <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></div>
-    <div id="incident-history-summary" class="history-summary hidden"></div>
-    <div id="incident-history"></div>
-    <div class="guidance-section"><strong>해당 장애의 최근 10분 로그 (최대 20건)</strong></div>
-    <div id="incident-detail-logs-status" class="muted"></div>
-    <pre id="incident-detail-logs" class="log-scroll"></pre>
+    <details class="detail-section"><summary>발생 내용</summary><pre id="incident-detail-message"></pre></details>
+    <details class="detail-section"><summary>과거 유사 장애 조치 이력 <span class="muted">(같은 오류 코드 · 기간 제한 없음)</span></summary>
+      <div id="incident-history-summary" class="history-summary hidden"></div>
+      <div id="incident-history"></div></details>
+    <details class="detail-section"><summary>해당 장애의 최근 10분 로그 <span class="muted">(최대 20건)</span></summary>
+      <div id="incident-detail-logs-status" class="muted"></div>
+      <pre id="incident-detail-logs" class="log-scroll"></pre></details>
+    </div>
   </div>
   <div id="log-tabs-panel" class="card hidden admin-only">
     <div class="card-head"><div><strong>수집·분석 로그</strong><span class="muted">(선택한 시점 이후분)</span></div><button id="log-close" class="panel-toggle" type="button">닫기</button></div>
@@ -408,6 +429,11 @@ _PAGE = """<!doctype html>
     <div style="margin-top:18px"><strong>조치 제안 Runbook</strong>
       <span class="muted">(신뢰도 높은 순)</span></div>
     <div id="actions"></div>
+    <div id="runbook-pager" class="runbook-pager hidden">
+      <button id="runbook-prev" type="button" class="secondary">← 이전</button>
+      <span id="runbook-page-info" class="page-info" aria-live="polite"></span>
+      <button id="runbook-next" type="button" class="secondary">다음 →</button>
+    </div>
   </div>
 
   <div id="manual-remediation" class="card hidden">
@@ -707,11 +733,20 @@ function renderIncidentDetails(incident, processing = null) {
     ["최근 발생", formatDateTime(incident.last_seen)],
     ["장애 ID", incident.incident_id],
   ];
+  $("incident-detail-title").textContent = "에러 메시지 · " + (incident.error_code || "UNKNOWN_ERROR");
   $("incident-detail-fields").innerHTML = fields.map(([label, value]) => '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd>').join("");
   $("incident-detail-message").textContent = incident.latest_message || incident.representative_message || incident.normalized_message || "발생 내용 없음";
   $("incident-detail-panel").dataset.lastSeen = incident.last_seen || "";
   renderIncidentProcessing(incident, processing);
   refreshRecentIncidents();
+}
+// 에러 메시지 배너와 하위 항목은 새 장애를 열 때마다 접힌 상태로 시작한다.
+function collapseIncidentDetails() {
+  const panel = $("incident-detail-panel");
+  panel.classList.add("collapsed");
+  $("incident-detail-toggle").setAttribute("aria-expanded", "false");
+  $("incident-detail-toggle").querySelector(".toggle-label").textContent = "펼치기";
+  panel.querySelectorAll("details.detail-section").forEach(section => section.open = false);
 }
 function closeIncidentDetails() {
   selectedIncidentId = null;
@@ -837,6 +872,7 @@ async function fetchIncidentDetails(incident, scroll, refresh) {
   selectedIncidentId = incident.incident_id;
   $("incident-detail-panel").classList.remove("hidden");
   if (!refresh) {
+    collapseIncidentDetails();
     $("result").classList.add("hidden");
     $("guidance-result").classList.add("hidden");
     $("exec").classList.add("hidden");
@@ -1382,9 +1418,25 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   });
 
   // 한 추천에서는 조치 하나만 실행한다 - 이미 승인(또는 결재 대기)된 게 있으면 나머지를 잠근다.
-  const pendingEl = [...box.querySelectorAll(".runbook")].find(el => el.approvalPending);
+  const runbookEls = [...box.querySelectorAll(".runbook")];
+  const pendingEl = runbookEls.find(el => el.approvalPending);
   if (decisions.some((d) => d.decision === "approve")) lockOtherRunbooks();
   else if (pendingEl) lockOtherRunbooks(pendingEl);
+
+  // 조치 제안은 신뢰도 순으로 한 건씩 페이지로 보여준다.
+  // 같은 추천을 다시 그릴 때는 보던 페이지를 유지하고, 결재 대기·처리된 조치가 있으면 그 페이지를 연다.
+  const focusEl = pendingEl || runbookEls.find(el => el.classList.contains("decided"));
+  if (runbookPageKey !== rec.recommendation_id) {
+    runbookPageKey = rec.recommendation_id;
+    runbookPage = 0;
+  }
+  if (focusEl) runbookPage = runbookEls.indexOf(focusEl);
+  showRunbookPage(runbookPage);
+
+  // 결재 승인 후 조치가 완료되면 "현재 오류 원인" 배너는 자동으로 닫는다 (실행 결과 카드만 남긴다).
+  const actionDone = ["completed", "action_completed"].includes(processing?.state)
+    || decisions.some((d) => d.decision === "approve" && d.result?.status === "success");
+  if (actionDone) result.classList.add("hidden");
 
   if (decisions.length) {
     const last = decisions[decisions.length - 1];
@@ -1395,11 +1447,27 @@ function renderRecommendation(errorCode, rec, decisions = [], processing = null)
   ) ? "명령 실행 완료 — 업무 복구 확인 필요" : "분석 완료");
 }
 
+let runbookPage = 0;
+let runbookPageKey = null;
+function showRunbookPage(index) {
+  const els = [...document.querySelectorAll("#actions .runbook")];
+  runbookPage = Math.max(0, Math.min(els.length - 1, index));
+  els.forEach((el, i) => el.classList.toggle("hidden", i !== runbookPage));
+  $("runbook-pager").classList.toggle("hidden", els.length < 2);
+  $("runbook-page-info").textContent = els.length ? (runbookPage + 1) + " / " + els.length : "";
+  $("runbook-prev").disabled = runbookPage <= 0;
+  $("runbook-next").disabled = runbookPage >= els.length - 1;
+}
+$("runbook-prev").addEventListener("click", () => showRunbookPage(runbookPage - 1));
+$("runbook-next").addEventListener("click", () => showRunbookPage(runbookPage + 1));
+
 const OTHER_ACTION_LOCKED = "다른 조치가 이미 실행(또는 결재 대기)되어 선택할 수 없습니다.";
-const APPROVAL_LABELS = {PENDING: "결재 대기", EXECUTING: "결재 승인 · 실행 중", APPROVED: "결재 승인", REJECTED: "결재 반려", FAILED: "결재 승인 후 실행 불가"};
+const APPROVAL_LABELS = {PENDING: "결재 대기", EXECUTING: "결재 승인 · 실행 중", APPROVED: "결재 승인", REJECTED: "결재 반려", FAILED: "결재 승인 후 실행 불가", EXPIRED: "결재 만료 (새 분석으로 대체)"};
 
 function applyApprovalState(el, scriptId) {
-  const approval = currentApprovals.find(item => item.script_id === scriptId);
+  const approval = currentApprovals.find(item => item.script_id === scriptId
+    && (!item.recommendation_id || item.recommendation_id === currentRecommendation?.recommendation_id
+        || ["PENDING", "EXECUTING"].includes(item.status)));
   el.approvalPending = Boolean(approval && ["PENDING", "EXECUTING"].includes(approval.status));
   if (!approval) return;
   const status = el.querySelector(".approval-status");
@@ -1441,6 +1509,8 @@ function approvalBlockReason(data) {
     "action not allowed for incident":"최신 분석 결과에 이 조치·대상이 없습니다. 다시 결재를 요청하세요.",
     "recommendation does not belong to incident":"장애의 최신 추천이 바뀌었습니다. 다시 결재를 요청하세요.",
     "invalid requested_by":"결재 요청자를 확인하세요.",
+    "superseded by newer analysis":"같은 오류가 다시 발생해 새로 분석되었습니다. 새 조치 제안에서 다시 결재를 요청하세요.",
+    "incident resolved":"장애가 이미 처리 완료되어 결재가 만료되었습니다.",
     "not_found":"결재 건을 찾을 수 없습니다. 목록을 새로 불러온 뒤 다시 시도하세요.",
     "host is executing or waiting for business recovery confirmation":"대상이 다른 조치를 실행 중이거나 복구 확인을 기다리고 있습니다.",
     "dependency unavailable; inspect service status":"실행 Agent 또는 저장소에 연결할 수 없습니다. 기동·연결 상태를 확인하세요.",
@@ -1875,7 +1945,7 @@ async function loadApprovals() {
   try {
     const [pending, recent] = await Promise.all([
       getJSON("/api/v1/approvals?status=PENDING,EXECUTING"),
-      getJSON("/api/v1/approvals?status=APPROVED,REJECTED,FAILED&limit=10"),
+      getJSON("/api/v1/approvals?status=APPROVED,REJECTED,FAILED,EXPIRED&limit=10"),
     ]);
     const items = pending.approvals || [];
     $("approval-count").textContent = items.length + "건";
@@ -1987,7 +2057,8 @@ async function loadNotifications() {
     const data = await getJSON("/api/v1/notifications?limit=8");
     const items = data.notifications || [];
     $("notification-count").classList.toggle("hidden", !data.unread);
-    $("notification-count").textContent = "새 알림 " + data.unread + "건";
+    $("notification-count").textContent = data.unread > 99 ? "99+" : String(data.unread || "");
+    $("notification-bell").setAttribute("aria-label", data.unread ? "알림 (새 알림 " + data.unread + "건)" : "알림");
     $("notification-list").className = items.length ? "" : "muted";
     $("notification-list").innerHTML = items.length
       ? items.map(item => '<div class="notification' + (item.read ? '' : ' unread') + '"><strong>' + esc(item.title) + '</strong>'
@@ -1998,6 +2069,24 @@ async function loadNotifications() {
     return false;
   }
 }
+function setNotificationsOpen(open) {
+  $("notification-panel").classList.toggle("hidden", !open);
+  $("notification-bell").setAttribute("aria-expanded", String(open));
+  if (open) loadNotifications();
+}
+$("notification-bell").addEventListener("click", event => {
+  event.stopPropagation();
+  setNotificationsOpen($("notification-panel").classList.contains("hidden"));
+});
+document.addEventListener("click", event => {
+  if (!$("notification-panel").classList.contains("hidden") && !event.target.closest(".bell-wrap")) setNotificationsOpen(false);
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !$("notification-panel").classList.contains("hidden")) {
+    setNotificationsOpen(false);
+    $("notification-bell").focus();
+  }
+});
 $("notification-read").addEventListener("click", async () => {
   await postJSON("/api/v1/notifications/read", {});
   loadNotifications();

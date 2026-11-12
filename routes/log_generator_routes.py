@@ -291,7 +291,11 @@ def recent_incidents():
     documents = list(documents) + [item for item in held if item.get("incident_id") not in seen]
     try:
         from operations.incident_workflow import WorkflowStore
-        pending = WorkflowStore().pending_incident_ids()
+        store = WorkflowStore()
+        pending = store.pending_incident_ids()
+        for document in documents:
+            if document.get("incident_id") in pending and store.expire_superseded(document):
+                pending = store.pending_incident_ids()
     except Exception:
         pending = set()
 
@@ -355,6 +359,7 @@ def incident_detail(incident_id):
     try:
         from operations.incident_workflow import WorkflowStore
         store = WorkflowStore()
+        store.expire_superseded(incident)
         approvals = store.list_approvals(incident_id=incident_id, limit=10)
         exception_rule = store.match_rule(incident)
     except Exception:
